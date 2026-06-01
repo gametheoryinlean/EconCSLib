@@ -22,4 +22,4 @@ game-theory and EconCS (economics and computer science) library.
 - **2026** — in March, Ma Jiajun and Bei Xiaohui decided to go ahead and
   re-founded the project as `EconCSLib` under
   [`gametheoryinlean`](https://github.com/gametheoryinlean).
-
+<!-- Temporary branch-protection test. -->
