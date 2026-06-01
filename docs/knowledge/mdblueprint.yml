@@ -1,0 +1,249 @@
+site:
+  title: EconCSLib Knowledge Blueprint
+  short_title: EconCSLib
+
+sources:
+  library:
+    - id: mfogt
+      title: "Mathematical Foundations of Game Theory"
+      short: "MFoGT"
+      authors: "Laraki, Renault, and Sorin"
+    - id: msz-game-theory
+      title: "Game Theory"
+      short: "MSZ"
+      authors: "Maschler, Solan, and Zamir"
+    - id: agt
+      title: "Algorithmic Game Theory"
+      short: "AGT"
+      authors: "Nisan, Roughgarden, Tardos, and Vazirani"
+    - id: krishna-auction-theory
+      title: "Auction Theory"
+      short: "Krishna 2010"
+      authors: "Vijay Krishna"
+    - id: robinson-1951
+      title: "An Iterative Method of Solving a Game"
+      short: "Robinson 1951"
+      authors: "Julia Robinson"
+
+topics:
+  - id: foundation
+    title: Foundation Vocabulary
+  - id: foundation.preference
+    title: Preference Vocabulary
+  - id: math.simplex
+    title: Simplex Utilities
+  - id: foundation.profile
+    title: Profile Shim
+  - id: foundation.argmax
+    title: Argmax
+  - id: foundation.cost
+    title: Complexity Monad (CostM)
+  - id: foundation.cost.examples
+    title: CostM Worked Examples
+  - id: math.minimax
+    title: Minimax Theorems
+  - id: math.minimax.structure
+    title: Minimax Structure & Statements
+  - id: math.minimax.proofs
+    title: Minimax Proof Routes
+  - id: math.linear_programming.minimax_bridge
+    title: Zero-Sum Linear Programming
+  - id: social_choice
+    title: Social Choice
+    aliases:
+      - socialchoice
+  - id: social_choice.voting
+    title: Voting
+  - id: social_choice.voting.arrow
+    title: Arrow's Theorem
+  - id: social_choice.voting.gibbard_satterthwaite
+    title: Gibbard–Satterthwaite Theorem
+  - id: social_choice.voting.rules
+    title: Voting Rules
+  - id: social_choice.fair_division
+    title: Fair Division
+  - id: social_choice.fair_division.core
+    title: Fair Division Core
+  - id: social_choice.fair_division.divisible
+    title: Divisible Fair Division
+  - id: social_choice.fair_division.divisible.cut_and_choose
+    title: Cut and Choose
+  - id: social_choice.fair_division.divisible.dubins_spanier
+    title: Dubins–Spanier
+  - id: social_choice.fair_division.divisible.stromquist
+    title: Stromquist EF Existence
+  - id: social_choice.fair_division.indivisible
+    title: Indivisible Fair Division
+  - id: social_choice.fair_division.indivisible.algorithms
+    title: Indivisible Algorithms
+  - id: social_choice.fair_division.indivisible.mms
+    title: Maximin Share
+  - id: foundation.utility
+    title: Utility Theory
+  - id: mechanism_design
+    title: Mechanism Design
+  - id: mechanism_design.basic
+    title: Basic Mechanism Design
+  - id: mechanism_design.transfer
+    title: Transfer Mechanisms
+  - id: mechanism_design.bayesian
+    title: Bayesian Mechanisms
+  - id: mechanism_design.vcg
+    title: VCG Mechanisms
+  - id: mechanism_design.myerson
+    title: Myerson Mechanism Design
+  - id: mechanism_design.auction
+    title: Auctions
+  - id: mechanism_design.auction.basic
+    title: Basic Auction Formats
+  - id: mechanism_design.auction.knapsack
+    title: Knapsack Auctions
+  - id: mechanism_design.auction.bayesian
+    title: Bayesian Auctions
+  - id: math.fixed_point
+    title: Fixed Point Theorems
+  - id: math.linear_algebra
+    title: Linear Algebra
+  - id: math.linear_algebra.alternatives
+    title: Linear Algebra Alternatives
+  - id: math.linear_programming
+    title: Linear Programming
+  - id: math.linear_programming.duality
+    title: LP Duality
+  - id: math.linear_programming.complementarity
+    title: LP Complementarity
+  - id: math.order
+    title: Order Theory
+  - id: math.lattice
+    title: Lattice Theory
+  - id: game_theory
+    title: Game Theory
+  - id: market_design
+    title: Market Design
+  - id: market_design.matching
+    title: Matching
+  - id: market_design.matching.one_to_one
+    title: One-to-One Matching
+  - id: market_design.matching.many_to_one
+    title: Many-to-One Matching (College Admission)
+  - id: market_design.matching.housing
+    title: Housing Market (Top Trading Cycles)
+  - id: market_design.matching.assignment
+    title: Assignment Game (Two-Sided Transfers)
+  - id: math
+    title: Mathematics
+  - id: foundation.utility.lottery
+    title: Lotteries
+  - id: game_theory.strategic_game
+    title: Strategic Games
+    aliases:
+      - strategic_game
+  - id: game_theory.strategic_game.core
+    title: Strategic Game Core
+  - id: game_theory.strategic_game.equilibrium
+    title: Nash Equilibrium
+  - id: game_theory.strategic_game.dominance
+    title: Dominance & Rationalizability
+  - id: game_theory.strategic_game.refinements
+    title: Equilibrium Refinements
+  - id: game_theory.strategic_game.continuous
+    title: Continuous & Geometric Games
+  - id: game_theory.strategic_game.dynamics
+    title: Dynamics & Evolution
+  - id: game_theory.strategic_game.bayesian_correlated
+    title: Bayesian & Correlated Games
+  - id: game_theory.zero_sum
+    title: Zero-Sum & Matrix Games
+    aliases:
+      - zerosum
+  - id: game_theory.zero_sum.core
+    title: Zero-Sum Core
+  - id: game_theory.zero_sum.minimax
+    title: Minimax
+  - id: game_theory.zero_sum.learning
+    title: Learning in Games
+  - id: game_theory.zero_sum.continuous
+    title: Continuous Zero-Sum Games
+  - id: game_theory.zero_sum.operators
+    title: Value Operators
+  - id: game_theory.zero_sum.examples
+    title: Zero-Sum Examples
+  - id: game_theory.zero_sum.applications
+    title: Zero-Sum Applications
+  - id: game_theory.extensive_game
+    title: Extensive-Form Games
+  - id: game_theory.extensive_game.core
+    title: Extensive Game Core
+  - id: game_theory.extensive_game.perfect_information
+    title: Perfect Information
+  - id: game_theory.extensive_game.imperfect_information
+    title: Imperfect Information
+  - id: game_theory.extensive_game.normal_form
+    title: Normal-Form Reduction
+  - id: game_theory.extensive_game.examples
+    title: Extensive Examples
+  - id: game_theory.cooperative_game
+    title: Cooperative Games
+    aliases:
+      - coalitional_game
+      - coalitionalgame
+      - coalitional_games
+      - cooperativegame
+  - id: game_theory.cooperative_game.core
+    title: Cooperative Core
+  - id: game_theory.cooperative_game.shapley_value
+    title: Shapley Value
+  - id: game_theory.cooperative_game.classes
+    title: Cooperative Game Classes
+  - id: game_theory.repeated_game
+    title: Repeated Games
+    aliases:
+      - repeatedgame
+      - repeated_games
+  - id: game_theory.repeated_game.core
+    title: Repeated Game Core
+  - id: game_theory.repeated_game.folk_theorem
+    title: Folk Theorems
+  - id: game_theory.repeated_game.incomplete_info
+    title: Incomplete Information
+  - id: game_theory.stochastic_game
+    title: Stochastic Games
+    aliases:
+      - stochasticgame
+      - stochastic_games
+  - id: game_theory.stochastic_game.core
+    title: Stochastic Game Core
+  - id: game_theory.stochastic_game.value
+    title: Discounted Value
+  - id: game_theory.stochastic_game.asymptotic
+    title: Asymptotic & Uniform Value
+graph:
+  max_visible_nodes: 120
+  max_expand_nodes: 80
+  proof_plans: selected-only
+
+lean:
+  default_repository: econcslib
+  repositories:
+    - id: econcslib
+      title: EconCSLib
+      local_path: ../..
+      web_url: https://github.com/gametheoryinlean/EconCSLib
+      source_url_template: "{web_url}/blob/{revision}/{path}#L{line}"
+      revision: auto
+
+
+math:
+  throw_on_error: false
+  # NOTE: Per mdblueprint convention (math-authoring.md), do not redeclare
+  # KaTeX built-ins here. mdblueprint's KNOWN_MACROS filters built-ins it
+  # knows about; the macros below are KaTeX built-ins that are NOT yet in
+  # KNOWN_MACROS but are used in node bodies, so they must remain declared
+  # until KNOWN_MACROS is extended upstream. The expansions deliberately
+  # use only safe constructions (no unicode characters that KaTeX would
+  # re-normalize back to the same macro, which causes infinite expansion).
+  macros:
+    arg: "\\operatorname{arg}"
+    bigl: "\\left("
+    bigr: "\\right)"
+    dots: "\\ldots"

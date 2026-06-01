@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Lean build artifacts and downloaded packages (managed by Lake)
+.lake/build/
+.lake/config/
+.lake/packages/
+
+# Claude Code local config
+CLAUDE.md
+.claude/
+docs/superpowers/
+
+# Local duplicate/reference downloads before canonicalizing into references/
+AUCTION THEORY SECOND EDITION*.pdf
+
+# Local MCP / editor config
+.mcp.json
+.vscode/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Generated documentation sites
+_site/

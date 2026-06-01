@@ -1,0 +1,65 @@
+name: Deploy API docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install elan
+        run: |
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> $GITHUB_PATH
+
+      - name: Cache Lake packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan
+            .lake
+            docbuild/.lake
+          key: ${{ runner.os }}-docs-lake-${{ hashFiles('lean-toolchain', 'lakefile.toml', 'docbuild/lakefile.toml') }}
+
+      - name: Fetch Mathlib cache
+        run: lake exe cache get
+
+      - name: Build EconCSLib
+        run: lake build
+
+      # doc-gen4 (external-linking fork) lives in docbuild/; resolve it against
+      # the shared package cache, then generate HTML for EconCSLib's own modules.
+      - name: Resolve docbuild deps
+        working-directory: docbuild
+        run: MATHLIB_NO_CACHE_ON_UPDATE=1 lake update doc-gen4
+
+      - name: Build docs
+        working-directory: docbuild
+        env:
+          LEAN_ABORT_ON_PANIC: "1"
+        run: lake build EconCSLib:docs
+
+      - name: Stage repo README into the published site
+        run: cp docbuild/econcslib_doc-README.md docbuild/.lake/build/doc/README.md
+
+      - name: Deploy to econcslib_doc
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.ECONCSLIB_DOC_DEPLOY_KEY }}
+          external_repository: gametheoryinlean/econcslib_doc
+          publish_branch: main
+          publish_dir: ./docbuild/.lake/build/doc
+          force_orphan: true
+          commit_message: "docs: deploy from EconCSLib@${{ github.sha }}"

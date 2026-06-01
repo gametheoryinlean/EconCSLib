@@ -1,0 +1,16 @@
+name = "docbuild"
+reservoir = false
+version = "0.1.0"
+packagesDir = "../.lake/packages"
+
+# External-linking doc-gen4 ported onto the v4.30.0 toolchain (matches EconCSLib).
+# It emits HTML only for EconCSLib's own modules; Mathlib / Lean-core references
+# resolve to the hosted mathlib4_docs site instead of being regenerated locally.
+[[require]]
+name = "doc-gen4"
+git = "https://github.com/gametheoryinlean/docgen.git"
+rev = "external-linking-v4.30.0"
+
+[[require]]
+name = "EconCSLib"
+path = "../"

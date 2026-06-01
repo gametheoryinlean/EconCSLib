@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use EconCSLib, please cite this software."
+title: "EconCSLib"
+type: software
+version: 0.1.0
+date-released: 2026-06-01
+license: Apache-2.0
+repository-code: "https://github.com/gametheoryinlean/EconCSLib"
+url: "https://github.com/gametheoryinlean/EconCSLib"
+abstract: "A Lean 4 library and cross-linked knowledge base for computational economics."
+authors:
+  - family-names: Bei
+    given-names: Xiaohui
+  - family-names: Ma
+    given-names: Jiajun

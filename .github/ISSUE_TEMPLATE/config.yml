@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Design discussion
+    url: https://github.com/gametheoryinlean/EconCSLib/discussions
+    about: Use Discussions for broad mathematical or architectural proposals.

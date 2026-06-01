@@ -1,0 +1,3128 @@
+/-
+Copyright (c) 2026 EconCSLib contributors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+
+import EconCSLib.MechanismDesign.Auction.BayesianSingleItem
+import EconCSLib.MechanismDesign.Auction.Myerson
+import Mathlib.Data.Prod.Lex
+import Mathlib.MeasureTheory.Integral.IntervalIntegral.AbsolutelyContinuousFun
+import Mathlib.MeasureTheory.Integral.Prod
+import Mathlib.Tactic.Ring
+
+/-!
+# EconCSLib.MechanismDesign.Auction.OptimalSingleItem
+
+Regular Myerson optimal single-item auctions.
+
+This file defines virtual values, the virtual-surplus-maximizing allocation
+rule, its Myerson payment rule, and the IC/IR revenue-optimality interface for
+MSZ 12.59. The main public result is
+`virtualSurplusMaximizingAuction_regularMyersonOptimalICIR_of_isRegular`.
+
+## Structure hierarchy
+
+```
+BayesianSingleItemAuction I                       -- direct Bayesian single-item layer
+  ├─ virtualSurplusMaximizingMechanism            -- SingleParameterMechanism view
+  └─ virtualSurplusMaximizingAuction              -- BayesianSingleItemAuction view
+
+SingleParameterMechanism.withMyersonPayment       -- payment formula used by the optimizer
+```
+
+## Main definitions
+
+* `virtualValue`, `IsRegular`, `IsReserveThreshold`
+* `virtualSurplus`, `expectedVirtualSurplus`
+* `IsSingleItemAllocationRule`, `IsVirtualSurplusOptimalAllocationRule`
+* `IsFeasibleICIRIntegrable`
+* `InterimFubiniAnalyticAssumptions`
+* `RegularMyersonICIRAnalyticAssumptions`
+* `IsRegularMyersonOptimalICIRAuction`
+* `virtualSurplusMaximizingAllocationRule`
+* `virtualSurplusMaximizingPaymentRule`, `virtualSurplusMaximizingMechanism`,
+  `virtualSurplusMaximizingAuction`
+
+## Main proofs
+
+* reserve-threshold and sale/no-sale behavior
+* feasibility and pointwise virtual-surplus optimality
+* expected virtual-surplus monotonicity
+* monotonicity and DSIC via `MechanismDesign.Auction.Myerson`
+* bridge from ex-post DSIC to interim IC, plus conditional interim IR
+* `virtualSurplusMaximizingAuction_regularMyersonOptimalICIR_of_isRegular`
+
+References:
+* Maschler, Solan, Zamir, *Game Theory*, Section 12.10.
+* Nisan, Roughgarden, Tardos, Vazirani, *Algorithmic Game Theory*, Chapter 13.
+-/
+
+open scoped BigOperators
+open MeasureTheory
+
+namespace BayesianSingleItemAuction
+
+variable {I : Type*}
+
+section VirtualValues
+
+/-! ## Virtual values and regularity -/
+
+/-- Myerson virtual value `v - (1 - F_i(v)) / f_i(v)` for bidder `i`. -/
+noncomputable def virtualValue (A : BayesianSingleItemAuction I) (i : I) (v : ℝ) : ℝ :=
+  v - (1 - (A.typeData.cdf i).cdf v) / A.typeDensity i v
+
+/-- Regularity: every bidder's virtual value is monotone. -/
+def IsRegular (A : BayesianSingleItemAuction I) : Prop :=
+  ∀ i : I, Monotone (A.virtualValue i)
+
+/-- Regular virtual values are measurable by Mathlib's measurability theorem for
+monotone real functions. -/
+theorem measurable_virtualValue_of_isRegular
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) (i : I) :
+    Measurable (A.virtualValue i) :=
+  (hA i).measurable
+
+/-- A reserve threshold separating nonpositive and nonnegative virtual values. -/
+def IsReserveThreshold (A : BayesianSingleItemAuction I) (i : I) (reserve : ℝ) : Prop :=
+  (∀ v, v < reserve → A.virtualValue i v ≤ 0) ∧
+    ∀ v, reserve ≤ v → 0 ≤ A.virtualValue i v
+
+/-- At a reserve threshold, the virtual value is nonnegative. -/
+theorem virtualValue_nonneg_of_isReserveThreshold
+    (A : BayesianSingleItemAuction I) {i : I} {reserve v : ℝ}
+    (hreserve : A.IsReserveThreshold i reserve) (hv : reserve ≤ v) :
+    0 ≤ A.virtualValue i v :=
+  hreserve.2 v hv
+
+/-- Below a reserve threshold, the virtual value is nonpositive. -/
+theorem virtualValue_nonpos_of_lt_isReserveThreshold
+    (A : BayesianSingleItemAuction I) {i : I} {reserve v : ℝ}
+    (hreserve : A.IsReserveThreshold i reserve) (hv : v < reserve) :
+    A.virtualValue i v ≤ 0 :=
+  hreserve.1 v hv
+
+/-- A zero of a regular virtual value is a reserve threshold. -/
+theorem isReserveThreshold_of_isRegular_of_virtualValue_eq_zero
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) {i : I} {reserve : ℝ}
+    (hzero : A.virtualValue i reserve = 0) :
+    A.IsReserveThreshold i reserve := by
+  constructor
+  · intro v hv
+    simpa [hzero] using hA i hv.le
+  · intro v hv
+    simpa [hzero] using hA i hv
+
+end VirtualValues
+
+section VirtualSurplusMaximizingMechanism
+
+/-- Virtual surplus of an allocation rule at a reported type profile. -/
+noncomputable def virtualSurplus [Fintype I]
+    (A : BayesianSingleItemAuction I) (x : (I → ℝ) → I → ℝ) (b : I → ℝ) : ℝ :=
+  ∑ i, x b i * A.virtualValue i (b i)
+
+/-- Ex-ante expected virtual surplus under the auction prior. -/
+noncomputable def expectedVirtualSurplus [Fintype I]
+    (A : BayesianSingleItemAuction I) (x : (I → ℝ) → I → ℝ) : ℝ :=
+  ∫ t, A.virtualSurplus x t ∂A.prior
+
+/-- Integrability condition for ex-ante virtual surplus under the auction prior. -/
+def IntegrableVirtualSurplus [Fintype I]
+    (A : BayesianSingleItemAuction I) (x : (I → ℝ) → I → ℝ) : Prop :=
+  Integrable (fun t => A.virtualSurplus x t) A.prior
+
+/-- Pointwise virtual-surplus dominance lifts to ex-ante dominance. -/
+theorem expectedVirtualSurplus_le_of_forall_virtualSurplus_le [Fintype I]
+    (A : BayesianSingleItemAuction I) {x y : (I → ℝ) → I → ℝ}
+    (hx_int : A.IntegrableVirtualSurplus x)
+    (hy_int : A.IntegrableVirtualSurplus y)
+    (hxy : ∀ t, A.virtualSurplus x t ≤ A.virtualSurplus y t) :
+    A.expectedVirtualSurplus x ≤ A.expectedVirtualSurplus y :=
+  integral_mono hx_int hy_int hxy
+
+/-- A nonnegative fractional allocation rule with total mass at most `1`. -/
+def IsSingleItemAllocationRule [Fintype I]
+    (x : (I → ℝ) → I → ℝ) : Prop :=
+  (∀ b i, 0 ≤ x b i) ∧ ∀ b, (∑ i, x b i) ≤ 1
+
+/-- A feasible single-item allocation gives each bidder probability at most `1`. -/
+theorem IsSingleItemAllocationRule.le_one
+    [Fintype I] [DecidableEq I] {x : (I → ℝ) → I → ℝ}
+    (hx : IsSingleItemAllocationRule x) (b : I → ℝ) (i : I) :
+    x b i ≤ 1 := by
+  have hle_sum : x b i ≤ ∑ j, x b j := by
+    exact Finset.single_le_sum (fun j _ => hx.1 b j) (Finset.mem_univ i)
+  exact le_trans hle_sum (hx.2 b)
+
+/-- A feasible single-item allocation rule satisfies `IsAllocFeasible` with any payment rule. -/
+theorem withPayment_isAllocFeasible_of_isSingleItemAllocationRule
+    [Fintype I] [DecidableEq I] {x p : (I → ℝ) → I → ℝ}
+    (hx : IsSingleItemAllocationRule x) :
+    ({ allocationRule := x, paymentRule := p } :
+      SingleParameterMechanism I ℝ).IsAllocFeasible := by
+  intro b i
+  exact ⟨hx.1 b i, hx.le_one b i⟩
+
+/-- Feasible allocation rules that pointwise maximize virtual surplus. -/
+def IsVirtualSurplusOptimalAllocationRule [Fintype I]
+    (A : BayesianSingleItemAuction I) (x : (I → ℝ) → I → ℝ) : Prop :=
+  IsSingleItemAllocationRule x ∧
+    ∀ y, IsSingleItemAllocationRule y →
+      ∀ b, A.virtualSurplus y b ≤ A.virtualSurplus x b
+
+/-! ## Deterministic virtual-surplus maximization -/
+
+/-- Lexicographic score used to break ties among virtual values. -/
+noncomputable def virtualScore [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) : ℝ ×ₗ I :=
+  toLex (A.virtualValue i (b i), i)
+
+/-- The virtual-value winner with deterministic tie-breaking. -/
+noncomputable def virtualSurplusMaximizingWinner
+    [Fintype I] [Nontrivial I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) : I :=
+  Auction.argmaxBid (A.virtualScore b)
+
+/-- The selected winner is exactly the bidder whose lexicographic virtual score
+dominates every other bidder's score. -/
+theorem virtualSurplusMaximizingWinner_eq_iff_forall_virtualScore_le
+    [Fintype I] [Nontrivial I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) :
+    A.virtualSurplusMaximizingWinner b = i ↔
+      ∀ j, A.virtualScore b j ≤ A.virtualScore b i := by
+  constructor
+  · intro hwinner j
+    have hle :
+        A.virtualScore b j ≤
+          A.virtualScore b (A.virtualSurplusMaximizingWinner b) := by
+      simpa [virtualSurplusMaximizingWinner] using
+        Auction.bid_le_maxBid (A.virtualScore b) j
+    simpa [hwinner] using hle
+  · intro hmax
+    let w := A.virtualSurplusMaximizingWinner b
+    have hwi : A.virtualScore b w ≤ A.virtualScore b i := hmax w
+    have hiw : A.virtualScore b i ≤ A.virtualScore b w := by
+      simpa [w, virtualSurplusMaximizingWinner] using
+        Auction.bid_le_maxBid (A.virtualScore b) i
+    have hscore : A.virtualScore b w = A.virtualScore b i := le_antisymm hwi hiw
+    have hpair :
+        (A.virtualValue w (b w), w) = (A.virtualValue i (b i), i) := by
+      apply toLex_inj.mp
+      simpa [w, virtualScore] using hscore
+    exact congrArg Prod.snd hpair
+
+/-- The virtual value attained by the selected virtual-value winner. -/
+noncomputable def winningVirtualValue
+    [Fintype I] [Nontrivial I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) : ℝ :=
+  A.virtualValue (A.virtualSurplusMaximizingWinner b)
+    (b (A.virtualSurplusMaximizingWinner b))
+
+/-- Allocates to the highest positive virtual value, otherwise withholds the item. -/
+noncomputable def virtualSurplusMaximizingAllocationRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) : (I → ℝ) → I → ℝ :=
+  fun b i =>
+    let w := A.virtualSurplusMaximizingWinner b
+    if 0 < A.winningVirtualValue b then
+      if i = w then 1 else 0
+    else
+      0
+
+/-- Myerson payment for `virtualSurplusMaximizingAllocationRule`. -/
+noncomputable def virtualSurplusMaximizingPaymentRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) : (I → ℝ) → I → ℝ :=
+  SingleParameterMechanism.myersonPayment A.virtualSurplusMaximizingAllocationRule
+
+/-- The virtual-surplus allocation rule paired with its Myerson payment. -/
+noncomputable def virtualSurplusMaximizingMechanism
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) : SingleParameterMechanism I ℝ where
+  allocationRule := A.virtualSurplusMaximizingAllocationRule
+  paymentRule := A.virtualSurplusMaximizingPaymentRule
+
+/-- The Bayesian auction using the virtual-surplus mechanism and the original priors. -/
+noncomputable def virtualSurplusMaximizingAuction
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) : BayesianSingleItemAuction I where
+  allocationRule := (A.virtualSurplusMaximizingMechanism).allocationRule
+  paymentRule := (A.virtualSurplusMaximizingMechanism).paymentRule
+  prior := A.prior
+  prob_prior := A.prob_prior
+  opponentPrior := A.opponentPrior
+  prob_opponentPrior := A.prob_opponentPrior
+  typeData := A.typeData
+
+@[simp] theorem virtualSurplusMaximizingMechanism_allocationRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingMechanism).allocationRule =
+      A.virtualSurplusMaximizingAllocationRule := by
+  rfl
+
+@[simp] theorem virtualSurplusMaximizingMechanism_paymentRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingMechanism).paymentRule =
+      A.virtualSurplusMaximizingPaymentRule := by
+  rfl
+
+@[simp] theorem virtualSurplusMaximizingAuction_allocationRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingAuction).allocationRule =
+      A.virtualSurplusMaximizingAllocationRule := by
+  rfl
+
+@[simp] theorem virtualSurplusMaximizingAuction_paymentRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingAuction).paymentRule =
+      A.virtualSurplusMaximizingPaymentRule := by
+  rfl
+
+@[simp] theorem virtualSurplusMaximizingAuction_prior
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingAuction).prior = A.prior := by
+  rfl
+
+@[simp] theorem virtualSurplusMaximizingAuction_opponentPrior
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingAuction).opponentPrior = A.opponentPrior := by
+  rfl
+
+@[simp] theorem virtualSurplusMaximizingAuction_typeData
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingAuction).typeData = A.typeData := by
+  rfl
+
+@[simp] theorem virtualSurplusMaximizingAuction_toSingleParameterMechanism
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingAuction).toSingleParameterMechanism =
+      A.virtualSurplusMaximizingMechanism := by
+  rfl
+
+@[simp] theorem virtualSurplusMaximizingAuction_toDirectBayesianMechanismWithTransfers
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingAuction).toDirectBayesianMechanismWithTransfers =
+      ({ prior := A.prior
+         prob_prior := A.prob_prior
+         allocationRule := (A.virtualSurplusMaximizingMechanism).allocationRule
+         paymentRule := (A.virtualSurplusMaximizingMechanism).paymentRule } :
+        DirectBayesianMechanismWithTransfers I (fun _ => ℝ) (I → ℝ) ℝ) := by
+  rfl
+
+end VirtualSurplusMaximizingMechanism
+
+section VirtualSurplusMaximality
+
+/-! ## Allocation-rule facts and virtual-surplus maximality -/
+
+private lemma virtualSurplusMaximizingAllocationRule_eq_winnerIndicator_of_pos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ)
+    (hpos : 0 < A.winningVirtualValue b) :
+    A.virtualSurplusMaximizingAllocationRule b =
+      fun i => if i = A.virtualSurplusMaximizingWinner b then (1 : ℝ) else 0 := by
+  funext i
+  simp [virtualSurplusMaximizingAllocationRule, hpos]
+
+private lemma virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ)
+    (hnotpos : ¬ 0 < A.winningVirtualValue b) :
+    A.virtualSurplusMaximizingAllocationRule b = fun _ => (0 : ℝ) := by
+  funext i
+  simp [virtualSurplusMaximizingAllocationRule, hnotpos]
+
+private lemma virtualSurplusMaximizingAllocationRule_eq_one_of_winner_of_winning_pos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {b : I → ℝ} {i : I}
+    (hwinner : A.virtualSurplusMaximizingWinner b = i)
+    (hpos : 0 < A.winningVirtualValue b) :
+    A.virtualSurplusMaximizingAllocationRule b i = 1 := by
+  simp [virtualSurplusMaximizingAllocationRule, hpos, hwinner]
+
+private lemma virtualSurplusMaximizingAllocationRule_eq_zero_of_ne_winner
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {b : I → ℝ} {i : I}
+    (hi : i ≠ A.virtualSurplusMaximizingWinner b) :
+    A.virtualSurplusMaximizingAllocationRule b i = 0 := by
+  by_cases hpos : 0 < A.winningVirtualValue b
+  · simp [virtualSurplusMaximizingAllocationRule, hpos, hi]
+  · simp [virtualSurplusMaximizingAllocationRule, hpos]
+
+/-- The selected winner has maximal virtual value. -/
+theorem virtualSurplusMaximizingWinner_virtualValue_ge
+    [Fintype I] [Nontrivial I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) :
+    A.virtualValue i (b i) ≤ A.winningVirtualValue b := by
+  have hscore :
+      A.virtualScore b i ≤ A.virtualScore b (A.virtualSurplusMaximizingWinner b) := by
+    simpa [virtualSurplusMaximizingWinner] using Auction.bid_le_maxBid (A.virtualScore b) i
+  rw [virtualScore, virtualScore, Prod.Lex.toLex_le_toLex] at hscore
+  rcases hscore with hlt | ⟨heq, _⟩
+  · exact le_of_lt hlt
+  · exact le_of_eq heq
+
+private lemma virtualSurplus_virtualSurplusMaximizingAllocationRule_eq_of_pos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ)
+    (hpos : 0 < A.winningVirtualValue b) :
+    A.virtualSurplus A.virtualSurplusMaximizingAllocationRule b = A.winningVirtualValue b := by
+  rw [virtualSurplus, A.virtualSurplusMaximizingAllocationRule_eq_winnerIndicator_of_pos b hpos]
+  simp [winningVirtualValue, Finset.sum_ite_eq', Finset.mem_univ]
+
+private lemma virtualSurplus_virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ)
+    (hnotpos : ¬ 0 < A.winningVirtualValue b) :
+    A.virtualSurplus A.virtualSurplusMaximizingAllocationRule b = 0 := by
+  rw [virtualSurplus, A.virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos b hnotpos]
+  simp
+
+private lemma virtualSurplus_le_totalAllocation_mul_winningVirtualValue
+    [Fintype I] [Nontrivial I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {x : (I → ℝ) → I → ℝ} {b : I → ℝ}
+    (hx_nonneg : ∀ i, 0 ≤ x b i) :
+    A.virtualSurplus x b ≤ (∑ i, x b i) * A.winningVirtualValue b := by
+  have hterm :
+      ∀ i, x b i * A.virtualValue i (b i) ≤ x b i * A.winningVirtualValue b := by
+    intro i
+    exact mul_le_mul_of_nonneg_left
+      (A.virtualSurplusMaximizingWinner_virtualValue_ge b i)
+      (hx_nonneg i)
+  calc
+    A.virtualSurplus x b = ∑ i, x b i * A.virtualValue i (b i) := rfl
+    _ ≤ ∑ i, x b i * A.winningVirtualValue b :=
+      Finset.sum_le_sum fun i _ => hterm i
+    _ = (∑ i, x b i) * A.winningVirtualValue b := by
+      rw [← Finset.sum_mul]
+
+private lemma virtualSurplus_le_winningVirtualValue
+    [Fintype I] [Nontrivial I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {x : (I → ℝ) → I → ℝ} {b : I → ℝ}
+    (hx_nonneg : ∀ i, 0 ≤ x b i)
+    (hx_capacity : (∑ i, x b i) ≤ 1)
+    (hwin_nonneg : 0 ≤ A.winningVirtualValue b) :
+    A.virtualSurplus x b ≤ A.winningVirtualValue b := by
+  calc
+    A.virtualSurplus x b ≤ (∑ i, x b i) * A.winningVirtualValue b :=
+      A.virtualSurplus_le_totalAllocation_mul_winningVirtualValue hx_nonneg
+    _ ≤ 1 * A.winningVirtualValue b :=
+      mul_le_mul_of_nonneg_right hx_capacity hwin_nonneg
+    _ = A.winningVirtualValue b := by ring
+
+private lemma virtualSurplus_nonpos_of_winningVirtualValue_nonpos
+    [Fintype I] [Nontrivial I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {x : (I → ℝ) → I → ℝ} {b : I → ℝ}
+    (hx_nonneg : ∀ i, 0 ≤ x b i)
+    (hwin_nonpos : A.winningVirtualValue b ≤ 0) :
+    A.virtualSurplus x b ≤ 0 := by
+  have hsum_nonneg : 0 ≤ ∑ i, x b i := Finset.sum_nonneg fun i _ => hx_nonneg i
+  calc
+    A.virtualSurplus x b ≤ (∑ i, x b i) * A.winningVirtualValue b :=
+      A.virtualSurplus_le_totalAllocation_mul_winningVirtualValue hx_nonneg
+    _ ≤ 0 := mul_nonpos_of_nonneg_of_nonpos hsum_nonneg hwin_nonpos
+
+/-- Pointwise virtual-surplus maximality. -/
+theorem virtualSurplus_le_virtualSurplusMaximizingAllocationRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {x : (I → ℝ) → I → ℝ} {b : I → ℝ}
+    (hx_nonneg : ∀ i, 0 ≤ x b i)
+    (hx_capacity : (∑ i, x b i) ≤ 1) :
+    A.virtualSurplus x b ≤
+    A.virtualSurplus A.virtualSurplusMaximizingAllocationRule b := by
+  by_cases hpos : 0 < A.winningVirtualValue b
+  · have hle := A.virtualSurplus_le_winningVirtualValue hx_nonneg hx_capacity (le_of_lt hpos)
+    simpa [A.virtualSurplus_virtualSurplusMaximizingAllocationRule_eq_of_pos b hpos] using hle
+  · have hle := A.virtualSurplus_nonpos_of_winningVirtualValue_nonpos hx_nonneg (le_of_not_gt hpos)
+    simpa [A.virtualSurplus_virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos b hpos]
+      using hle
+
+end VirtualSurplusMaximality
+
+section ReserveInterpretation
+
+/-! ## Reserve-price interpretation of the allocation rule -/
+
+/-- If the winning virtual value is positive, allocate to the selected winner. -/
+theorem virtualSurplusMaximizingAllocationRule_eq_winnerIndicator_of_winningVirtualValue_pos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ)
+    (hpos : 0 < A.winningVirtualValue b) :
+    A.virtualSurplusMaximizingAllocationRule b =
+      fun i => if i = A.virtualSurplusMaximizingWinner b then (1 : ℝ) else 0 :=
+  A.virtualSurplusMaximizingAllocationRule_eq_winnerIndicator_of_pos b hpos
+
+/-- If the winning virtual value is positive, the selected winner receives `1`. -/
+theorem virtualSurplusMaximizingAllocationRule_winner_eq_one_of_winningVirtualValue_pos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ)
+    (hpos : 0 < A.winningVirtualValue b) :
+    A.virtualSurplusMaximizingAllocationRule b (A.virtualSurplusMaximizingWinner b) = 1 :=
+  A.virtualSurplusMaximizingAllocationRule_eq_one_of_winner_of_winning_pos rfl hpos
+
+/-- The winning virtual value is positive iff some virtual value is positive. -/
+theorem winningVirtualValue_pos_iff_exists_virtualValue_pos
+    [Fintype I] [Nontrivial I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) :
+    0 < A.winningVirtualValue b ↔ ∃ i, 0 < A.virtualValue i (b i) := by
+  constructor
+  · intro hpos
+    exact ⟨A.virtualSurplusMaximizingWinner b, by simpa [winningVirtualValue] using hpos⟩
+  · rintro ⟨i, hi⟩
+    exact lt_of_lt_of_le hi (A.virtualSurplusMaximizingWinner_virtualValue_ge b i)
+
+/-- The winning virtual value is nonpositive iff all virtual values are. -/
+theorem winningVirtualValue_nonpos_iff_forall_virtualValue_nonpos
+    [Fintype I] [Nontrivial I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) :
+    A.winningVirtualValue b ≤ 0 ↔ ∀ i, A.virtualValue i (b i) ≤ 0 := by
+  constructor
+  · intro hwin i
+    exact le_trans (A.virtualSurplusMaximizingWinner_virtualValue_ge b i) hwin
+  · intro h
+    simpa [winningVirtualValue] using h (A.virtualSurplusMaximizingWinner b)
+
+/-- Allocation probability `1` characterizes the positive virtual-value winner. -/
+theorem virtualSurplusMaximizingAllocationRule_eq_one_iff
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) :
+    A.virtualSurplusMaximizingAllocationRule b i = 1 ↔
+      0 < A.winningVirtualValue b ∧ i = A.virtualSurplusMaximizingWinner b := by
+  constructor
+  · intro hi
+    by_cases hpos : 0 < A.winningVirtualValue b
+    · refine ⟨hpos, ?_⟩
+      by_contra hne
+      have hzero : A.virtualSurplusMaximizingAllocationRule b i = 0 :=
+        A.virtualSurplusMaximizingAllocationRule_eq_zero_of_ne_winner hne
+      exact zero_ne_one (hzero.symm.trans hi)
+    · have hzero : A.virtualSurplusMaximizingAllocationRule b i = 0 := by
+        simpa using
+          congr_fun (A.virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos b hpos) i
+      exact False.elim (zero_ne_one (by rw [← hzero, hi]))
+  · rintro ⟨hpos, hi⟩
+    exact A.virtualSurplusMaximizingAllocationRule_eq_one_of_winner_of_winning_pos
+      hi.symm hpos
+
+/-- A bidder allocated probability `1` has positive virtual value. -/
+theorem virtualValue_pos_of_virtualSurplusMaximizingAllocationRule_eq_one
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {b : I → ℝ} {i : I}
+    (hi : A.virtualSurplusMaximizingAllocationRule b i = 1) :
+    0 < A.virtualValue i (b i) := by
+  rcases (A.virtualSurplusMaximizingAllocationRule_eq_one_iff b i).mp hi with
+    ⟨hpos, hi_winner⟩
+  simpa [winningVirtualValue, hi_winner] using hpos
+
+/-- An allocated bidder reports at least her reserve threshold. -/
+theorem reserveThreshold_le_bid_of_virtualSurplusMaximizingAllocationRule_eq_one
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {b : I → ℝ} {i : I} {reserve : ℝ}
+    (hreserve : A.IsReserveThreshold i reserve)
+    (hi : A.virtualSurplusMaximizingAllocationRule b i = 1) :
+    reserve ≤ b i := by
+  by_contra hnot
+  have hlt : b i < reserve := lt_of_not_ge hnot
+  have hvirt_pos : 0 < A.virtualValue i (b i) :=
+    A.virtualValue_pos_of_virtualSurplusMaximizingAllocationRule_eq_one hi
+  exact (not_le_of_gt hvirt_pos) (A.virtualValue_nonpos_of_lt_isReserveThreshold hreserve hlt)
+
+/-- A sale occurs exactly when some bidder has positive virtual value. -/
+theorem exists_virtualSurplusMaximizingAllocationRule_eq_one_iff_exists_virtualValue_pos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) :
+    (∃ i, A.virtualSurplusMaximizingAllocationRule b i = 1) ↔
+      ∃ i, 0 < A.virtualValue i (b i) := by
+  constructor
+  · rintro ⟨i, hi⟩
+    exact ⟨i, A.virtualValue_pos_of_virtualSurplusMaximizingAllocationRule_eq_one hi⟩
+  · intro hpos_exists
+    have hpos : 0 < A.winningVirtualValue b :=
+      (A.winningVirtualValue_pos_iff_exists_virtualValue_pos b).2 hpos_exists
+    exact ⟨A.virtualSurplusMaximizingWinner b,
+      A.virtualSurplusMaximizingAllocationRule_winner_eq_one_of_winningVirtualValue_pos b hpos⟩
+
+/-- A sale occurs exactly when the selected virtual value is positive. -/
+theorem exists_virtualSurplusMaximizingAllocationRule_eq_one_iff_winningVirtualValue_pos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) :
+    (∃ i, A.virtualSurplusMaximizingAllocationRule b i = 1) ↔
+      0 < A.winningVirtualValue b := by
+  rw [A.exists_virtualSurplusMaximizingAllocationRule_eq_one_iff_exists_virtualValue_pos,
+    A.winningVirtualValue_pos_iff_exists_virtualValue_pos]
+
+/-- If a sale occurs, some bidder reaches her reserve threshold. -/
+theorem exists_reserveThreshold_le_bid_of_exists_virtualSurplusMaximizingAllocationRule_eq_one
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {reserve b : I → ℝ}
+    (hreserve : ∀ i, A.IsReserveThreshold i (reserve i))
+    (hsale : ∃ i, A.virtualSurplusMaximizingAllocationRule b i = 1) :
+    ∃ i, reserve i ≤ b i := by
+  rcases hsale with ⟨i, hi⟩
+  exact ⟨i, A.reserveThreshold_le_bid_of_virtualSurplusMaximizingAllocationRule_eq_one
+    (hreserve i) hi⟩
+
+/-- A positive virtual-value winner reaches her reserve threshold. -/
+theorem reserveThreshold_le_winner_bid_of_winningVirtualValue_pos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {reserve b : I → ℝ}
+    (hreserve : ∀ i, A.IsReserveThreshold i (reserve i))
+    (hpos : 0 < A.winningVirtualValue b) :
+    reserve (A.virtualSurplusMaximizingWinner b) ≤ b (A.virtualSurplusMaximizingWinner b) :=
+  A.reserveThreshold_le_bid_of_virtualSurplusMaximizingAllocationRule_eq_one
+    (hreserve (A.virtualSurplusMaximizingWinner b))
+    (A.virtualSurplusMaximizingAllocationRule_winner_eq_one_of_winningVirtualValue_pos b hpos)
+
+/-- Positive winning virtual value implies some report reaches reserve. -/
+theorem exists_reserveThreshold_le_bid_of_winningVirtualValue_pos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {reserve b : I → ℝ}
+    (hreserve : ∀ i, A.IsReserveThreshold i (reserve i))
+    (hpos : 0 < A.winningVirtualValue b) :
+    ∃ i, reserve i ≤ b i :=
+  ⟨A.virtualSurplusMaximizingWinner b,
+    A.reserveThreshold_le_winner_bid_of_winningVirtualValue_pos hreserve hpos⟩
+
+/-- If all reports are below reserve, the winning virtual value is nonpositive. -/
+theorem winningVirtualValue_nonpos_of_forall_lt_reserveThreshold
+    [Fintype I] [Nontrivial I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {reserve b : I → ℝ}
+    (hreserve : ∀ i, A.IsReserveThreshold i (reserve i))
+    (hb : ∀ i, b i < reserve i) :
+    A.winningVirtualValue b ≤ 0 :=
+  (A.winningVirtualValue_nonpos_iff_forall_virtualValue_nonpos b).mpr
+    fun i => A.virtualValue_nonpos_of_lt_isReserveThreshold (hreserve i) (hb i)
+
+/-- Positive winning virtual value rules out all reports below reserve. -/
+theorem not_forall_lt_reserveThreshold_of_winningVirtualValue_pos
+    [Fintype I] [Nontrivial I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {reserve b : I → ℝ}
+    (hreserve : ∀ i, A.IsReserveThreshold i (reserve i))
+    (hpos : 0 < A.winningVirtualValue b) :
+    ¬ ∀ i, b i < reserve i := by
+  intro hb
+  exact not_le_of_gt hpos (A.winningVirtualValue_nonpos_of_forall_lt_reserveThreshold hreserve hb)
+
+/-- If all virtual values are nonpositive, withhold the item. -/
+theorem virtualSurplusMaximizingAllocationRule_eq_zero_of_forall_virtualValue_nonpos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {b : I → ℝ}
+    (hnonpos : ∀ i, A.virtualValue i (b i) ≤ 0) :
+    A.virtualSurplusMaximizingAllocationRule b = fun _ => (0 : ℝ) := by
+  have hwin_nonpos : A.winningVirtualValue b ≤ 0 := by
+    simpa [winningVirtualValue] using hnonpos (A.virtualSurplusMaximizingWinner b)
+  exact A.virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos b
+    (not_lt_of_ge hwin_nonpos)
+
+/-- If all reports are below reserve thresholds, withhold the item. -/
+theorem virtualSurplusMaximizingAllocationRule_eq_zero_of_forall_lt_reserveThreshold
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {reserve b : I → ℝ}
+    (hreserve : ∀ i, A.IsReserveThreshold i (reserve i))
+    (hb : ∀ i, b i < reserve i) :
+    A.virtualSurplusMaximizingAllocationRule b = fun _ => (0 : ℝ) :=
+  A.virtualSurplusMaximizingAllocationRule_eq_zero_of_forall_virtualValue_nonpos
+    fun i => A.virtualValue_nonpos_of_lt_isReserveThreshold (hreserve i) (hb i)
+
+/-- Withholding is equivalent to all virtual values being nonpositive. -/
+theorem virtualSurplusMaximizingAllocationRule_eq_zero_iff_forall_virtualValue_nonpos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {b : I → ℝ} :
+    (A.virtualSurplusMaximizingAllocationRule b = fun _ => (0 : ℝ)) ↔
+      ∀ i, A.virtualValue i (b i) ≤ 0 := by
+  constructor
+  · intro hzero
+    apply (A.winningVirtualValue_nonpos_iff_forall_virtualValue_nonpos b).mp
+    by_contra hnot
+    have hpos : 0 < A.winningVirtualValue b := lt_of_not_ge hnot
+    have hone :
+        A.virtualSurplusMaximizingAllocationRule b (A.virtualSurplusMaximizingWinner b) = 1 :=
+      A.virtualSurplusMaximizingAllocationRule_winner_eq_one_of_winningVirtualValue_pos b hpos
+    have hzero_at :
+        A.virtualSurplusMaximizingAllocationRule b (A.virtualSurplusMaximizingWinner b) = 0 := by
+      simpa using congr_fun hzero (A.virtualSurplusMaximizingWinner b)
+    exact one_ne_zero (hone.symm.trans hzero_at)
+  · exact A.virtualSurplusMaximizingAllocationRule_eq_zero_of_forall_virtualValue_nonpos
+
+/-- Withholding is equivalent to nonpositive winning virtual value. -/
+theorem virtualSurplusMaximizingAllocationRule_eq_zero_iff_winningVirtualValue_nonpos
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {b : I → ℝ} :
+    (A.virtualSurplusMaximizingAllocationRule b = fun _ => (0 : ℝ)) ↔
+      A.winningVirtualValue b ≤ 0 := by
+  constructor
+  · intro hzero
+    exact (A.winningVirtualValue_nonpos_iff_forall_virtualValue_nonpos b).mpr
+      (A.virtualSurplusMaximizingAllocationRule_eq_zero_iff_forall_virtualValue_nonpos.mp hzero)
+  · intro hwin
+    exact A.virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos b (not_lt_of_ge hwin)
+
+/-- The constructed virtual surplus is the positive part of the winning virtual value. -/
+theorem virtualSurplus_virtualSurplusMaximizingAllocationRule_eq_max_winningVirtualValue_zero
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) :
+    A.virtualSurplus A.virtualSurplusMaximizingAllocationRule b =
+      max (A.winningVirtualValue b) 0 := by
+  by_cases hpos : 0 < A.winningVirtualValue b
+  · have hnonneg : 0 ≤ A.winningVirtualValue b := le_of_lt hpos
+    rw [A.virtualSurplus_virtualSurplusMaximizingAllocationRule_eq_of_pos b hpos,
+      max_eq_left hnonneg]
+  · have hnonpos : A.winningVirtualValue b ≤ 0 := le_of_not_gt hpos
+    rw [A.virtualSurplus_virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos b hpos,
+      max_eq_right hnonpos]
+
+end ReserveInterpretation
+
+section Feasibility
+
+/-! ## Feasibility -/
+
+lemma virtualSurplusMaximizingAllocationRule_nonneg
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) :
+    0 ≤ A.virtualSurplusMaximizingAllocationRule b i := by
+  classical
+  by_cases hpos : 0 < A.winningVirtualValue b
+  · rw [A.virtualSurplusMaximizingAllocationRule_eq_winnerIndicator_of_pos b hpos]
+    by_cases hi : i = A.virtualSurplusMaximizingWinner b <;> simp [hi]
+  · rw [A.virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos b hpos]
+
+lemma virtualSurplusMaximizingAllocationRule_le_one
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) :
+    A.virtualSurplusMaximizingAllocationRule b i ≤ 1 := by
+  classical
+  by_cases hpos : 0 < A.winningVirtualValue b
+  · rw [A.virtualSurplusMaximizingAllocationRule_eq_winnerIndicator_of_pos b hpos]
+    by_cases hi : i = A.virtualSurplusMaximizingWinner b <;> simp [hi]
+  · rw [A.virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos b hpos]
+    simp
+
+lemma virtualSurplusMaximizingAllocationRule_respectsSingleItemCapacity
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) :
+    (∑ i, A.virtualSurplusMaximizingAllocationRule b i) ≤ 1 := by
+  classical
+  by_cases hpos : 0 < A.winningVirtualValue b
+  · rw [A.virtualSurplusMaximizingAllocationRule_eq_winnerIndicator_of_pos b hpos]
+    simp [Finset.sum_ite_eq', Finset.mem_univ]
+  · rw [A.virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos b hpos]
+    simp
+
+/-- The virtual-surplus-maximizing allocation rule is feasible. -/
+theorem virtualSurplusMaximizingAllocationRule_isSingleItemAllocationRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    IsSingleItemAllocationRule A.virtualSurplusMaximizingAllocationRule := by
+  exact ⟨fun b i => A.virtualSurplusMaximizingAllocationRule_nonneg b i,
+    fun b => A.virtualSurplusMaximizingAllocationRule_respectsSingleItemCapacity b⟩
+
+/-- The virtual-surplus-maximizing mechanism is allocation-feasible. -/
+theorem virtualSurplusMaximizingMechanism_isAllocFeasible
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingMechanism).IsAllocFeasible := by
+  simpa [virtualSurplusMaximizingMechanism] using
+    withPayment_isAllocFeasible_of_isSingleItemAllocationRule
+      (p := A.virtualSurplusMaximizingPaymentRule)
+      A.virtualSurplusMaximizingAllocationRule_isSingleItemAllocationRule
+
+/-- The constructed auction is feasible. -/
+theorem virtualSurplusMaximizingAuction_isFeasible
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingAuction).IsFeasible := by
+  constructor
+  · simpa using A.virtualSurplusMaximizingMechanism_isAllocFeasible
+  · intro b
+    simpa [virtualSurplusMaximizingAuction] using
+      A.virtualSurplusMaximizingAllocationRule_respectsSingleItemCapacity b
+
+/-- Auction feasibility gives allocation-rule feasibility. -/
+theorem IsFeasible.isSingleItemAllocationRule
+    [Fintype I] {B : BayesianSingleItemAuction I} (hB : B.IsFeasible) :
+    IsSingleItemAllocationRule B.allocationRule := by
+  exact ⟨fun b i => (hB.1 b i).1, hB.2⟩
+
+end Feasibility
+
+section Measurability
+
+/-! ## Measurability helpers -/
+
+private lemma measurable_virtualScore_le_of_measurable_virtualValues
+    [Fintype I] [LinearOrder I] {X : Type*} [MeasurableSpace X]
+    (A : BayesianSingleItemAuction I) (b : X → I → ℝ)
+    (hb : ∀ j, Measurable fun t => A.virtualValue j (b t j)) (i j : I) :
+    MeasurableSet {t | A.virtualScore (b t) j ≤ A.virtualScore (b t) i} := by
+  have hset :
+      {t | A.virtualScore (b t) j ≤ A.virtualScore (b t) i} =
+        {t | A.virtualValue j (b t j) < A.virtualValue i (b t i) ∨
+          A.virtualValue j (b t j) = A.virtualValue i (b t i) ∧ j ≤ i} := by
+    ext t
+    simp [virtualScore, Prod.Lex.toLex_le_toLex]
+  rw [hset]
+  by_cases hji : j ≤ i
+  · have hset' :
+        {t | A.virtualValue j (b t j) < A.virtualValue i (b t i) ∨
+          A.virtualValue j (b t j) = A.virtualValue i (b t i) ∧ j ≤ i} =
+          {t | A.virtualValue j (b t j) < A.virtualValue i (b t i)} ∪
+            {t | A.virtualValue j (b t j) = A.virtualValue i (b t i)} := by
+      ext t
+      simp [hji]
+    rw [hset']
+    exact (measurableSet_lt (hb j) (hb i)).union
+      (measurableSet_eq_fun (hb j) (hb i))
+  · have hset' :
+        {t | A.virtualValue j (b t j) < A.virtualValue i (b t i) ∨
+          A.virtualValue j (b t j) = A.virtualValue i (b t i) ∧ j ≤ i} =
+          {t | A.virtualValue j (b t j) < A.virtualValue i (b t i)} := by
+      ext t
+      simp [hji]
+    rw [hset']
+    exact measurableSet_lt (hb j) (hb i)
+
+private lemma measurable_winner_eq_of_measurable_virtualValues
+    [Fintype I] [Nontrivial I] [LinearOrder I] {X : Type*} [MeasurableSpace X]
+    (A : BayesianSingleItemAuction I) (b : X → I → ℝ)
+    (hb : ∀ j, Measurable fun t => A.virtualValue j (b t j)) (i : I) :
+    MeasurableSet {t | A.virtualSurplusMaximizingWinner (b t) = i} := by
+  classical
+  haveI : Countable I := inferInstance
+  have hset :
+      {t | A.virtualSurplusMaximizingWinner (b t) = i} =
+        ⋂ j, {t | A.virtualScore (b t) j ≤ A.virtualScore (b t) i} := by
+    ext t
+    simp [A.virtualSurplusMaximizingWinner_eq_iff_forall_virtualScore_le]
+  rw [hset]
+  exact MeasurableSet.iInter fun j =>
+    A.measurable_virtualScore_le_of_measurable_virtualValues b hb i j
+
+private lemma measurable_winningVirtualValue_pos_of_measurable_virtualValues
+    [Fintype I] [Nontrivial I] [LinearOrder I] {X : Type*} [MeasurableSpace X]
+    (A : BayesianSingleItemAuction I) (b : X → I → ℝ)
+    (hb : ∀ j, Measurable fun t => A.virtualValue j (b t j)) :
+    MeasurableSet {t | 0 < A.winningVirtualValue (b t)} := by
+  classical
+  haveI : Countable I := inferInstance
+  have hset :
+      {t | 0 < A.winningVirtualValue (b t)} =
+        ⋃ j, {t | 0 < A.virtualValue j (b t j)} := by
+    ext t
+    simp [A.winningVirtualValue_pos_iff_exists_virtualValue_pos]
+  rw [hset]
+  exact MeasurableSet.iUnion fun j => measurableSet_lt measurable_const (hb j)
+
+private lemma measurable_virtualSurplusMaximizingAllocationRule_comp_of_measurable_virtualValues
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {X : Type*} [MeasurableSpace X]
+    (A : BayesianSingleItemAuction I) (b : X → I → ℝ)
+    (hb : ∀ j, Measurable fun t => A.virtualValue j (b t j)) (i : I) :
+    Measurable fun t => A.virtualSurplusMaximizingAllocationRule (b t) i := by
+  classical
+  refine Measurable.ite
+    (A.measurable_winningVirtualValue_pos_of_measurable_virtualValues b hb) ?_
+    measurable_const
+  have hwinner : MeasurableSet {t | i = A.virtualSurplusMaximizingWinner (b t)} := by
+    simpa [eq_comm] using A.measurable_winner_eq_of_measurable_virtualValues b hb i
+  refine Measurable.ite
+    hwinner ?_
+    measurable_const
+  · exact measurable_const
+
+private lemma aestronglyMeasurable_virtualSurplusMaximizingAuction_interimAllocationIntegrand
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I)
+    (hmeas :
+      ∀ i z_i j,
+        Measurable fun t : OpponentTypeProfile I i =>
+          A.virtualValue j (reportProfile i z_i t j)) :
+    ∀ i z_i,
+      AEStronglyMeasurable
+        (fun t =>
+          A.virtualSurplusMaximizingAuction.interimAllocationIntegrand i z_i t)
+        (A.opponentPrior i) := by
+  intro i z_i
+  have hmeas_alloc :
+      Measurable fun t : OpponentTypeProfile I i =>
+        A.virtualSurplusMaximizingAllocationRule (reportProfile i z_i t) i :=
+    A.measurable_virtualSurplusMaximizingAllocationRule_comp_of_measurable_virtualValues
+      (fun t => reportProfile i z_i t) (hmeas i z_i) i
+  simpa [interimAllocationIntegrand, virtualSurplusMaximizingAuction,
+    virtualSurplusMaximizingMechanism] using hmeas_alloc.aestronglyMeasurable
+
+private lemma measurable_virtualValue_reportProfile_of_measurable_virtualValue
+    (A : BayesianSingleItemAuction I)
+    (hvirt : ∀ j, Measurable (A.virtualValue j)) :
+    ∀ i z_i j,
+      Measurable fun t : OpponentTypeProfile I i =>
+        A.virtualValue j (reportProfile i z_i t j) := by
+  classical
+  intro i z_i j
+  by_cases hji : j = i
+  · subst hji
+    simp
+  · simpa [reportProfile, hji] using
+      (hvirt j).comp (measurable_pi_apply (⟨j, hji⟩ : {j // j ≠ i}))
+
+private lemma measurable_reportProfile_prod (i : I) :
+    Measurable fun p : OpponentTypeProfile I i × ℝ => reportProfile i p.2 p.1 := by
+  classical
+  rw [measurable_pi_iff]
+  intro j
+  by_cases hji : j = i
+  · simpa [reportProfile, hji] using
+      (measurable_snd : Measurable fun p : OpponentTypeProfile I i × ℝ => p.2)
+  · simpa [reportProfile, hji] using
+      ((measurable_pi_apply (⟨j, hji⟩ : {j // j ≠ i})).comp
+        (measurable_fst : Measurable fun p : OpponentTypeProfile I i × ℝ => p.1))
+
+private lemma measurable_virtualSurplusMaximizingAllocationRule_reportProfile_prod_of_measurable_virtualValue
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I)
+    (hvirt : ∀ j, Measurable (A.virtualValue j)) (i k : I) :
+    Measurable fun p : OpponentTypeProfile I i × ℝ =>
+      A.virtualSurplusMaximizingAllocationRule (reportProfile i p.2 p.1) k := by
+  exact
+    A.measurable_virtualSurplusMaximizingAllocationRule_comp_of_measurable_virtualValues
+      (fun p : OpponentTypeProfile I i × ℝ => reportProfile i p.2 p.1)
+      (fun j => (hvirt j).comp ((measurable_pi_apply j).comp (measurable_reportProfile_prod i)))
+      k
+
+private lemma aestronglyMeasurable_virtualSurplusMaximizingAuction_interimAllocationIntegrand_of_measurable_virtualValue
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I)
+    (hvirt : ∀ j, Measurable (A.virtualValue j)) :
+    ∀ i z_i,
+      AEStronglyMeasurable
+        (fun t =>
+          A.virtualSurplusMaximizingAuction.interimAllocationIntegrand i z_i t)
+        (A.opponentPrior i) :=
+  A.aestronglyMeasurable_virtualSurplusMaximizingAuction_interimAllocationIntegrand
+    (A.measurable_virtualValue_reportProfile_of_measurable_virtualValue hvirt)
+
+private lemma aestronglyMeasurable_virtualSurplusMaximizingAuction_interimPaymentIntegrand_of_measurable_virtualValue
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I)
+    (hvirt : ∀ j, Measurable (A.virtualValue j)) :
+    ∀ i z_i,
+      AEStronglyMeasurable
+        (fun t =>
+          A.virtualSurplusMaximizingAuction.interimPaymentIntegrand i z_i t)
+        (A.opponentPrior i) := by
+  intro i z_i
+  have halloc_fixed :
+      AEStronglyMeasurable
+        (fun t : OpponentTypeProfile I i =>
+          A.virtualSurplusMaximizingAllocationRule (reportProfile i z_i t) i)
+        (A.opponentPrior i) := by
+    exact
+      (A.measurable_virtualSurplusMaximizingAllocationRule_comp_of_measurable_virtualValues
+        (fun t : OpponentTypeProfile I i => reportProfile i z_i t)
+        (A.measurable_virtualValue_reportProfile_of_measurable_virtualValue hvirt i z_i)
+        i).aestronglyMeasurable
+  have hfirst :
+      AEStronglyMeasurable
+        (fun t : OpponentTypeProfile I i =>
+          z_i * A.virtualSurplusMaximizingAllocationRule (reportProfile i z_i t) i)
+        (A.opponentPrior i) :=
+    halloc_fixed.const_mul z_i
+  have hjoint :
+      StronglyMeasurable
+        (fun p : OpponentTypeProfile I i × ℝ =>
+          A.virtualSurplusMaximizingAllocationRule (reportProfile i p.2 p.1) i) :=
+    (A.measurable_virtualSurplusMaximizingAllocationRule_reportProfile_prod_of_measurable_virtualValue
+      hvirt i i).stronglyMeasurable
+  have hleft :
+      AEStronglyMeasurable
+        (fun t : OpponentTypeProfile I i =>
+          ∫ z in Set.Ioc 0 z_i,
+            A.virtualSurplusMaximizingAllocationRule (reportProfile i z t) i)
+        (A.opponentPrior i) := by
+    simpa using
+      (hjoint.integral_prod_right'
+        (ν := volume.restrict (Set.Ioc 0 z_i))).aestronglyMeasurable
+  have hright :
+      AEStronglyMeasurable
+        (fun t : OpponentTypeProfile I i =>
+          ∫ z in Set.Ioc z_i 0,
+            A.virtualSurplusMaximizingAllocationRule (reportProfile i z t) i)
+        (A.opponentPrior i) := by
+    simpa using
+      (hjoint.integral_prod_right'
+        (ν := volume.restrict (Set.Ioc z_i 0))).aestronglyMeasurable
+  have hintegral :
+      AEStronglyMeasurable
+        (fun t : OpponentTypeProfile I i =>
+          ∫ z in 0..z_i, A.virtualSurplusMaximizingAllocationRule (reportProfile i z t) i)
+        (A.opponentPrior i) := by
+    simpa [intervalIntegral] using hleft.sub hright
+  have hpay :
+      AEStronglyMeasurable
+        (fun t : OpponentTypeProfile I i =>
+          z_i * A.virtualSurplusMaximizingAllocationRule (reportProfile i z_i t) i -
+            ∫ z in 0..z_i,
+              A.virtualSurplusMaximizingAllocationRule (reportProfile i z t) i)
+        (A.opponentPrior i) :=
+    hfirst.sub hintegral
+  simpa [interimPaymentIntegrand, virtualSurplusMaximizingAuction,
+    virtualSurplusMaximizingMechanism, virtualSurplusMaximizingPaymentRule,
+    SingleParameterMechanism.withMyersonPayment, SingleParameterMechanism.myersonPayment] using hpay
+
+end Measurability
+
+section AllocationOptimality
+
+/-! ## Allocation-rule optimality -/
+
+/-- The deterministic virtual-surplus-maximizing allocation rule is feasible and
+pointwise maximizes virtual surplus among all feasible fractional single-item
+allocation rules. -/
+theorem virtualSurplusMaximizingAllocationRule_isVirtualSurplusOptimalAllocationRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    A.IsVirtualSurplusOptimalAllocationRule A.virtualSurplusMaximizingAllocationRule := by
+  constructor
+  · exact A.virtualSurplusMaximizingAllocationRule_isSingleItemAllocationRule
+  · intro y hy b
+    exact A.virtualSurplus_le_virtualSurplusMaximizingAllocationRule
+      (x := y) (b := b) (hy.1 b) (hy.2 b)
+
+/-- The allocation rule of the Myerson-payment mechanism is virtual-surplus
+optimal.  This exposes the optimal-allocation content at the mechanism layer,
+while payments continue to be supplied by `MechanismDesign.Auction.Myerson`. -/
+theorem virtualSurplusMaximizingMechanism_allocationRule_isVirtualSurplusOptimal
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    A.IsVirtualSurplusOptimalAllocationRule
+      (A.virtualSurplusMaximizingMechanism).allocationRule := by
+  simpa [virtualSurplusMaximizingMechanism] using
+    A.virtualSurplusMaximizingAllocationRule_isVirtualSurplusOptimalAllocationRule
+
+/-- The allocation rule of the constructed Bayesian single-item auction is
+virtual-surplus optimal. -/
+theorem virtualSurplusMaximizingAuction_allocationRule_isVirtualSurplusOptimal
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    A.IsVirtualSurplusOptimalAllocationRule
+      (A.virtualSurplusMaximizingAuction).allocationRule := by
+  simpa [virtualSurplusMaximizingAuction, virtualSurplusMaximizingMechanism] using
+    A.virtualSurplusMaximizingAllocationRule_isVirtualSurplusOptimalAllocationRule
+
+/-- Ex-ante virtual-surplus optimality of the deterministic rule, conditional
+on the explicit integrability assumptions needed by the Bochner integral. -/
+theorem expectedVirtualSurplus_le_virtualSurplusMaximizingAllocationRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {x : (I → ℝ) → I → ℝ}
+    (hx : IsSingleItemAllocationRule x)
+    (hx_int : A.IntegrableVirtualSurplus x)
+    (hopt_int : A.IntegrableVirtualSurplus A.virtualSurplusMaximizingAllocationRule) :
+    A.expectedVirtualSurplus x ≤
+      A.expectedVirtualSurplus A.virtualSurplusMaximizingAllocationRule :=
+  A.expectedVirtualSurplus_le_of_forall_virtualSurplus_le hx_int hopt_int
+    fun b => A.virtualSurplus_le_virtualSurplusMaximizingAllocationRule
+      (x := x) (b := b) (hx.1 b) (hx.2 b)
+
+/-- The allocation rule of the constructed Bayesian auction is ex-ante
+virtual-surplus optimal under the same explicit integrability assumptions. -/
+theorem expectedVirtualSurplus_le_virtualSurplusMaximizingAuction_allocationRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {x : (I → ℝ) → I → ℝ}
+    (hx : IsSingleItemAllocationRule x)
+    (hx_int : A.IntegrableVirtualSurplus x)
+    (hopt_int : A.IntegrableVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule) :
+    A.expectedVirtualSurplus x ≤
+      A.expectedVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule := by
+  simpa [virtualSurplusMaximizingAuction, virtualSurplusMaximizingMechanism] using
+    A.expectedVirtualSurplus_le_virtualSurplusMaximizingAllocationRule
+      (x := x) hx hx_int hopt_int
+
+theorem expectedVirtualSurplus_le_virtualSurplusMaximizingAuction_of_isFeasible
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A B : BayesianSingleItemAuction I)
+    (hB : B.IsFeasible)
+    (hB_int : A.IntegrableVirtualSurplus B.allocationRule)
+    (hopt_int : A.IntegrableVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule) :
+    A.expectedVirtualSurplus B.allocationRule ≤
+      A.expectedVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule :=
+  A.expectedVirtualSurplus_le_virtualSurplusMaximizingAuction_allocationRule
+    hB.isSingleItemAllocationRule hB_int hopt_int
+
+end AllocationOptimality
+
+section PaymentNormalization
+
+/-- Zero normalization for a Bayesian single-item auction's payment rule:
+reporting `0` gives payment `0`, holding the other reports fixed. -/
+def IsZeroNormalized [DecidableEq I] (B : BayesianSingleItemAuction I) : Prop :=
+  SingleParameterMechanism.ZeroNormalized B.paymentRule
+
+/-- A zero-normalized payment rule has zero interim expected payment at type
+`0`. -/
+theorem interimExpectedPayment_zero_of_isZeroNormalized
+    [DecidableEq I] (B : BayesianSingleItemAuction I) (hzero : B.IsZeroNormalized)
+    (i : I) :
+    B.interimExpectedPayment i 0 = 0 := by
+  have hpoint :
+      (fun t : OpponentTypeProfile I i => B.interimPaymentIntegrand i 0 t) =
+        fun _ => 0 := by
+    funext t
+    have hz := hzero i (reportProfile i 0 t)
+    simpa [IsZeroNormalized, SingleParameterMechanism.ZeroNormalized,
+      interimPaymentIntegrand] using hz
+  rw [B.interimExpectedPayment_eq_integral_interimPaymentIntegrand i 0, hpoint]
+  simp
+
+/-- Under the interim envelope formula and nonnegative envelope increments,
+zero normalization implies support-restricted interim IR. -/
+theorem isIndividuallyRationalOnSupport_of_isZeroNormalized_of_hasInterimEnvelopeFormula
+    [DecidableEq I] (B : BayesianSingleItemAuction I)
+    (hzero : B.IsZeroNormalized)
+    (henv : B.HasInterimEnvelopeFormula)
+    (hint_nonneg : B.HasNonnegativeInterimAllocationIntegralOnSupport) :
+    B.IsIndividuallyRationalOnSupport := by
+  exact
+    (B.isIndividuallyRationalOnSupport_iff_interimExpectedPayment_zero_nonpos
+      henv hint_nonneg).2
+      (fun i => by
+        rw [B.interimExpectedPayment_zero_of_isZeroNormalized hzero i])
+
+end PaymentNormalization
+
+section MonotonicityAndDSIC
+
+/-! ## Monotonicity and Myerson implementation -/
+
+private lemma virtualScore_update_ne
+    [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) {i j : I} (hji : j ≠ i) (r : ℝ) :
+    A.virtualScore (Function.update b i r) j = A.virtualScore b j := by
+  simp [virtualScore, Function.update_of_ne hji]
+
+private lemma virtualScore_update_self_mono_of_isRegular
+    [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular)
+    (b : I → ℝ) (i : I) {r s : ℝ} (hrs : r ≤ s) :
+    A.virtualScore (Function.update b i r) i ≤
+      A.virtualScore (Function.update b i s) i := by
+  rw [virtualScore, virtualScore, Function.update_self, Function.update_self,
+    Prod.Lex.toLex_le_toLex]
+  rcases lt_or_eq_of_le (hA i hrs) with hlt | heq
+  · exact Or.inl hlt
+  · exact Or.inr ⟨heq, le_rfl⟩
+
+private lemma virtualSurplusMaximizingWinner_update_self_of_winner
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular)
+    (b : I → ℝ) (i : I) {r s : ℝ} (hrs : r ≤ s)
+    (hwinner : A.virtualSurplusMaximizingWinner (Function.update b i r) = i) :
+    A.virtualSurplusMaximizingWinner (Function.update b i s) = i := by
+  classical
+  let bLo := Function.update b i r
+  let bHi := Function.update b i s
+  have hstrict : ∀ j, j ≠ i → A.virtualScore bHi j < A.virtualScore bHi i := by
+    intro j hji
+    have hwinner' : Auction.argmaxBid (A.virtualScore bLo) = i := by
+      simpa [virtualSurplusMaximizingWinner, bLo] using hwinner
+    have hle_lo :
+        A.virtualScore bLo j ≤ A.virtualScore bLo i := by
+      simpa [hwinner'] using
+        Auction.bid_le_maxBid (A.virtualScore bLo) j
+    have hne_lo : A.virtualScore bLo j ≠ A.virtualScore bLo i := by
+      intro h
+      exact hji (Prod.ext_iff.mp (toLex_inj.mp h)).2
+    have hlt_lo : A.virtualScore bLo j < A.virtualScore bLo i :=
+      lt_of_le_of_ne hle_lo hne_lo
+    have hle_self : A.virtualScore bLo i ≤ A.virtualScore bHi i := by
+      simpa [bLo, bHi] using
+        A.virtualScore_update_self_mono_of_isRegular hA b i hrs
+    have hlt_hi : A.virtualScore bLo j < A.virtualScore bHi i :=
+      lt_of_lt_of_le hlt_lo hle_self
+    simpa [bLo, bHi, virtualScore_update_ne A b hji s,
+      virtualScore_update_ne A b hji r] using hlt_hi
+  exact (Auction.eq_argmaxBid_of_strict_max (A.virtualScore bHi) i hstrict).symm
+
+private lemma winningVirtualValue_update_self_of_winner
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) (r : ℝ)
+    (hwinner : A.virtualSurplusMaximizingWinner (Function.update b i r) = i) :
+    A.winningVirtualValue (Function.update b i r) = A.virtualValue i r := by
+  rw [winningVirtualValue, hwinner, Function.update_self]
+
+private lemma winningVirtualValue_update_self_pos_iff_of_winner
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) (r : ℝ)
+    (hwinner : A.virtualSurplusMaximizingWinner (Function.update b i r) = i) :
+    0 < A.winningVirtualValue (Function.update b i r) ↔ 0 < A.virtualValue i r := by
+  rw [A.winningVirtualValue_update_self_of_winner b i r hwinner]
+
+/-- Under regularity, the deterministic virtual-surplus-maximizing allocation
+rule is monotone in the sense required by `SingleParameterMechanism`. -/
+theorem virtualSurplusMaximizingAllocationRule_isMonotone_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
+    SingleParameterMechanism.IsMonotone
+      ({ allocationRule := A.virtualSurplusMaximizingAllocationRule
+         paymentRule := A.virtualSurplusMaximizingPaymentRule } :
+        SingleParameterMechanism I ℝ) := by
+  classical
+  intro i r s hrs b
+  change
+    A.virtualSurplusMaximizingAllocationRule (Function.update b i r) i ≤
+      A.virtualSurplusMaximizingAllocationRule (Function.update b i s) i
+  by_cases hwin_lo :
+      A.virtualSurplusMaximizingWinner (Function.update b i r) = i
+  · have hwin_hi :
+        A.virtualSurplusMaximizingWinner (Function.update b i s) = i :=
+      A.virtualSurplusMaximizingWinner_update_self_of_winner hA b i hrs hwin_lo
+    by_cases hpos_lo : 0 < A.virtualValue i r
+    · have hpos_hi : 0 < A.virtualValue i s := lt_of_lt_of_le hpos_lo (hA i hrs)
+      have hpos_lo' :
+          0 < A.winningVirtualValue (Function.update b i r) :=
+        (A.winningVirtualValue_update_self_pos_iff_of_winner b i r hwin_lo).2 hpos_lo
+      have hpos_hi' :
+          0 < A.winningVirtualValue (Function.update b i s) :=
+        (A.winningVirtualValue_update_self_pos_iff_of_winner b i s hwin_hi).2 hpos_hi
+      rw [A.virtualSurplusMaximizingAllocationRule_eq_one_of_winner_of_winning_pos hwin_lo
+          hpos_lo',
+        A.virtualSurplusMaximizingAllocationRule_eq_one_of_winner_of_winning_pos hwin_hi
+          hpos_hi']
+    · have hnotpos_lo :
+          ¬ 0 < A.winningVirtualValue (Function.update b i r) :=
+        mt (A.winningVirtualValue_update_self_pos_iff_of_winner b i r hwin_lo).1 hpos_lo
+      rw [A.virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos
+        (Function.update b i r) hnotpos_lo]
+      exact A.virtualSurplusMaximizingAllocationRule_nonneg (Function.update b i s) i
+  · have hi_ne : i ≠ A.virtualSurplusMaximizingWinner (Function.update b i r) :=
+      fun hi => hwin_lo hi.symm
+    rw [A.virtualSurplusMaximizingAllocationRule_eq_zero_of_ne_winner hi_ne]
+    exact A.virtualSurplusMaximizingAllocationRule_nonneg (Function.update b i s) i
+
+/-- The regular deterministic virtual-surplus-maximizing mechanism is DSIC by
+the existing Myerson payment theorem. -/
+theorem virtualSurplusMaximizingMechanism_isDSIC_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
+    (A.virtualSurplusMaximizingMechanism).IsDSIC := by
+  simpa [virtualSurplusMaximizingMechanism, virtualSurplusMaximizingPaymentRule,
+    virtualSurplusMaximizingAllocationRule] using
+    (SingleParameterMechanism.withMyersonPayment_isDSIC_of_isMonotone
+      (x := A.virtualSurplusMaximizingAllocationRule)
+      (A.virtualSurplusMaximizingAllocationRule_isMonotone_of_isRegular hA))
+
+/-- The constructed Bayesian single-item auction is DSIC after forgetting to the
+underlying single-parameter mechanism. -/
+theorem virtualSurplusMaximizingAuction_isDSIC_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
+    (A.virtualSurplusMaximizingAuction).IsDSIC := by
+  simpa [virtualSurplusMaximizingAuction, virtualSurplusMaximizingMechanism] using
+    A.virtualSurplusMaximizingMechanism_isDSIC_of_isRegular hA
+
+/-! ### Myerson payment formula and uniqueness -/
+
+@[simp] theorem virtualSurplusMaximizingMechanism_eq_withMyersonPayment
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    A.virtualSurplusMaximizingMechanism =
+      SingleParameterMechanism.withMyersonPayment A.virtualSurplusMaximizingAllocationRule := by
+  rfl
+
+@[simp] theorem virtualSurplusMaximizingPaymentRule_eq
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) :
+    A.virtualSurplusMaximizingPaymentRule b i =
+      b i * A.virtualSurplusMaximizingAllocationRule b i -
+        ∫ z in 0..b i, A.virtualSurplusMaximizingAllocationRule (Function.update b i z) i := by
+  rfl
+
+/-- The constructed Myerson payment is bounded by twice the absolute report.
+
+This uses only the pointwise allocation bounds `0 ≤ x ≤ 1`; it is the boundedness
+half of the interim-integrability proof route. -/
+theorem norm_virtualSurplusMaximizingPaymentRule_le
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) :
+    ‖A.virtualSurplusMaximizingPaymentRule b i‖ ≤ 2 * ‖b i‖ := by
+  let x : ℝ := A.virtualSurplusMaximizingAllocationRule b i
+  have hx_nonneg : 0 ≤ x := by
+    simpa [x] using A.virtualSurplusMaximizingAllocationRule_nonneg b i
+  have hx_le_one : x ≤ 1 := by
+    simpa [x] using A.virtualSurplusMaximizingAllocationRule_le_one b i
+  have hterm :
+      ‖b i * A.virtualSurplusMaximizingAllocationRule b i‖ ≤ ‖b i‖ := by
+    calc
+      ‖b i * A.virtualSurplusMaximizingAllocationRule b i‖
+          = |b i| * x := by
+            simp [x, Real.norm_eq_abs, abs_of_nonneg hx_nonneg]
+      _ ≤ |b i| * 1 := mul_le_mul_of_nonneg_left hx_le_one (abs_nonneg (b i))
+      _ = ‖b i‖ := by simp [Real.norm_eq_abs]
+  have hintegral :
+      ‖∫ z in 0..b i, A.virtualSurplusMaximizingAllocationRule (Function.update b i z) i‖
+        ≤ ‖b i‖ := by
+    have hbound :
+        ‖∫ z in 0..b i,
+            A.virtualSurplusMaximizingAllocationRule (Function.update b i z) i‖
+          ≤ 1 * |b i - 0| :=
+      intervalIntegral.norm_integral_le_of_norm_le_const
+        (fun z _hz => by
+          have hz_nonneg :
+              0 ≤ A.virtualSurplusMaximizingAllocationRule (Function.update b i z) i :=
+            A.virtualSurplusMaximizingAllocationRule_nonneg (Function.update b i z) i
+          have hz_le_one :
+              A.virtualSurplusMaximizingAllocationRule (Function.update b i z) i ≤ 1 :=
+            A.virtualSurplusMaximizingAllocationRule_le_one (Function.update b i z) i
+          simpa [Real.norm_eq_abs, abs_of_nonneg hz_nonneg] using hz_le_one)
+    simpa [Real.norm_eq_abs] using hbound
+  calc
+    ‖A.virtualSurplusMaximizingPaymentRule b i‖
+        = ‖b i * A.virtualSurplusMaximizingAllocationRule b i -
+            ∫ z in 0..b i,
+              A.virtualSurplusMaximizingAllocationRule (Function.update b i z) i‖ := by
+          rw [A.virtualSurplusMaximizingPaymentRule_eq]
+    _ ≤ ‖b i * A.virtualSurplusMaximizingAllocationRule b i‖ +
+          ‖∫ z in 0..b i,
+            A.virtualSurplusMaximizingAllocationRule (Function.update b i z) i‖ :=
+          norm_sub_le _ _
+    _ ≤ ‖b i‖ + ‖b i‖ := add_le_add hterm hintegral
+    _ = 2 * ‖b i‖ := by ring
+
+/-- For each fixed report, the constructed Myerson payment integrand is bounded
+uniformly over opponent profiles. -/
+theorem virtualSurplusMaximizingAuction_interimPaymentIntegrand_bound
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (i : I) (z_i : ℝ) :
+    ∀ᵐ t ∂A.opponentPrior i,
+      ‖A.virtualSurplusMaximizingAuction.interimPaymentIntegrand i z_i t‖ ≤
+        2 * ‖z_i‖ := by
+  refine Filter.Eventually.of_forall ?_
+  intro t
+  simpa [interimPaymentIntegrand, virtualSurplusMaximizingAuction,
+    virtualSurplusMaximizingMechanism, virtualSurplusMaximizingPaymentRule,
+    SingleParameterMechanism.withMyersonPayment, SingleParameterMechanism.myersonPayment] using
+    A.norm_virtualSurplusMaximizingPaymentRule_le (reportProfile i z_i t) i
+
+/-- Once the constructed allocation and payment integrands are measurable,
+boundedness gives interim integrability for the constructed auction. -/
+theorem virtualSurplusMaximizingAuction_hasIntegrableInterimObjects_of_aestronglyMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I)
+    (halloc_meas :
+      ∀ i z_i,
+        AEStronglyMeasurable
+          (fun t =>
+            A.virtualSurplusMaximizingAuction.interimAllocationIntegrand i z_i t)
+          (A.opponentPrior i))
+    (hpay_meas :
+      ∀ i z_i,
+        AEStronglyMeasurable
+          (fun t =>
+            A.virtualSurplusMaximizingAuction.interimPaymentIntegrand i z_i t)
+          (A.opponentPrior i)) :
+    A.virtualSurplusMaximizingAuction.HasIntegrableInterimObjects :=
+  A.virtualSurplusMaximizingAuction
+    |>.hasIntegrableInterimObjects_of_aestronglyMeasurable_of_bound
+      (by simpa [virtualSurplusMaximizingAuction_opponentPrior] using halloc_meas)
+      (by simpa [virtualSurplusMaximizingAuction_opponentPrior] using hpay_meas)
+      (by
+        intro i z_i
+        refine ⟨1, Filter.Eventually.of_forall ?_⟩
+        intro t
+        have hx :=
+          A.virtualSurplusMaximizingAuction_isFeasible.1 (reportProfile i z_i t) i
+        have hnonneg :
+            0 ≤
+              A.virtualSurplusMaximizingAuction.interimAllocationIntegrand i z_i t := by
+          simpa [interimAllocationIntegrand] using hx.1
+        have hle :
+            A.virtualSurplusMaximizingAuction.interimAllocationIntegrand i z_i t ≤ 1 := by
+          simpa [interimAllocationIntegrand] using hx.2
+        rw [Real.norm_eq_abs, abs_of_nonneg hnonneg]
+        exact hle)
+      (by
+        intro i z_i
+        exact ⟨2 * ‖z_i‖,
+          A.virtualSurplusMaximizingAuction_interimPaymentIntegrand_bound i z_i⟩)
+
+theorem virtualSurplusMaximizingAuction_hasIntegrableInterimObjects_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
+    A.virtualSurplusMaximizingAuction.HasIntegrableInterimObjects :=
+  A.virtualSurplusMaximizingAuction_hasIntegrableInterimObjects_of_aestronglyMeasurable
+    (A.aestronglyMeasurable_virtualSurplusMaximizingAuction_interimAllocationIntegrand_of_measurable_virtualValue
+      (A.measurable_virtualValue_of_isRegular hA))
+    (A.aestronglyMeasurable_virtualSurplusMaximizingAuction_interimPaymentIntegrand_of_measurable_virtualValue
+      (A.measurable_virtualValue_of_isRegular hA))
+
+theorem virtualSurplusMaximizingPaymentRule_zeroNormalized
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    SingleParameterMechanism.ZeroNormalized A.virtualSurplusMaximizingPaymentRule := by
+  simpa [virtualSurplusMaximizingPaymentRule] using
+    SingleParameterMechanism.myersonPayment_zeroNormalized
+      A.virtualSurplusMaximizingAllocationRule
+
+theorem virtualSurplusMaximizingAuction_isZeroNormalized
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingAuction).IsZeroNormalized := by
+  simpa [BayesianSingleItemAuction.IsZeroNormalized, virtualSurplusMaximizingAuction,
+    virtualSurplusMaximizingMechanism] using
+    A.virtualSurplusMaximizingPaymentRule_zeroNormalized
+
+theorem virtualSurplusMaximizingMechanism_quasiLinearUtility_eq
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (v b : I → ℝ) (i : I) :
+    (A.virtualSurplusMaximizingMechanism).quasiLinearUtility b v i =
+      (v i - b i) * A.virtualSurplusMaximizingAllocationRule b i +
+        ∫ z in 0..b i, A.virtualSurplusMaximizingAllocationRule (Function.update b i z) i := by
+  simpa [virtualSurplusMaximizingMechanism, virtualSurplusMaximizingPaymentRule] using
+    SingleParameterMechanism.withMyersonPayment_quasiLinearUtility_eq
+      A.virtualSurplusMaximizingAllocationRule v b i
+
+theorem virtualSurplusMaximizingAllocationRule_isImplementable_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
+    SingleParameterMechanism.IsImplementable A.virtualSurplusMaximizingAllocationRule := by
+  exact
+    SingleParameterMechanism.isImplementable_of_isMonotone
+      (by
+        simpa [virtualSurplusMaximizingPaymentRule] using
+          A.virtualSurplusMaximizingAllocationRule_isMonotone_of_isRegular hA)
+
+theorem paymentRule_eq_virtualSurplusMaximizingPaymentRule_of_isDSIC_of_zeroNormalized
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) {p : (I → ℝ) → I → ℝ}
+    (hdsic :
+      ({ allocationRule := A.virtualSurplusMaximizingAllocationRule
+         paymentRule := p } : SingleParameterMechanism I ℝ).IsDSIC)
+    (hzero : SingleParameterMechanism.ZeroNormalized p) :
+    p = A.virtualSurplusMaximizingPaymentRule := by
+  simpa [virtualSurplusMaximizingPaymentRule] using
+    SingleParameterMechanism.payment_eq_myersonPayment_of_isDSIC_of_zeroNormalized
+      (x := A.virtualSurplusMaximizingAllocationRule) (p := p) hdsic hzero
+
+theorem existsUnique_zeroNormalized_paymentRule_for_virtualSurplusMaximizingAllocationRule
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
+    ∃! p : (I → ℝ) → I → ℝ,
+      SingleParameterMechanism.ZeroNormalized p ∧
+        ({ allocationRule := A.virtualSurplusMaximizingAllocationRule
+           paymentRule := p } : SingleParameterMechanism I ℝ).IsDSIC := by
+  exact
+    SingleParameterMechanism.existsUnique_zeroNormalized_payment_of_isMonotone
+      (x := A.virtualSurplusMaximizingAllocationRule)
+      (by
+        simpa [virtualSurplusMaximizingPaymentRule] using
+          A.virtualSurplusMaximizingAllocationRule_isMonotone_of_isRegular hA)
+
+/-- Main mechanism-level package theorem for the regular case: the
+virtual-surplus-maximizing mechanism uses a virtual-surplus-optimal allocation
+rule and is DSIC with the canonical Myerson payment rule. -/
+theorem virtualSurplusMaximizingMechanism_isVirtualSurplusOptimal_and_isDSIC_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
+    A.IsVirtualSurplusOptimalAllocationRule
+        (A.virtualSurplusMaximizingMechanism).allocationRule ∧
+      (A.virtualSurplusMaximizingMechanism).IsDSIC := by
+  exact ⟨A.virtualSurplusMaximizingMechanism_allocationRule_isVirtualSurplusOptimal,
+    A.virtualSurplusMaximizingMechanism_isDSIC_of_isRegular hA⟩
+
+/-- Main auction-level package theorem for the regular case: the constructed
+Bayesian single-item auction has a virtual-surplus-optimal allocation rule, is
+feasible, and is DSIC after forgetting to the underlying single-parameter
+mechanism. -/
+theorem virtualSurplusMaximizingAuction_isVirtualSurplusOptimal_and_isFeasible_and_isDSIC_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
+    A.IsVirtualSurplusOptimalAllocationRule
+        (A.virtualSurplusMaximizingAuction).allocationRule ∧
+      (A.virtualSurplusMaximizingAuction).IsFeasible ∧
+        (A.virtualSurplusMaximizingAuction).IsDSIC := by
+  exact ⟨A.virtualSurplusMaximizingAuction_allocationRule_isVirtualSurplusOptimal,
+    A.virtualSurplusMaximizingAuction_isFeasible,
+    A.virtualSurplusMaximizingAuction_isDSIC_of_isRegular hA⟩
+
+end MonotonicityAndDSIC
+
+section AnalyticSupportAndDensity
+
+/-! ## Support and density assumptions for the analytic identity layer -/
+
+/-- Agent `i`'s type lies in `[0, ωᵢ]`. -/
+def IsOnTypeSupport (A : BayesianSingleItemAuction I) (i : I) (v : ℝ) : Prop :=
+  0 ≤ v ∧ v ≤ A.typeData.omega i
+
+/-- A type profile lies in the product support. -/
+def IsOnTypeProfileSupport (A : BayesianSingleItemAuction I) (t : I → ℝ) : Prop :=
+  ∀ i, A.IsOnTypeSupport i (t i)
+
+/-- Densities are positive on support interiors. -/
+def HasPositiveDensityOnSupport (A : BayesianSingleItemAuction I) : Prop :=
+  ∀ i v, 0 < v → v < A.typeData.omega i → 0 < A.typeDensity i v
+
+/-- Densities are nonnegative on supports. -/
+def HasNonnegativeDensityOnSupport (A : BayesianSingleItemAuction I) : Prop :=
+  ∀ i v, 0 ≤ v → v ≤ A.typeData.omega i → 0 ≤ A.typeDensity i v
+
+/-- The joint density is positive at a profile. -/
+def HasPositiveJointDensityAt [Fintype I]
+    (A : BayesianSingleItemAuction I) (t : I → ℝ) : Prop :=
+  0 < A.jointDensity t
+
+/-- A profile lies in the interior of the product support. -/
+def IsOnTypeProfileInterior (A : BayesianSingleItemAuction I) (t : I → ℝ) : Prop :=
+  ∀ i, 0 < t i ∧ t i < A.typeData.omega i
+
+theorem isOnTypeSupport_left
+    (A : BayesianSingleItemAuction I) {i : I} {v : ℝ}
+    (hv : A.IsOnTypeSupport i v) :
+    0 ≤ v :=
+  hv.1
+
+theorem isOnTypeSupport_right
+    (A : BayesianSingleItemAuction I) {i : I} {v : ℝ}
+    (hv : A.IsOnTypeSupport i v) :
+    v ≤ A.typeData.omega i :=
+  hv.2
+
+theorem isOnTypeProfileSupport_apply
+    (A : BayesianSingleItemAuction I) {t : I → ℝ}
+    (ht : A.IsOnTypeProfileSupport t) (i : I) :
+    A.IsOnTypeSupport i (t i) :=
+  ht i
+
+theorem isOnTypeProfileInterior_isOnTypeProfileSupport
+    (A : BayesianSingleItemAuction I) {t : I → ℝ}
+    (ht : A.IsOnTypeProfileInterior t) :
+    A.IsOnTypeProfileSupport t := by
+  intro i
+  exact ⟨le_of_lt (ht i).1, le_of_lt (ht i).2⟩
+
+theorem typeDensity_pos_of_hasPositiveDensityOnSupport
+    (A : BayesianSingleItemAuction I)
+    (hA : A.HasPositiveDensityOnSupport) {i : I} {v : ℝ}
+    (h0 : 0 < v) (homega : v < A.typeData.omega i) :
+    0 < A.typeDensity i v :=
+  hA i v h0 homega
+
+theorem typeDensity_nonneg_of_hasNonnegativeDensityOnSupport
+    (A : BayesianSingleItemAuction I)
+    (hA : A.HasNonnegativeDensityOnSupport) {i : I} {v : ℝ}
+    (h0 : 0 ≤ v) (homega : v ≤ A.typeData.omega i) :
+    0 ≤ A.typeDensity i v :=
+  hA i v h0 homega
+
+theorem typeDensity_measurable (A : BayesianSingleItemAuction I) (i : I) :
+    Measurable (A.typeDensity i) := by
+  simpa [typeDensity] using measurable_deriv (A.typeData.cdf i).cdf
+
+theorem typeDensity_ennreal_ofReal_aemeasurable
+    (A : BayesianSingleItemAuction I) (i : I) :
+    AEMeasurable
+      (fun v => ENNReal.ofReal (A.typeDensity i v))
+      (volume.restrict (Set.Ioc 0 (A.typeData.omega i))) :=
+  (A.typeDensity_measurable i).aemeasurable.ennreal_ofReal
+
+theorem typeDensity_nonnegative_ae_of_hasPositiveDensityOnSupport
+    (A : BayesianSingleItemAuction I)
+    (hA : A.HasPositiveDensityOnSupport) (i : I) :
+    ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+      0 ≤ A.typeDensity i v := by
+  have hne :
+      ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+        v ≠ A.typeData.omega i :=
+    ae_restrict_of_ae (Measure.ae_ne volume (A.typeData.omega i))
+  filter_upwards [ae_restrict_mem measurableSet_Ioc, hne] with v hv hvne
+  exact (A.typeDensity_pos_of_hasPositiveDensityOnSupport hA hv.1
+    (lt_of_le_of_ne hv.2 hvne)).le
+
+theorem typeMeasure_isProbabilityMeasure_of_cdf_absolutelyContinuous_of_density_nonnegative_ae
+    (A : BayesianSingleItemAuction I)
+    (i : I)
+    (hAC :
+      AbsolutelyContinuousOnInterval (A.typeData.cdf i).cdf 0 (A.typeData.omega i))
+    (hdens_ae :
+      ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+        0 ≤ A.typeDensity i v) :
+    IsProbabilityMeasure (A.typeMeasure i) := by
+  refine ⟨?_⟩
+  let s := Set.Ioc (0 : ℝ) (A.typeData.omega i)
+  have hint : Integrable (A.typeDensity i) (volume.restrict s) := by
+    have hinterval :
+        IntervalIntegrable (A.typeDensity i) volume 0 (A.typeData.omega i) := by
+      simpa [typeDensity] using hAC.intervalIntegrable_deriv
+    have hio :=
+      (intervalIntegrable_iff_integrableOn_Ioc_of_le
+        (A.typeData.cdf i).omega_nonneg).mp hinterval
+    simpa [IntegrableOn, s] using hio
+  have hintegral : (∫ v, A.typeDensity i v ∂volume.restrict s) = 1 := by
+    have hinterval :
+        (∫ v in 0..A.typeData.omega i, A.typeDensity i v) = 1 := by
+      calc
+        (∫ v in 0..A.typeData.omega i, A.typeDensity i v)
+            = (A.typeData.cdf i).cdf (A.typeData.omega i) -
+                (A.typeData.cdf i).cdf 0 := by
+              simpa [typeDensity] using hAC.integral_deriv_eq_sub
+        _ = 1 := by
+              rw [(A.typeData.cdf i).cdf_upper, (A.typeData.cdf i).cdf_zero]
+              ring
+    rw [← intervalIntegral.integral_of_le (A.typeData.cdf i).omega_nonneg]
+    exact hinterval
+  have hlintegral :
+      (∫⁻ v, ENNReal.ofReal (A.typeDensity i v) ∂volume.restrict s) = 1 := by
+    rw [← ofReal_integral_eq_lintegral_ofReal hint (by simpa [s] using hdens_ae),
+      hintegral]
+    norm_num
+  simpa [typeMeasure, s] using hlintegral
+
+theorem typeMeasure_isProbabilityMeasure_of_cdf_absolutelyContinuous_of_positiveDensity
+    (A : BayesianSingleItemAuction I)
+    (hdens : A.HasPositiveDensityOnSupport)
+    (i : I)
+    (hAC :
+      AbsolutelyContinuousOnInterval (A.typeData.cdf i).cdf 0 (A.typeData.omega i)) :
+    IsProbabilityMeasure (A.typeMeasure i) :=
+  A.typeMeasure_isProbabilityMeasure_of_cdf_absolutelyContinuous_of_density_nonnegative_ae
+    i hAC (A.typeDensity_nonnegative_ae_of_hasPositiveDensityOnSupport hdens i)
+
+theorem typeDensity_pos_of_hasPositiveDensityOnSupport_of_profileInterior
+    (A : BayesianSingleItemAuction I)
+    (hA : A.HasPositiveDensityOnSupport) {t : I → ℝ}
+    (ht : A.IsOnTypeProfileInterior t) (i : I) :
+    0 < A.typeDensity i (t i) :=
+  A.typeDensity_pos_of_hasPositiveDensityOnSupport hA (ht i).1 (ht i).2
+
+theorem jointDensity_pos_of_hasPositiveDensityOnSupport_of_profileInterior
+    [Fintype I] (A : BayesianSingleItemAuction I)
+    (hA : A.HasPositiveDensityOnSupport) {t : I → ℝ}
+    (ht : A.IsOnTypeProfileInterior t) :
+    A.HasPositiveJointDensityAt t := by
+  dsimp [HasPositiveJointDensityAt, jointDensity]
+  exact Finset.prod_pos fun i _ =>
+    A.typeDensity_pos_of_hasPositiveDensityOnSupport_of_profileInterior hA ht i
+
+/-- Integration by parts for the survival term. -/
+theorem survivalIntegral_eq_intervalIntegral_mul_deriv
+    {F Q : ℝ → ℝ} {ω : ℝ}
+    (hω : 0 ≤ ω)
+    (hF : AbsolutelyContinuousOnInterval F 0 ω)
+    (hF0 : F 0 = 0) (hFω : F ω = 1)
+    (hQ : IntervalIntegrable Q volume 0 ω) :
+    (∫ v in 0..ω, Q v * (1 - F v)) =
+      ∫ v in 0..ω, (∫ z in 0..v, Q z) * deriv F v := by
+  let G : ℝ → ℝ := fun v => ∫ z in 0..v, Q z
+  have h0mem : (0 : ℝ) ∈ Set.uIcc 0 ω := by
+    rw [Set.uIcc_of_le hω]
+    exact ⟨le_rfl, hω⟩
+  have hG : AbsolutelyContinuousOnInterval G 0 ω :=
+    hQ.absolutelyContinuousOnInterval_intervalIntegral h0mem
+  have hQF : IntervalIntegrable (fun v => Q v * F v) volume 0 ω :=
+    by simpa [mul_comm] using hQ.continuousOn_mul hF.continuousOn
+  have hderiv_ae :
+      ∀ᵐ v ∂volume, v ∈ Set.uIoc 0 ω → deriv G v = Q v := by
+    filter_upwards [hQ.ae_hasDerivAt_integral] with v hv hv_mem
+    exact (hv (Set.uIoc_subset_uIcc hv_mem) 0 h0mem).deriv
+  have hderiv_integral :
+      (∫ v in 0..ω, deriv G v * F v) =
+        ∫ v in 0..ω, Q v * F v := by
+    refine intervalIntegral.integral_congr_ae ?_
+    filter_upwards [hderiv_ae] with v hv hv_mem
+    rw [hv hv_mem]
+  have hibp :
+      (∫ v in 0..ω, G v * deriv F v) =
+        (∫ v in 0..ω, Q v) - ∫ v in 0..ω, Q v * F v := by
+    calc
+      (∫ v in 0..ω, G v * deriv F v)
+          = G ω * F ω - G 0 * F 0 - ∫ v in 0..ω, deriv G v * F v :=
+            hG.integral_mul_deriv_eq_deriv_mul hF
+      _ = (∫ v in 0..ω, Q v) - ∫ v in 0..ω, Q v * F v := by
+            rw [hderiv_integral]
+            simp [G, hF0, hFω]
+  have hsurvival :
+      (∫ v in 0..ω, Q v * (1 - F v)) =
+        (∫ v in 0..ω, Q v) - ∫ v in 0..ω, Q v * F v := by
+    calc
+      (∫ v in 0..ω, Q v * (1 - F v))
+          = ∫ v in 0..ω, Q v - Q v * F v := by
+            refine intervalIntegral.integral_congr_ae ?_
+            filter_upwards with v hv_mem
+            ring
+      _ = (∫ v in 0..ω, Q v) - ∫ v in 0..ω, Q v * F v := by
+            rw [intervalIntegral.integral_sub hQ hQF]
+  exact hsurvival.trans hibp.symm
+
+/-- CDF assumptions for the interim virtual-surplus comparison. -/
+structure EnvelopeVirtualSurplusAnalyticAssumptions
+    (A B : BayesianSingleItemAuction I) : Prop where
+  cdf_absolutelyContinuous :
+    ∀ i : I, AbsolutelyContinuousOnInterval (A.typeData.cdf i).cdf 0 (A.typeData.omega i)
+  positive_density_on_support :
+    A.HasPositiveDensityOnSupport
+  interim_allocation_intervalIntegrable :
+    ∀ i : I, IntervalIntegrable (B.interimAllocProb i) volume 0 (A.typeData.omega i)
+  interim_allocation_survival_integrable :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => B.interimAllocProb i v * (1 - (A.typeData.cdf i).cdf v))
+        volume 0 (A.typeData.omega i)
+  interim_virtual_surplus_integrable :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v)
+        volume 0 (A.typeData.omega i)
+
+/-- Environment-level analytic assumptions for the envelope/virtual-surplus
+comparison. -/
+structure EnvelopeVirtualSurplusEnvironmentAssumptions
+    (A : BayesianSingleItemAuction I) : Prop where
+  cdf_absolutelyContinuous :
+    ∀ i : I, AbsolutelyContinuousOnInterval (A.typeData.cdf i).cdf 0 (A.typeData.omega i)
+  positive_density_on_support :
+    A.HasPositiveDensityOnSupport
+
+theorem EnvelopeVirtualSurplusEnvironmentAssumptions.typeDensity_nonnegative_ae
+    {A : BayesianSingleItemAuction I}
+    (h : A.EnvelopeVirtualSurplusEnvironmentAssumptions) (i : I) :
+    ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+      0 ≤ A.typeDensity i v :=
+  A.typeDensity_nonnegative_ae_of_hasPositiveDensityOnSupport
+    h.positive_density_on_support i
+
+theorem EnvelopeVirtualSurplusEnvironmentAssumptions.typeMeasure_isProbabilityMeasure
+    {A : BayesianSingleItemAuction I}
+    (h : A.EnvelopeVirtualSurplusEnvironmentAssumptions) (i : I) :
+    IsProbabilityMeasure (A.typeMeasure i) :=
+  A.typeMeasure_isProbabilityMeasure_of_cdf_absolutelyContinuous_of_positiveDensity
+    h.positive_density_on_support i (h.cdf_absolutelyContinuous i)
+
+theorem envelopeVirtualSurplusAnalyticAssumptions_of_environment
+    {A B : BayesianSingleItemAuction I}
+    (henv : A.EnvelopeVirtualSurplusEnvironmentAssumptions)
+    (hQ :
+      ∀ i : I, IntervalIntegrable (B.interimAllocProb i) volume 0 (A.typeData.omega i))
+    (hQsurv :
+      ∀ i : I,
+        IntervalIntegrable
+          (fun v => B.interimAllocProb i v * (1 - (A.typeData.cdf i).cdf v))
+          volume 0 (A.typeData.omega i))
+    (hvirt :
+      ∀ i : I,
+        IntervalIntegrable
+          (fun v => B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v)
+          volume 0 (A.typeData.omega i)) :
+    A.EnvelopeVirtualSurplusAnalyticAssumptions B where
+  cdf_absolutelyContinuous := henv.cdf_absolutelyContinuous
+  positive_density_on_support := henv.positive_density_on_support
+  interim_allocation_intervalIntegrable := hQ
+  interim_allocation_survival_integrable := hQsurv
+  interim_virtual_surplus_integrable := hvirt
+
+theorem HasPositiveDensityOnSupport.nonzero_on_support
+    (A : BayesianSingleItemAuction I)
+    (hA : A.HasPositiveDensityOnSupport) {i : I} {v : ℝ}
+    (h0 : 0 < v) (homega : v < A.typeData.omega i) :
+    A.typeDensity i v ≠ 0 :=
+  (A.typeDensity_pos_of_hasPositiveDensityOnSupport hA h0 homega).ne'
+
+theorem EnvelopeVirtualSurplusAnalyticAssumptions.interim_allocation_intervalIntegrableOnSupport
+    {A B : BayesianSingleItemAuction I}
+    (h : A.EnvelopeVirtualSurplusAnalyticAssumptions B) (i : I) :
+    IntervalIntegrable (B.interimAllocProb i) volume 0 (A.typeData.omega i) :=
+  h.interim_allocation_intervalIntegrable i
+
+theorem EnvelopeVirtualSurplusAnalyticAssumptions.envelopeIntegrand_eq_onSupport
+    {A B : BayesianSingleItemAuction I}
+    (h : A.EnvelopeVirtualSurplusAnalyticAssumptions B) (i : I) :
+    Set.EqOn
+      (fun v =>
+        (B.interimAllocProb i v * v -
+          ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v)
+      (fun v =>
+        B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v +
+          B.interimAllocProb i v * (1 - (A.typeData.cdf i).cdf v) -
+            (∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v)
+      (Set.uIoc 0 (A.typeData.omega i)) := by
+  intro v hv
+  have hv' : v ∈ Set.Ioc 0 (A.typeData.omega i) := by
+    simpa [Set.uIoc_of_le (A.typeData.cdf i).omega_nonneg] using hv
+  have h0 : 0 < v := hv'.1
+  have homega : v ≤ A.typeData.omega i := hv'.2
+  have homega_lt_or_eq : v < A.typeData.omega i ∨ v = A.typeData.omega i :=
+    lt_or_eq_of_le homega
+  rcases homega_lt_or_eq with homega_lt | rfl
+  · have hdens_ne :
+        A.typeDensity i v ≠ 0 :=
+      h.positive_density_on_support.nonzero_on_support A h0 homega_lt
+    simp [virtualValue, mul_sub, sub_mul, mul_assoc, div_eq_mul_inv, hdens_ne]
+  · have hFω : (A.typeData.cdf i).cdf (A.typeData.omega i) = 1 :=
+      (A.typeData.cdf i).cdf_upper
+    have hsurv_zero : 1 - (A.typeData.cdf i).cdf (A.typeData.omega i) = 0 := by
+      rw [hFω]
+      ring
+    simp [virtualValue, hsurv_zero, sub_mul]
+
+theorem EnvelopeVirtualSurplusAnalyticAssumptions.accumulatedAllocation_density_integrable
+    {A B : BayesianSingleItemAuction I}
+    (h : A.EnvelopeVirtualSurplusAnalyticAssumptions B) (i : I) :
+    IntervalIntegrable
+      (fun v => (∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v)
+      volume 0 (A.typeData.omega i) := by
+  have hQ := h.interim_allocation_intervalIntegrableOnSupport i
+  have hAC := h.cdf_absolutelyContinuous i
+  have h0mem : (0 : ℝ) ∈ Set.uIcc 0 (A.typeData.omega i) := by
+    rw [Set.uIcc_of_le (A.typeData.cdf i).omega_nonneg]
+    exact ⟨le_rfl, (A.typeData.cdf i).omega_nonneg⟩
+  have hG : AbsolutelyContinuousOnInterval
+      (fun v => ∫ z in 0..v, B.interimAllocProb i z) 0 (A.typeData.omega i) :=
+    hQ.absolutelyContinuousOnInterval_intervalIntegral h0mem
+  have hderiv_int :
+      IntervalIntegrable
+        (fun v => (∫ z in 0..v, B.interimAllocProb i z) * deriv (A.typeData.cdf i).cdf v)
+        volume 0 (A.typeData.omega i) :=
+    hAC.intervalIntegrable_deriv.continuousOn_mul hG.continuousOn
+  simpa [typeDensity] using hderiv_int
+
+theorem EnvelopeVirtualSurplusAnalyticAssumptions.survivalIntegral_eq_accumulatedDensity
+    {A B : BayesianSingleItemAuction I}
+    (h : A.EnvelopeVirtualSurplusAnalyticAssumptions B) (i : I) :
+    (∫ v in 0..A.typeData.omega i,
+        B.interimAllocProb i v * (1 - (A.typeData.cdf i).cdf v)) =
+      ∫ v in 0..A.typeData.omega i,
+        (∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v := by
+  simpa [typeDensity] using
+    survivalIntegral_eq_intervalIntegral_mul_deriv
+      (F := (A.typeData.cdf i).cdf)
+      (Q := B.interimAllocProb i)
+      (ω := A.typeData.omega i)
+      (A.typeData.cdf i).omega_nonneg
+      (h.cdf_absolutelyContinuous i)
+      (A.typeData.cdf i).cdf_zero
+      (A.typeData.cdf i).cdf_upper
+      (h.interim_allocation_intervalIntegrableOnSupport i)
+
+theorem EnvelopeVirtualSurplusAnalyticAssumptions.envelope_density_integrable
+    {A B : BayesianSingleItemAuction I}
+    (h : A.EnvelopeVirtualSurplusAnalyticAssumptions B) (i : I) :
+    IntervalIntegrable
+      (fun v =>
+        (B.interimAllocProb i v * v -
+          ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v)
+      volume 0 (A.typeData.omega i) := by
+  have hQsurv := h.interim_allocation_survival_integrable i
+  have hvirtual := h.interim_virtual_surplus_integrable i
+  have hderiv_int := h.accumulatedAllocation_density_integrable i
+  have hsplit :
+      IntervalIntegrable
+        (fun v =>
+          B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v +
+            B.interimAllocProb i v * (1 - (A.typeData.cdf i).cdf v) -
+              (∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v)
+        volume 0 (A.typeData.omega i) :=
+    (hvirtual.add hQsurv).sub hderiv_int
+  exact hsplit.congr (h.envelopeIntegrand_eq_onSupport i).symm
+
+end AnalyticSupportAndDensity
+
+section RevenueOptimalityInterface
+
+/-! ## Abstract expected-revenue optimality interface -/
+
+/-- Myerson-payment revenue of `B`, evaluated in environment `A`. -/
+noncomputable def myersonPaymentRevenueInEnvironment [Fintype I] [DecidableEq I]
+    (A B : BayesianSingleItemAuction I) : ℝ :=
+  A.expectedPaymentRevenueInEnvironment
+    (SingleParameterMechanism.myersonPayment B.allocationRule)
+
+/-- Ex-ante virtual surplus through interim allocation probabilities. -/
+noncomputable def expectedInterimVirtualSurplus [Fintype I]
+    (A B : BayesianSingleItemAuction I) : ℝ :=
+  ∑ i, ∫ v in 0..A.typeData.omega i,
+    B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v
+
+/-- Expected revenue equals expected virtual surplus. -/
+def HasExpectedRevenueVirtualSurplusIdentity [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop :=
+  A.expectedSellerRevenueInEnvironment B =
+    A.expectedVirtualSurplus B.allocationRule
+
+/-- Expected revenue is bounded above by expected virtual surplus. -/
+def HasExpectedRevenueVirtualSurplusUpperBound [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop :=
+  A.expectedSellerRevenueInEnvironment B ≤
+    A.expectedVirtualSurplus B.allocationRule
+
+/-- Myerson-payment revenue equals expected virtual surplus. -/
+def HasMyersonPaymentRevenueVirtualSurplusIdentity [Fintype I] [DecidableEq I]
+    (A B : BayesianSingleItemAuction I) : Prop :=
+  A.myersonPaymentRevenueInEnvironment B =
+    A.expectedVirtualSurplus B.allocationRule
+
+/-- Ex-ante virtual surplus agrees with the interim expression. -/
+def HasExpectedVirtualSurplusInterimIdentity [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop :=
+  A.expectedVirtualSurplus B.allocationRule =
+    A.expectedInterimVirtualSurplus B
+
+/-- Fubini hypotheses connecting ex-ante and interim expressions. -/
+structure InterimFubiniAnalyticAssumptions [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop where
+  payment_integrable :
+    ∀ i : I, Integrable (fun t => B.paymentRule t i) A.prior
+  virtual_surplus_integrable :
+    ∀ i : I, Integrable (fun t => B.allocationRule t i * A.virtualValue i (t i)) A.prior
+  payment_interim_fubini :
+    ∀ i : I,
+      (∫ t, B.paymentRule t i ∂A.prior) =
+        ∫ v in 0..A.typeData.omega i, B.interimExpectedPayment i v * A.typeDensity i v
+  virtual_surplus_interim_fubini :
+    ∀ i : I,
+      (∫ t, B.allocationRule t i * A.virtualValue i (t i) ∂A.prior) =
+        ∫ v in 0..A.typeData.omega i,
+          B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v
+
+theorem InterimFubiniAnalyticAssumptions.toPaymentInterimFubini
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (h : A.InterimFubiniAnalyticAssumptions B) :
+    A.PaymentInterimFubiniAssumptions B where
+  payment_integrable := h.payment_integrable
+  payment_interim_fubini := h.payment_interim_fubini
+
+theorem InterimFubiniAnalyticAssumptions.expectedPaymentRevenueIntegrable
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (h : A.InterimFubiniAnalyticAssumptions B) :
+    Integrable (fun t => ∑ i, B.paymentRule t i) A.prior :=
+  h.toPaymentInterimFubini.expectedPaymentRevenueIntegrable
+
+theorem InterimFubiniAnalyticAssumptions.integrableVirtualSurplus
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (h : A.InterimFubiniAnalyticAssumptions B) :
+    A.IntegrableVirtualSurplus B.allocationRule := by
+  dsimp [IntegrableVirtualSurplus, virtualSurplus]
+  exact integrable_finset_sum Finset.univ fun i _ => h.virtual_surplus_integrable i
+
+theorem InterimFubiniAnalyticAssumptions.hasExpectedRevenueInterimPaymentIdentity
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (h : A.InterimFubiniAnalyticAssumptions B) :
+    A.HasExpectedRevenueInterimPaymentIdentity B := by
+  exact h.toPaymentInterimFubini.hasExpectedRevenueInterimPaymentIdentity
+
+theorem InterimFubiniAnalyticAssumptions.hasExpectedVirtualSurplusInterimIdentity
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (h : A.InterimFubiniAnalyticAssumptions B) :
+    A.HasExpectedVirtualSurplusInterimIdentity B := by
+  dsimp [
+    HasExpectedVirtualSurplusInterimIdentity,
+    expectedVirtualSurplus,
+    virtualSurplus,
+    expectedInterimVirtualSurplus]
+  calc
+    (∫ t, ∑ i, B.allocationRule t i * A.virtualValue i (t i) ∂A.prior)
+        = ∑ i, ∫ t, B.allocationRule t i * A.virtualValue i (t i) ∂A.prior := by
+          simpa using
+            (integral_finset_sum (s := Finset.univ)
+              (f := fun i t => B.allocationRule t i * A.virtualValue i (t i))
+              (fun i _ => h.virtual_surplus_integrable i))
+    _ = ∑ i, ∫ v in 0..A.typeData.omega i,
+          B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v := by
+          exact Finset.sum_congr rfl fun i _ => h.virtual_surplus_interim_fubini i
+
+/-- Type-measure Fubini hypotheses. -/
+structure TypeMeasureInterimFubiniAnalyticAssumptions [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop where
+  payment_integrable :
+    ∀ i : I, Integrable (fun t => B.paymentRule t i) A.prior
+  virtual_surplus_integrable :
+    ∀ i : I, Integrable (fun t => B.allocationRule t i * A.virtualValue i (t i)) A.prior
+  type_density_measurable :
+    ∀ i : I,
+      AEMeasurable
+        (fun v => ENNReal.ofReal (A.typeDensity i v))
+        (volume.restrict (Set.Ioc 0 (A.typeData.omega i)))
+  type_density_nonnegative_ae :
+    ∀ i : I,
+      ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+        0 ≤ A.typeDensity i v
+  payment_typeMeasure_fubini :
+    ∀ i : I,
+      (∫ t, B.paymentRule t i ∂A.prior) =
+        ∫ v, B.interimExpectedPayment i v ∂A.typeMeasure i
+  virtual_surplus_typeMeasure_fubini :
+    ∀ i : I,
+      (∫ t, B.allocationRule t i * A.virtualValue i (t i) ∂A.prior) =
+        ∫ v, B.interimAllocProb i v * A.virtualValue i v ∂A.typeMeasure i
+
+theorem typeMeasureInterimFubiniAnalyticAssumptions_of_typeMeasure_fubini
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (hdens_ae :
+      ∀ i : I,
+        ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+          0 ≤ A.typeDensity i v)
+    (hpay_int : ∀ i : I, Integrable (fun t => B.paymentRule t i) A.prior)
+    (hvs_int :
+      ∀ i : I, Integrable (fun t => B.allocationRule t i * A.virtualValue i (t i))
+        A.prior)
+    (hpay_fubini :
+      ∀ i : I,
+        (∫ t, B.paymentRule t i ∂A.prior) =
+          ∫ v, B.interimExpectedPayment i v ∂A.typeMeasure i)
+    (hvs_fubini :
+      ∀ i : I,
+        (∫ t, B.allocationRule t i * A.virtualValue i (t i) ∂A.prior) =
+          ∫ v, B.interimAllocProb i v * A.virtualValue i v ∂A.typeMeasure i) :
+    A.TypeMeasureInterimFubiniAnalyticAssumptions B where
+  payment_integrable := hpay_int
+  virtual_surplus_integrable := hvs_int
+  type_density_measurable := fun i => A.typeDensity_ennreal_ofReal_aemeasurable i
+  type_density_nonnegative_ae := hdens_ae
+  payment_typeMeasure_fubini := hpay_fubini
+  virtual_surplus_typeMeasure_fubini := hvs_fubini
+
+theorem TypeMeasureInterimFubiniAnalyticAssumptions.toInterimFubini
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (h : A.TypeMeasureInterimFubiniAnalyticAssumptions B) :
+    A.InterimFubiniAnalyticAssumptions B where
+  payment_integrable := h.payment_integrable
+  virtual_surplus_integrable := h.virtual_surplus_integrable
+  payment_interim_fubini := by
+    intro i
+    calc
+      (∫ t, B.paymentRule t i ∂A.prior)
+          = ∫ v, B.interimExpectedPayment i v ∂A.typeMeasure i :=
+            h.payment_typeMeasure_fubini i
+      _ = ∫ v in 0..A.typeData.omega i,
+            B.interimExpectedPayment i v * A.typeDensity i v := by
+            exact A.integral_typeMeasure_eq_intervalIntegral_mul i
+              (B.interimExpectedPayment i)
+              (h.type_density_measurable i)
+              (h.type_density_nonnegative_ae i)
+  virtual_surplus_interim_fubini := by
+    intro i
+    calc
+      (∫ t, B.allocationRule t i * A.virtualValue i (t i) ∂A.prior)
+          = ∫ v, B.interimAllocProb i v * A.virtualValue i v ∂A.typeMeasure i :=
+            h.virtual_surplus_typeMeasure_fubini i
+      _ = ∫ v in 0..A.typeData.omega i,
+            (B.interimAllocProb i v * A.virtualValue i v) * A.typeDensity i v := by
+            exact A.integral_typeMeasure_eq_intervalIntegral_mul i
+              (fun v => B.interimAllocProb i v * A.virtualValue i v)
+              (h.type_density_measurable i)
+              (h.type_density_nonnegative_ae i)
+      _ = ∫ v in 0..A.typeData.omega i,
+            B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v := by
+            refine intervalIntegral.integral_congr_ae ?_
+            filter_upwards with v _hv
+            ring
+
+/-- Interim-payment revenue is bounded by interim virtual surplus. -/
+def HasInterimPaymentVirtualSurplusUpperBound [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop :=
+  ∀ i : I,
+    (∫ v in 0..A.typeData.omega i, B.interimExpectedPayment i v * A.typeDensity i v) ≤
+      ∫ v in 0..A.typeData.omega i,
+        B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v
+
+/-- The envelope-term upper bound for interim expected payments. -/
+def HasInterimPaymentEnvelopeUpperBound [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop :=
+  ∀ i : I,
+    (∫ v in 0..A.typeData.omega i, B.interimExpectedPayment i v * A.typeDensity i v) ≤
+      ∫ v in 0..A.typeData.omega i,
+        (B.interimAllocProb i v * v -
+          ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v
+
+/-- Envelope-term revenue is bounded by interim virtual surplus. -/
+def HasEnvelopeVirtualSurplusUpperBound [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop :=
+  ∀ i : I,
+    (∫ v in 0..A.typeData.omega i,
+      (B.interimAllocProb i v * v -
+        ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v) ≤
+      ∫ v in 0..A.typeData.omega i,
+        B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v
+
+theorem EnvelopeVirtualSurplusAnalyticAssumptions.envelopeIntegral_eq_virtualSurplusIntegral
+    {A B : BayesianSingleItemAuction I}
+    (h : A.EnvelopeVirtualSurplusAnalyticAssumptions B) (i : I) :
+    (∫ v in 0..A.typeData.omega i,
+      (B.interimAllocProb i v * v -
+        ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v) =
+      ∫ v in 0..A.typeData.omega i,
+        B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v := by
+  have hsurv := h.survivalIntegral_eq_accumulatedDensity i
+  have hvirt_int := h.interim_virtual_surplus_integrable i
+  have hcongr :
+      (∫ v in 0..A.typeData.omega i,
+        (B.interimAllocProb i v * v -
+          ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v) =
+        ∫ v in 0..A.typeData.omega i,
+          B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v +
+            B.interimAllocProb i v * (1 - (A.typeData.cdf i).cdf v) -
+              (∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v := by
+    refine intervalIntegral.integral_congr_ae ?_
+    filter_upwards with v hv
+    exact h.envelopeIntegrand_eq_onSupport i hv
+  have hderiv_int := h.accumulatedAllocation_density_integrable i
+  calc
+    (∫ v in 0..A.typeData.omega i,
+        (B.interimAllocProb i v * v -
+          ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v)
+        = ∫ v in 0..A.typeData.omega i,
+            B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v +
+              B.interimAllocProb i v * (1 - (A.typeData.cdf i).cdf v) -
+                (∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v := hcongr
+    _ = (∫ v in 0..A.typeData.omega i,
+            B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v) -
+          (-(∫ v in 0..A.typeData.omega i,
+            B.interimAllocProb i v * (1 - (A.typeData.cdf i).cdf v))) -
+            ∫ v in 0..A.typeData.omega i,
+              (∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v := by
+          rw [intervalIntegral.integral_sub
+            (hvirt_int.add (h.interim_allocation_survival_integrable i)) hderiv_int,
+            intervalIntegral.integral_add hvirt_int (h.interim_allocation_survival_integrable i)]
+          ring
+    _ = ∫ v in 0..A.typeData.omega i,
+          B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v := by
+          rw [hsurv]
+          ring
+
+theorem hasEnvelopeVirtualSurplusUpperBound_of_analyticAssumptions
+    [Fintype I] (A B : BayesianSingleItemAuction I)
+    (h : A.EnvelopeVirtualSurplusAnalyticAssumptions B) :
+    A.HasEnvelopeVirtualSurplusUpperBound B := by
+  intro i
+  exact le_of_eq (h.envelopeIntegral_eq_virtualSurplusIntegral i)
+
+/-- Product-side virtual-surplus integrability gives interval integrability of
+the density-weighted interim virtual surplus. -/
+theorem intervalIntegrable_interimAllocProb_mul_virtualValue_mul_typeDensity_of_profileSplit_integrable
+    {A B : BayesianSingleItemAuction I} (i : I)
+    (hmeas :
+      AEMeasurable
+        (fun v => ENNReal.ofReal (A.typeDensity i v))
+        (volume.restrict (Set.Ioc 0 (A.typeData.omega i))))
+    (hnonneg :
+      ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+        0 ≤ A.typeDensity i v)
+    (hvs :
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+        ((A.typeMeasure i).prod (B.opponentPrior i))) :
+    IntervalIntegrable
+      (fun v => B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v)
+      volume 0 (A.typeData.omega i) := by
+  let s := Set.Ioc (0 : ℝ) (A.typeData.omega i)
+  have hinner :
+      Integrable
+        (fun v : ℝ =>
+          ∫ t, B.allocationRule (reportProfile i v t) i * A.virtualValue i v
+            ∂B.opponentPrior i)
+        (A.typeMeasure i) := by
+    simpa using hvs.integral_prod_left
+  have htop :
+      ∀ᵐ v ∂(volume.restrict s),
+        ENNReal.ofReal (A.typeDensity i v) < (⊤ : ENNReal) :=
+    Filter.Eventually.of_forall fun _ => ENNReal.ofReal_lt_top
+  have hinner' :
+      Integrable
+        (fun v : ℝ =>
+          ∫ t, B.allocationRule (reportProfile i v t) i * A.virtualValue i v
+            ∂B.opponentPrior i)
+        ((volume.restrict s).withDensity fun v => ENNReal.ofReal (A.typeDensity i v)) := by
+    simpa [typeMeasure, s] using hinner
+  have hsmul :
+      Integrable
+        (fun v : ℝ =>
+          (ENNReal.ofReal (A.typeDensity i v)).toReal •
+            (∫ t, B.allocationRule (reportProfile i v t) i * A.virtualValue i v
+              ∂B.opponentPrior i))
+        (volume.restrict s) :=
+    (integrable_withDensity_iff_integrable_smul₀' hmeas htop).mp hinner'
+  have hmul :
+      Integrable
+        (fun v : ℝ =>
+          (∫ t, B.allocationRule (reportProfile i v t) i * A.virtualValue i v
+            ∂B.opponentPrior i) * A.typeDensity i v)
+        (volume.restrict s) := by
+    refine hsmul.congr ?_
+    filter_upwards [hnonneg] with v hv
+    rw [ENNReal.toReal_ofReal hv]
+    simp [smul_eq_mul, mul_comm]
+  have hcongr :
+      (fun v : ℝ =>
+          (∫ t, B.allocationRule (reportProfile i v t) i * A.virtualValue i v
+            ∂B.opponentPrior i) * A.typeDensity i v) =
+        fun v : ℝ =>
+          B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v := by
+    funext v
+    simp [interimAllocProb, interimExpectation, integral_mul_const]
+  have hint :
+      Integrable
+        (fun v => B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v)
+        (volume.restrict s) := by
+    simpa [hcongr, s] using hmul
+  rw [intervalIntegrable_iff, Set.uIoc_of_le (A.typeData.cdf i).omega_nonneg]
+  simpa [IntegrableOn, s] using hint
+
+@[simp] theorem virtualSurplusMaximizingAuction_hasSameSellingEnvironment
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    A.HasSameSellingEnvironment A.virtualSurplusMaximizingAuction := by
+  simp [HasSameSellingEnvironment]
+
+/-- Product-side virtual-surplus integrability gives ex-ante virtual-surplus
+integrability under independent priors. -/
+theorem integrableVirtualSurplus_of_profileSplit_integrable_of_hasIndependentTypePriors
+    [Fintype I] [DecidableEq I] {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (hind : A.HasIndependentTypePriors)
+    (henv : A.HasSameSellingEnvironment B)
+    (hvs_prod_int :
+      ∀ i : I,
+        Integrable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+          ((A.typeMeasure i).prod (B.opponentPrior i))) :
+    A.IntegrableVirtualSurplus B.allocationRule := by
+  dsimp [IntegrableVirtualSurplus, virtualSurplus]
+  exact integrable_finset_sum Finset.univ fun i _ => by
+    apply A.integrable_prior_of_integrable_profileSplit_of_hasIndependentTypePriors hind i
+    have hprod := hvs_prod_int i
+    rw [henv.opponentPrior_eq] at hprod
+    simpa using hprod
+
+/-- Build type-measure Fubini hypotheses from independent priors and product-side
+integrability. This is the main bridge from the full prior to interim
+one-dimensional expressions. -/
+theorem typeMeasureInterimFubiniAnalyticAssumptions_of_independentTypePriors
+    [Fintype I] [DecidableEq I] {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (hdens_ae :
+      ∀ i : I,
+        ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+          0 ≤ A.typeDensity i v)
+    (hind : A.HasIndependentTypePriors)
+    (henv : A.HasSameSellingEnvironment B)
+    (hpay_prod_int :
+      ∀ i : I,
+        Integrable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.paymentRule (reportProfile i p.1 p.2) i)
+          ((A.typeMeasure i).prod (B.opponentPrior i)))
+    (hvs_prod_int :
+      ∀ i : I,
+        Integrable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+          ((A.typeMeasure i).prod (B.opponentPrior i))) :
+    A.TypeMeasureInterimFubiniAnalyticAssumptions B where
+  payment_integrable := by
+    intro i
+    apply A.integrable_prior_of_integrable_profileSplit_of_hasIndependentTypePriors hind i
+    have hprod := hpay_prod_int i
+    rwa [henv.opponentPrior_eq] at hprod
+  virtual_surplus_integrable := by
+    intro i
+    apply A.integrable_prior_of_integrable_profileSplit_of_hasIndependentTypePriors hind i
+    have hprod := hvs_prod_int i
+    rw [henv.opponentPrior_eq] at hprod
+    simpa using hprod
+  type_density_measurable := fun i => A.typeDensity_ennreal_ofReal_aemeasurable i
+  type_density_nonnegative_ae := hdens_ae
+  payment_typeMeasure_fubini := by
+    intro i
+    have hprod :
+        Integrable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.paymentRule (reportProfile i p.1 p.2) i)
+          ((A.typeMeasure i).prod (A.opponentPrior i)) := by
+      have h := hpay_prod_int i
+      rwa [henv.opponentPrior_eq] at h
+    have hfubini :=
+      A.integral_prior_eq_integral_typeMeasure_opponentPrior_of_hasIndependentTypePriors
+        hind i (fun t => B.paymentRule t i) hprod
+    calc
+      (∫ t, B.paymentRule t i ∂A.prior)
+          = ∫ v, ∫ t, B.paymentRule (reportProfile i v t) i
+              ∂A.opponentPrior i ∂A.typeMeasure i := hfubini
+      _ = ∫ v, B.interimExpectedPayment i v ∂A.typeMeasure i := by
+            refine integral_congr_ae ?_
+            filter_upwards with v
+            simp [interimExpectedPayment, interimExpectation, henv.opponentPrior_eq]
+  virtual_surplus_typeMeasure_fubini := by
+    intro i
+    have hprod :
+        Integrable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+          ((A.typeMeasure i).prod (A.opponentPrior i)) := by
+      have h := hvs_prod_int i
+      rwa [henv.opponentPrior_eq] at h
+    have hprod_full :
+        Integrable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.allocationRule (reportProfile i p.1 p.2) i *
+              A.virtualValue i ((reportProfile i p.1 p.2) i))
+          ((A.typeMeasure i).prod (A.opponentPrior i)) := by
+      simpa using hprod
+    have hfubini :=
+      A.integral_prior_eq_integral_typeMeasure_opponentPrior_of_hasIndependentTypePriors
+        hind i (fun t => B.allocationRule t i * A.virtualValue i (t i)) hprod_full
+    calc
+      (∫ t, B.allocationRule t i * A.virtualValue i (t i) ∂A.prior)
+          = ∫ v, ∫ t,
+              B.allocationRule (reportProfile i v t) i *
+                A.virtualValue i ((reportProfile i v t) i)
+              ∂A.opponentPrior i ∂A.typeMeasure i := hfubini
+      _ = ∫ v, ∫ t,
+              B.allocationRule (reportProfile i v t) i * A.virtualValue i v
+              ∂A.opponentPrior i ∂A.typeMeasure i := by
+            refine integral_congr_ae ?_
+            filter_upwards with v
+            refine integral_congr_ae ?_
+            filter_upwards with t
+            simp
+      _ = ∫ v,
+            (∫ t, B.allocationRule (reportProfile i v t) i ∂A.opponentPrior i) *
+              A.virtualValue i v ∂A.typeMeasure i := by
+            refine integral_congr_ae ?_
+            filter_upwards with v
+            rw [integral_mul_const]
+      _ = ∫ v, B.interimAllocProb i v * A.virtualValue i v ∂A.typeMeasure i := by
+            refine integral_congr_ae ?_
+            filter_upwards with v
+            simp [interimAllocProb, interimExpectation, henv.opponentPrior_eq]
+
+theorem interimFubiniAnalyticAssumptions_of_independentTypePriors
+    [Fintype I] [DecidableEq I] {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (hdens_ae :
+      ∀ i : I,
+        ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+          0 ≤ A.typeDensity i v)
+    (hind : A.HasIndependentTypePriors)
+    (henv : A.HasSameSellingEnvironment B)
+    (hpay_prod_int :
+      ∀ i : I,
+        Integrable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.paymentRule (reportProfile i p.1 p.2) i)
+          ((A.typeMeasure i).prod (B.opponentPrior i)))
+    (hvs_prod_int :
+      ∀ i : I,
+        Integrable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+          ((A.typeMeasure i).prod (B.opponentPrior i))) :
+    A.InterimFubiniAnalyticAssumptions B :=
+  (A.typeMeasureInterimFubiniAnalyticAssumptions_of_independentTypePriors
+    hdens_ae hind henv hpay_prod_int hvs_prod_int).toInterimFubini
+
+/-- Feasible candidates with revenue equal to virtual surplus. -/
+def IsRevenueComparable [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop :=
+  A.HasSameSellingEnvironment B ∧
+    B.IsFeasible ∧
+    A.IntegrableVirtualSurplus B.allocationRule ∧
+      A.HasExpectedRevenueVirtualSurplusIdentity B
+
+/-- Feasible candidates with revenue bounded by virtual surplus. -/
+def IsRevenueUpperBounded [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop :=
+  A.HasSameSellingEnvironment B ∧
+    B.IsFeasible ∧
+    A.IntegrableVirtualSurplus B.allocationRule ∧
+      A.HasExpectedRevenueVirtualSurplusUpperBound B
+
+/-- Feasible IC/IR candidates with integrable virtual surplus. -/
+def IsFeasibleICIRIntegrable [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop :=
+  A.HasSameSellingEnvironment B ∧
+    B.IsFeasible ∧
+    B.IsIncentiveCompatible ∧
+      B.IsIndividuallyRationalOnSupport ∧
+        A.IntegrableVirtualSurplus B.allocationRule
+
+/-- Analytic assumptions for MSZ 12.59. -/
+structure RegularMyersonICIRAnalyticAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) : Prop where
+  independent_type_priors :
+    A.HasIndependentTypePriors
+  envelope_environment :
+    A.EnvelopeVirtualSurplusEnvironmentAssumptions
+  candidate_payment_profileSplit_integrable :
+    ∀ B : BayesianSingleItemAuction I,
+      B.IsFeasible →
+        B.IsIncentiveCompatible →
+          B.IsIndividuallyRationalOnSupport →
+            ∀ i : I,
+              Integrable
+                (fun p : ℝ × OpponentTypeProfile I i =>
+                  B.paymentRule (reportProfile i p.1 p.2) i)
+                ((A.typeMeasure i).prod (B.opponentPrior i))
+  candidate_virtual_surplus_profileSplit_integrable :
+    ∀ B : BayesianSingleItemAuction I,
+      B.IsFeasible →
+        B.IsIncentiveCompatible →
+          B.IsIndividuallyRationalOnSupport →
+            ∀ i : I,
+              Integrable
+                (fun p : ℝ × OpponentTypeProfile I i =>
+                  B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+                ((A.typeMeasure i).prod (B.opponentPrior i))
+
+theorem RegularMyersonICIRAnalyticAssumptions.typeMeasure_isProbabilityMeasure
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions) (i : I) :
+    IsProbabilityMeasure (A.typeMeasure i) :=
+  h.envelope_environment.typeMeasure_isProbabilityMeasure i
+
+theorem RegularMyersonICIRAnalyticAssumptions.typeDensity_nonnegative_ae
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions) (i : I) :
+    ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+      0 ≤ A.typeDensity i v :=
+  h.envelope_environment.typeDensity_nonnegative_ae i
+
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_density_integrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => B.interimExpectedPayment i v * A.typeDensity i v)
+        volume 0 (A.typeData.omega i) := by
+  intro i
+  exact A.intervalIntegrable_interimExpectedPayment_mul_typeDensity_of_profileSplit_integrable
+    i
+    (A.typeDensity_ennreal_ofReal_aemeasurable i)
+    (h.typeDensity_nonnegative_ae i)
+    (h.candidate_payment_profileSplit_integrable B hfeas hIC hIR i)
+
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_interim_virtual_surplus_density_integrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v)
+        volume 0 (A.typeData.omega i) := by
+  intro i
+  exact
+    A.intervalIntegrable_interimAllocProb_mul_virtualValue_mul_typeDensity_of_profileSplit_integrable
+      i
+      (A.typeDensity_ennreal_ofReal_aemeasurable i)
+      (h.typeDensity_nonnegative_ae i)
+      (h.candidate_virtual_surplus_profileSplit_integrable B hfeas hIC hIR i)
+
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_allocation_survival_integrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (_hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (_hIR : B.IsIndividuallyRationalOnSupport) :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => B.interimAllocProb i v * (1 - (A.typeData.cdf i).cdf v))
+        volume 0 (A.typeData.omega i) := by
+  intro i
+  exact (B.hasIntervalIntegrableInterimAllocation_of_isIncentiveCompatible
+    hIC i 0 (A.typeData.omega i)).mul_continuousOn
+      (continuousOn_const.sub (h.envelope_environment.cdf_absolutelyContinuous i).continuousOn)
+
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_envelope_analytic
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.EnvelopeVirtualSurplusAnalyticAssumptions B :=
+  envelopeVirtualSurplusAnalyticAssumptions_of_environment
+    h.envelope_environment
+    (fun i => B.hasIntervalIntegrableInterimAllocation_of_isIncentiveCompatible
+      hIC i 0 (A.typeData.omega i))
+    (h.candidate_allocation_survival_integrable B hfeas hIC hIR)
+    (h.candidate_interim_virtual_surplus_density_integrable B hfeas hIC hIR)
+
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_typeMeasure_interim_fubini
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (henv : A.HasSameSellingEnvironment B)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.TypeMeasureInterimFubiniAnalyticAssumptions B := by
+  haveI : ∀ i : I, IsProbabilityMeasure (A.typeMeasure i) :=
+    h.typeMeasure_isProbabilityMeasure
+  exact A.typeMeasureInterimFubiniAnalyticAssumptions_of_independentTypePriors
+    h.typeDensity_nonnegative_ae
+    h.independent_type_priors
+    henv
+    (h.candidate_payment_profileSplit_integrable B hfeas hIC hIR)
+    (h.candidate_virtual_surplus_profileSplit_integrable B hfeas hIC hIR)
+
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_interim_fubini
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (henv : A.HasSameSellingEnvironment B)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.InterimFubiniAnalyticAssumptions B :=
+  (h.candidate_typeMeasure_interim_fubini B henv hfeas hIC hIR).toInterimFubini
+
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_integrableVirtualSurplus
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (henv : A.HasSameSellingEnvironment B)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.IntegrableVirtualSurplus B.allocationRule := by
+  haveI : ∀ i : I, IsProbabilityMeasure (A.typeMeasure i) :=
+    h.typeMeasure_isProbabilityMeasure
+  exact
+    A.integrableVirtualSurplus_of_profileSplit_integrable_of_hasIndependentTypePriors
+      h.independent_type_priors
+      henv
+      (h.candidate_virtual_surplus_profileSplit_integrable B hfeas hIC hIR)
+
+/-- Expected seller-revenue optimality among candidates. -/
+def IsExpectedSellerRevenueOptimalInEnvironmentAmong [Fintype I]
+    (A B : BayesianSingleItemAuction I)
+    (Candidate : BayesianSingleItemAuction I → Prop) : Prop :=
+  Candidate B ∧
+    ∀ C, Candidate C →
+      A.expectedSellerRevenueInEnvironment C ≤
+        A.expectedSellerRevenueInEnvironment B
+
+/-- Regular Myerson optimality among feasible IC/IR mechanisms. -/
+def IsRegularMyersonOptimalICIRAuction [Fintype I]
+    (A B : BayesianSingleItemAuction I) : Prop :=
+  A.IsVirtualSurplusOptimalAllocationRule B.allocationRule ∧
+    B.IsFeasible ∧
+      B.IsIncentiveCompatible ∧
+        B.IsIndividuallyRationalOnSupport ∧
+      A.IsExpectedSellerRevenueOptimalInEnvironmentAmong B
+        (fun C => A.IsFeasibleICIRIntegrable C)
+
+theorem IsRegularMyersonOptimalICIRAuction.isVirtualSurplusOptimalAllocationRule
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (hB : A.IsRegularMyersonOptimalICIRAuction B) :
+    A.IsVirtualSurplusOptimalAllocationRule B.allocationRule :=
+  hB.1
+
+theorem IsRegularMyersonOptimalICIRAuction.isFeasible
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (hB : A.IsRegularMyersonOptimalICIRAuction B) :
+    B.IsFeasible :=
+  hB.2.1
+
+theorem IsRegularMyersonOptimalICIRAuction.isIncentiveCompatible
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (hB : A.IsRegularMyersonOptimalICIRAuction B) :
+    B.IsIncentiveCompatible :=
+  hB.2.2.1
+
+theorem IsRegularMyersonOptimalICIRAuction.isIndividuallyRationalOnSupport
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (hB : A.IsRegularMyersonOptimalICIRAuction B) :
+    B.IsIndividuallyRationalOnSupport :=
+  hB.2.2.2.1
+
+theorem IsRegularMyersonOptimalICIRAuction.isExpectedSellerRevenueOptimal
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (hB : A.IsRegularMyersonOptimalICIRAuction B) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong B
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  hB.2.2.2.2
+
+/-- Virtual-surplus comparison gives revenue comparison under identity. -/
+theorem expectedSellerRevenueInEnvironment_le_of_expectedVirtualSurplus_le
+    [Fintype I] (A : BayesianSingleItemAuction I)
+    {B C : BayesianSingleItemAuction I}
+    (hB : A.HasExpectedRevenueVirtualSurplusIdentity B)
+    (hC : A.HasExpectedRevenueVirtualSurplusIdentity C)
+    (hvs :
+      A.expectedVirtualSurplus B.allocationRule ≤
+        A.expectedVirtualSurplus C.allocationRule) :
+    A.expectedSellerRevenueInEnvironment B ≤
+      A.expectedSellerRevenueInEnvironment C := by
+  rw [hB, hC]
+  exact hvs
+
+theorem hasExpectedRevenueVirtualSurplusUpperBound_of_identity
+    [Fintype I] (A B : BayesianSingleItemAuction I)
+    (hB : A.HasExpectedRevenueVirtualSurplusIdentity B) :
+    A.HasExpectedRevenueVirtualSurplusUpperBound B := by
+  dsimp [HasExpectedRevenueVirtualSurplusUpperBound]
+  exact le_of_eq hB
+
+theorem paymentRule_eq_myersonPayment_of_isDSIC_of_isZeroNormalized
+    [Fintype I] [DecidableEq I]
+    (B : BayesianSingleItemAuction I)
+    (hdsic : B.IsDSIC)
+    (hzero : B.IsZeroNormalized) :
+    B.paymentRule = SingleParameterMechanism.myersonPayment B.allocationRule :=
+  SingleParameterMechanism.payment_eq_myersonPayment_of_isDSIC_of_zeroNormalized
+    (x := B.allocationRule) (p := B.paymentRule) hdsic hzero
+
+theorem expectedSellerRevenueInEnvironment_eq_myersonPaymentRevenueInEnvironment_of_isDSIC_of_isZeroNormalized
+    [Fintype I] [DecidableEq I]
+    (A B : BayesianSingleItemAuction I)
+    (hdsic : B.IsDSIC)
+    (hzero : B.IsZeroNormalized) :
+    A.expectedSellerRevenueInEnvironment B =
+      A.myersonPaymentRevenueInEnvironment B := by
+  have hpay :
+      B.paymentRule = SingleParameterMechanism.myersonPayment B.allocationRule :=
+    B.paymentRule_eq_myersonPayment_of_isDSIC_of_isZeroNormalized hdsic hzero
+  simp [expectedSellerRevenueInEnvironment, myersonPaymentRevenueInEnvironment, hpay]
+
+theorem hasExpectedRevenueVirtualSurplusIdentity_of_myersonPaymentIdentity_of_isDSIC_of_isZeroNormalized
+    [Fintype I] [DecidableEq I]
+    (A B : BayesianSingleItemAuction I)
+    (hmyerson : A.HasMyersonPaymentRevenueVirtualSurplusIdentity B)
+    (hdsic : B.IsDSIC)
+    (hzero : B.IsZeroNormalized) :
+    A.HasExpectedRevenueVirtualSurplusIdentity B := by
+  dsimp [HasExpectedRevenueVirtualSurplusIdentity]
+  rw [
+    A.expectedSellerRevenueInEnvironment_eq_myersonPaymentRevenueInEnvironment_of_isDSIC_of_isZeroNormalized
+      B hdsic hzero]
+  exact hmyerson
+
+theorem hasExpectedRevenueVirtualSurplusUpperBound_of_interim_identities
+    [Fintype I] (A B : BayesianSingleItemAuction I)
+    (hrev : A.HasExpectedRevenueInterimPaymentIdentity B)
+    (hvs : A.HasExpectedVirtualSurplusInterimIdentity B)
+    (hupper : A.HasInterimPaymentVirtualSurplusUpperBound B) :
+    A.HasExpectedRevenueVirtualSurplusUpperBound B := by
+  dsimp [
+    HasExpectedRevenueVirtualSurplusUpperBound,
+    HasExpectedRevenueInterimPaymentIdentity,
+    HasExpectedVirtualSurplusInterimIdentity,
+    HasInterimPaymentVirtualSurplusUpperBound,
+    expectedInterimPaymentRevenue,
+    expectedInterimVirtualSurplus] at *
+  rw [hrev, hvs]
+  exact Finset.sum_le_sum fun i _ => hupper i
+
+theorem hasExpectedRevenueVirtualSurplusIdentity_of_interim_identities
+    [Fintype I] (A B : BayesianSingleItemAuction I)
+    (hrev : A.HasExpectedRevenueInterimPaymentIdentity B)
+    (hvs : A.HasExpectedVirtualSurplusInterimIdentity B)
+    (hid : ∀ i : I,
+      (∫ v in 0..A.typeData.omega i, B.interimExpectedPayment i v * A.typeDensity i v) =
+        ∫ v in 0..A.typeData.omega i,
+          B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v) :
+    A.HasExpectedRevenueVirtualSurplusIdentity B := by
+  dsimp [
+    HasExpectedRevenueVirtualSurplusIdentity,
+    HasExpectedRevenueInterimPaymentIdentity,
+    HasExpectedVirtualSurplusInterimIdentity,
+    expectedInterimPaymentRevenue,
+    expectedInterimVirtualSurplus] at *
+  rw [hrev, hvs]
+  exact Finset.sum_congr rfl fun i _ => hid i
+
+theorem hasInterimPaymentVirtualSurplusUpperBound_of_envelope_upper
+    [Fintype I] (A B : BayesianSingleItemAuction I)
+    (hpay : A.HasInterimPaymentEnvelopeUpperBound B)
+    (henv : A.HasEnvelopeVirtualSurplusUpperBound B) :
+    A.HasInterimPaymentVirtualSurplusUpperBound B := by
+  intro i
+  exact le_trans (hpay i) (henv i)
+
+theorem hasInterimPaymentEnvelopeIdentity_of_zeroNormalized_of_interimPaymentFormula
+    [Fintype I] [DecidableEq I] (A B : BayesianSingleItemAuction I)
+    (hzero : B.IsZeroNormalized)
+    (hpay_formula : B.HasInterimPaymentFormula) :
+    ∀ i : I,
+      (∫ v in 0..A.typeData.omega i, B.interimExpectedPayment i v * A.typeDensity i v) =
+        ∫ v in 0..A.typeData.omega i,
+          (B.interimAllocProb i v * v -
+            ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v := by
+  intro i
+  have hM0 : B.interimExpectedPayment i 0 = 0 :=
+    B.interimExpectedPayment_zero_of_isZeroNormalized hzero i
+  refine intervalIntegral.integral_congr_ae ?_
+  filter_upwards with v _hv
+  have hpay := hpay_formula i v
+  rw [hM0] at hpay
+  calc
+    B.interimExpectedPayment i v * A.typeDensity i v
+        = (B.interimAllocProb i v * v -
+            ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v := by
+          rw [hpay]
+          ring
+
+theorem hasInterimPaymentVirtualSurplusIdentity_of_zeroNormalized_of_interimPaymentFormula
+    [Fintype I] [DecidableEq I] (A B : BayesianSingleItemAuction I)
+    (hzero : B.IsZeroNormalized)
+    (hpay_formula : B.HasInterimPaymentFormula)
+    (henv :
+      A.EnvelopeVirtualSurplusAnalyticAssumptions B) :
+    ∀ i : I,
+      (∫ v in 0..A.typeData.omega i, B.interimExpectedPayment i v * A.typeDensity i v) =
+        ∫ v in 0..A.typeData.omega i,
+          B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v := by
+  intro i
+  calc
+    (∫ v in 0..A.typeData.omega i, B.interimExpectedPayment i v * A.typeDensity i v)
+        = ∫ v in 0..A.typeData.omega i,
+            (B.interimAllocProb i v * v -
+              ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v :=
+          A.hasInterimPaymentEnvelopeIdentity_of_zeroNormalized_of_interimPaymentFormula
+            B hzero hpay_formula i
+    _ = ∫ v in 0..A.typeData.omega i,
+          B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v :=
+          henv.envelopeIntegral_eq_virtualSurplusIntegral i
+
+theorem hasInterimPaymentEnvelopeUpperBound_of_pointwise
+    [Fintype I] (A B : BayesianSingleItemAuction I)
+    (hdens_ae :
+      ∀ i : I,
+        ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+          0 ≤ A.typeDensity i v)
+    (hint_pay :
+      ∀ i : I,
+        IntervalIntegrable
+          (fun v => B.interimExpectedPayment i v * A.typeDensity i v)
+          volume 0 (A.typeData.omega i))
+    (hint_env :
+      ∀ i : I,
+        IntervalIntegrable
+          (fun v =>
+            (B.interimAllocProb i v * v -
+              ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v)
+          volume 0 (A.typeData.omega i))
+    (hpoint :
+      ∀ (i : I) (v : ℝ),
+        0 ≤ v →
+          v ≤ A.typeData.omega i →
+            B.interimExpectedPayment i v ≤
+              B.interimAllocProb i v * v -
+                ∫ z in 0..v, B.interimAllocProb i z) :
+    A.HasInterimPaymentEnvelopeUpperBound B := by
+  intro i
+  have hae :
+      (fun v : ℝ => B.interimExpectedPayment i v * A.typeDensity i v)
+        ≤ᵐ[volume.restrict (Set.Ioc 0 (A.typeData.omega i))]
+      (fun v : ℝ =>
+        (B.interimAllocProb i v * v -
+          ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v) := by
+    filter_upwards [ae_restrict_mem measurableSet_Ioc, hdens_ae i] with v hv hdens_v
+    exact mul_le_mul_of_nonneg_right (hpoint i v hv.1.le hv.2) hdens_v
+  rw [intervalIntegral.integral_of_le (A.typeData.cdf i).omega_nonneg,
+    intervalIntegral.integral_of_le (A.typeData.cdf i).omega_nonneg]
+  exact setIntegral_mono_ae_restrict (hint_pay i).1 (hint_env i).1 hae
+
+theorem hasInterimPaymentEnvelopeUpperBound_of_isIncentiveCompatible_of_isIndividuallyRationalOnSupport
+    [Fintype I] (A B : BayesianSingleItemAuction I)
+    (hdens_ae :
+      ∀ i : I,
+        ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+          0 ≤ A.typeDensity i v)
+    (hint_pay :
+      ∀ i : I,
+        IntervalIntegrable
+          (fun v => B.interimExpectedPayment i v * A.typeDensity i v)
+          volume 0 (A.typeData.omega i))
+    (hint_env :
+      ∀ i : I,
+        IntervalIntegrable
+          (fun v =>
+            (B.interimAllocProb i v * v -
+              ∫ z in 0..v, B.interimAllocProb i z) * A.typeDensity i v)
+          volume 0 (A.typeData.omega i))
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.HasInterimPaymentEnvelopeUpperBound B :=
+  A.hasInterimPaymentEnvelopeUpperBound_of_pointwise B hdens_ae hint_pay hint_env
+    (fun i v _h0 _homega =>
+      BayesianSingleItemAuction.interimExpectedPayment_le_alloc_mul_sub_integral_of_isIncentiveCompatible_of_isIndividuallyRationalOnSupport
+        B hIC hIR i v)
+
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_envelope_upper
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.HasInterimPaymentEnvelopeUpperBound B :=
+  A.hasInterimPaymentEnvelopeUpperBound_of_isIncentiveCompatible_of_isIndividuallyRationalOnSupport
+    B h.typeDensity_nonnegative_ae
+    (h.candidate_payment_density_integrable B hfeas hIC hIR)
+    (fun i =>
+      (h.candidate_envelope_analytic B hfeas hIC hIR).envelope_density_integrable i)
+    hIC hIR
+
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_revenue_interim_identity
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (henv : A.HasSameSellingEnvironment B)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.HasExpectedRevenueInterimPaymentIdentity B :=
+  (h.candidate_interim_fubini B henv hfeas hIC hIR)
+    |>.hasExpectedRevenueInterimPaymentIdentity
+
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_virtual_surplus_interim_identity
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (henv : A.HasSameSellingEnvironment B)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.HasExpectedVirtualSurplusInterimIdentity B :=
+  (h.candidate_interim_fubini B henv hfeas hIC hIR)
+    |>.hasExpectedVirtualSurplusInterimIdentity
+
+theorem isRevenueUpperBounded_of_isRevenueComparable
+    [Fintype I] (A B : BayesianSingleItemAuction I)
+    (hB : A.IsRevenueComparable B) :
+    A.IsRevenueUpperBounded B := by
+  rcases hB with ⟨henv, hfeas, hint, hid⟩
+  exact ⟨henv, hfeas, hint,
+    A.hasExpectedRevenueVirtualSurplusUpperBound_of_identity B hid⟩
+
+theorem isRevenueUpperBounded_of_ic_ir_upper
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A B : BayesianSingleItemAuction I)
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    A.IsRevenueUpperBounded B := by
+  rcases hB with ⟨henv, hfeas, hIC, hIR, hint⟩
+  let hfubini := h.candidate_interim_fubini B henv hfeas hIC hIR
+  exact ⟨henv, hfeas, hint,
+    A.hasExpectedRevenueVirtualSurplusUpperBound_of_interim_identities B
+      hfubini.hasExpectedRevenueInterimPaymentIdentity
+      hfubini.hasExpectedVirtualSurplusInterimIdentity
+      (A.hasInterimPaymentVirtualSurplusUpperBound_of_envelope_upper B
+        (RegularMyersonICIRAnalyticAssumptions.candidate_payment_envelope_upper
+          h hfeas hIC hIR)
+      (A.hasEnvelopeVirtualSurplusUpperBound_of_analyticAssumptions B
+          (h.candidate_envelope_analytic B hfeas hIC hIR)))⟩
+
+theorem isRevenueComparable_of_myersonPaymentIdentity_of_isDSIC_of_isZeroNormalized
+    [Fintype I] [DecidableEq I]
+    (A B : BayesianSingleItemAuction I)
+    (henv : A.HasSameSellingEnvironment B)
+    (hfeas : B.IsFeasible)
+    (hint : A.IntegrableVirtualSurplus B.allocationRule)
+    (hmyerson : A.HasMyersonPaymentRevenueVirtualSurplusIdentity B)
+    (hdsic : B.IsDSIC)
+    (hzero : B.IsZeroNormalized) :
+    A.IsRevenueComparable B :=
+  ⟨henv, hfeas, hint,
+    A.hasExpectedRevenueVirtualSurplusIdentity_of_myersonPaymentIdentity_of_isDSIC_of_isZeroNormalized
+      B hmyerson hdsic hzero⟩
+
+theorem expectedSellerRevenueInEnvironment_le_virtualSurplusMaximizingAuction
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A B : BayesianSingleItemAuction I)
+    (hB : A.IsRevenueComparable B)
+    (hopt_int :
+      A.IntegrableVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule)
+    (hopt_id :
+      A.HasExpectedRevenueVirtualSurplusIdentity A.virtualSurplusMaximizingAuction) :
+    A.expectedSellerRevenueInEnvironment B ≤
+      A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction := by
+  rcases hB with ⟨_henv, hfeas, hint, hid⟩
+  exact A.expectedSellerRevenueInEnvironment_le_of_expectedVirtualSurplus_le
+    hid hopt_id
+    (A.expectedVirtualSurplus_le_virtualSurplusMaximizingAuction_allocationRule
+      (x := B.allocationRule) hfeas.isSingleItemAllocationRule hint hopt_int)
+
+theorem expectedSellerRevenueInEnvironment_le_virtualSurplusMaximizingAuction_of_revenueUpperBounded
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A B : BayesianSingleItemAuction I)
+    (hB : A.IsRevenueUpperBounded B)
+    (hopt_int :
+      A.IntegrableVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule)
+    (hopt_id :
+      A.HasExpectedRevenueVirtualSurplusIdentity A.virtualSurplusMaximizingAuction) :
+    A.expectedSellerRevenueInEnvironment B ≤
+      A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction := by
+  rcases hB with ⟨_henv, hfeas, hint, hupper⟩
+  calc
+    A.expectedSellerRevenueInEnvironment B
+        ≤ A.expectedVirtualSurplus B.allocationRule := hupper
+    _ ≤ A.expectedVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule :=
+        A.expectedVirtualSurplus_le_virtualSurplusMaximizingAuction_allocationRule
+          (x := B.allocationRule) hfeas.isSingleItemAllocationRule hint hopt_int
+    _ = A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction := by
+        exact hopt_id.symm
+
+theorem virtualSurplusMaximizingAuction_isRevenueComparable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I)
+    (hopt_int :
+      A.IntegrableVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule)
+    (hopt_id :
+      A.HasExpectedRevenueVirtualSurplusIdentity A.virtualSurplusMaximizingAuction) :
+    A.IsRevenueComparable A.virtualSurplusMaximizingAuction :=
+  ⟨A.virtualSurplusMaximizingAuction_hasSameSellingEnvironment,
+    A.virtualSurplusMaximizingAuction_isFeasible, hopt_int, hopt_id⟩
+
+theorem virtualSurplusMaximizingAuction_isRevenueUpperBounded
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I)
+    (hopt_int :
+      A.IntegrableVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule)
+    (hopt_id :
+      A.HasExpectedRevenueVirtualSurplusIdentity A.virtualSurplusMaximizingAuction) :
+    A.IsRevenueUpperBounded A.virtualSurplusMaximizingAuction :=
+  A.isRevenueUpperBounded_of_isRevenueComparable
+    A.virtualSurplusMaximizingAuction
+    (A.virtualSurplusMaximizingAuction_isRevenueComparable hopt_int hopt_id)
+
+theorem virtualSurplusMaximizingAuction_isIncentiveCompatible_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
+    (A.virtualSurplusMaximizingAuction).IsIncentiveCompatible := by
+  have hint : A.virtualSurplusMaximizingAuction.HasIntegrableInterimObjects :=
+    A.virtualSurplusMaximizingAuction_hasIntegrableInterimObjects_of_isRegular hA
+  exact A.virtualSurplusMaximizingAuction.isIncentiveCompatible_of_isDSIC
+    hint (A.virtualSurplusMaximizingAuction_isDSIC_of_isRegular hA)
+
+theorem virtualSurplusMaximizingAuction_isIndividuallyRationalOnSupport
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I)
+    (henv : A.virtualSurplusMaximizingAuction.HasInterimEnvelopeFormula)
+    (hint_nonneg :
+      A.virtualSurplusMaximizingAuction.HasNonnegativeInterimAllocationIntegralOnSupport) :
+    (A.virtualSurplusMaximizingAuction).IsIndividuallyRationalOnSupport :=
+  A.virtualSurplusMaximizingAuction
+    |>.isIndividuallyRationalOnSupport_of_isZeroNormalized_of_hasInterimEnvelopeFormula
+      A.virtualSurplusMaximizingAuction_isZeroNormalized henv hint_nonneg
+
+/-- MSZ 12.58: regular Myerson is IC and IR. -/
+theorem virtualSurplusMaximizingAuction_isIncentiveCompatible_and_individuallyRationalOnSupport_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
+    (A.virtualSurplusMaximizingAuction).IsIncentiveCompatible ∧
+      (A.virtualSurplusMaximizingAuction).IsIndividuallyRationalOnSupport := by
+  have hIC :
+      (A.virtualSurplusMaximizingAuction).IsIncentiveCompatible :=
+    A.virtualSurplusMaximizingAuction_isIncentiveCompatible_of_isRegular hA
+  have henv :
+      A.virtualSurplusMaximizingAuction.HasInterimEnvelopeFormula :=
+    A.virtualSurplusMaximizingAuction.hasInterimEnvelopeFormula_of_isIncentiveCompatible hIC
+  have hint_nonneg :
+      A.virtualSurplusMaximizingAuction.HasNonnegativeInterimAllocationIntegralOnSupport :=
+    A.virtualSurplusMaximizingAuction
+      |>.hasNonnegativeInterimAllocationIntegralOnSupport_of_isFeasible
+        A.virtualSurplusMaximizingAuction_isFeasible
+  exact ⟨
+    hIC,
+    A.virtualSurplusMaximizingAuction_isIndividuallyRationalOnSupport henv hint_nonneg⟩
+
+/-- IR half of MSZ 12.58. -/
+theorem virtualSurplusMaximizingAuction_isIndividuallyRationalOnSupport_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
+    (A.virtualSurplusMaximizingAuction).IsIndividuallyRationalOnSupport :=
+  (A.virtualSurplusMaximizingAuction_isIncentiveCompatible_and_individuallyRationalOnSupport_of_isRegular
+    hA).2
+
+theorem RegularMyersonICIRAnalyticAssumptions.opt_identity
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hA : A.IsRegular) :
+    A.HasExpectedRevenueVirtualSurplusIdentity A.virtualSurplusMaximizingAuction := by
+  have h1258 :
+      (A.virtualSurplusMaximizingAuction).IsIncentiveCompatible ∧
+        (A.virtualSurplusMaximizingAuction).IsIndividuallyRationalOnSupport :=
+    A.virtualSurplusMaximizingAuction_isIncentiveCompatible_and_individuallyRationalOnSupport_of_isRegular
+      hA
+  have henv_same :
+      A.HasSameSellingEnvironment A.virtualSurplusMaximizingAuction :=
+    A.virtualSurplusMaximizingAuction_hasSameSellingEnvironment
+  have hrev :
+      A.HasExpectedRevenueInterimPaymentIdentity A.virtualSurplusMaximizingAuction :=
+    h.candidate_revenue_interim_identity
+      (B := A.virtualSurplusMaximizingAuction)
+      henv_same
+      A.virtualSurplusMaximizingAuction_isFeasible
+      h1258.1
+      h1258.2
+  have hvs :
+      A.HasExpectedVirtualSurplusInterimIdentity A.virtualSurplusMaximizingAuction :=
+    h.candidate_virtual_surplus_interim_identity
+      (B := A.virtualSurplusMaximizingAuction)
+      henv_same
+      A.virtualSurplusMaximizingAuction_isFeasible
+      h1258.1
+      h1258.2
+  have hpay_formula :
+      A.virtualSurplusMaximizingAuction.HasInterimPaymentFormula :=
+    A.virtualSurplusMaximizingAuction.hasInterimPaymentFormula_of_isIncentiveCompatible
+      h1258.1
+  have hanalytic :
+      A.EnvelopeVirtualSurplusAnalyticAssumptions A.virtualSurplusMaximizingAuction :=
+    h.candidate_envelope_analytic
+      (B := A.virtualSurplusMaximizingAuction)
+      A.virtualSurplusMaximizingAuction_isFeasible
+      h1258.1
+      h1258.2
+  exact
+    A.hasExpectedRevenueVirtualSurplusIdentity_of_interim_identities
+      A.virtualSurplusMaximizingAuction
+      hrev
+      hvs
+      (A.hasInterimPaymentVirtualSurplusIdentity_of_zeroNormalized_of_interimPaymentFormula
+        A.virtualSurplusMaximizingAuction
+        A.virtualSurplusMaximizingAuction_isZeroNormalized
+        hpay_formula
+        hanalytic)
+
+theorem virtualSurplusMaximizingAuction_isFeasibleICIRIntegrable_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular)
+    (h : A.RegularMyersonICIRAnalyticAssumptions) :
+    A.IsFeasibleICIRIntegrable A.virtualSurplusMaximizingAuction := by
+  have h1258 :
+      (A.virtualSurplusMaximizingAuction).IsIncentiveCompatible ∧
+        (A.virtualSurplusMaximizingAuction).IsIndividuallyRationalOnSupport :=
+    A.virtualSurplusMaximizingAuction_isIncentiveCompatible_and_individuallyRationalOnSupport_of_isRegular
+      hA
+  exact ⟨
+    A.virtualSurplusMaximizingAuction_hasSameSellingEnvironment,
+    A.virtualSurplusMaximizingAuction_isFeasible,
+    h1258.1,
+    h1258.2,
+    h.candidate_integrableVirtualSurplus
+      A.virtualSurplusMaximizingAuction
+      A.virtualSurplusMaximizingAuction_hasSameSellingEnvironment
+      A.virtualSurplusMaximizingAuction_isFeasible
+      h1258.1
+      h1258.2⟩
+
+/-- Revenue optimality among revenue-comparable candidates. -/
+theorem virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongRevenueComparable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I)
+    (hopt_int :
+      A.IntegrableVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule)
+    (hopt_id :
+      A.HasExpectedRevenueVirtualSurplusIdentity A.virtualSurplusMaximizingAuction) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      A.virtualSurplusMaximizingAuction
+      (fun B => A.IsRevenueComparable B) := by
+  constructor
+  · exact A.virtualSurplusMaximizingAuction_isRevenueComparable hopt_int hopt_id
+  · intro B hB
+    exact A.expectedSellerRevenueInEnvironment_le_virtualSurplusMaximizingAuction
+      B hB hopt_int hopt_id
+
+/-- Revenue optimality under the one-sided revenue upper bound. -/
+theorem virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongRevenueUpperBounded
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I)
+    (hopt_int :
+      A.IntegrableVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule)
+    (hopt_id :
+      A.HasExpectedRevenueVirtualSurplusIdentity A.virtualSurplusMaximizingAuction) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      A.virtualSurplusMaximizingAuction
+      (fun B => A.IsRevenueUpperBounded B) := by
+  constructor
+  · exact A.virtualSurplusMaximizingAuction_isRevenueUpperBounded hopt_int hopt_id
+  · intro B hB
+    exact
+      A.expectedSellerRevenueInEnvironment_le_virtualSurplusMaximizingAuction_of_revenueUpperBounded
+        B hB hopt_int hopt_id
+
+/-- MSZ 12.59: revenue optimality among IC/IR candidates. -/
+theorem virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular)
+    (h : A.RegularMyersonICIRAnalyticAssumptions) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      A.virtualSurplusMaximizingAuction
+      (fun B => A.IsFeasibleICIRIntegrable B) := by
+  have hopt_id := h.opt_identity hA
+  have h1258 :
+      (A.virtualSurplusMaximizingAuction).IsIncentiveCompatible ∧
+        (A.virtualSurplusMaximizingAuction).IsIndividuallyRationalOnSupport :=
+    A.virtualSurplusMaximizingAuction_isIncentiveCompatible_and_individuallyRationalOnSupport_of_isRegular
+      hA
+  have hopt_int :
+      A.IntegrableVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule :=
+    h.candidate_integrableVirtualSurplus
+      A.virtualSurplusMaximizingAuction
+      A.virtualSurplusMaximizingAuction_hasSameSellingEnvironment
+      A.virtualSurplusMaximizingAuction_isFeasible
+      h1258.1
+      h1258.2
+  constructor
+  · exact A.virtualSurplusMaximizingAuction_isFeasibleICIRIntegrable_of_isRegular hA h
+  · intro B hB
+    exact
+      A.expectedSellerRevenueInEnvironment_le_virtualSurplusMaximizingAuction_of_revenueUpperBounded
+        B
+        (A.isRevenueUpperBounded_of_ic_ir_upper B h hB)
+        hopt_int
+        hopt_id
+
+/-- MSZ 12.59 compact theorem. -/
+theorem virtualSurplusMaximizingAuction_regularMyersonOptimalICIR_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) (hA : A.IsRegular)
+    (h : A.RegularMyersonICIRAnalyticAssumptions) :
+    A.IsRegularMyersonOptimalICIRAuction A.virtualSurplusMaximizingAuction := by
+  have h1258 :
+      (A.virtualSurplusMaximizingAuction).IsIncentiveCompatible ∧
+        (A.virtualSurplusMaximizingAuction).IsIndividuallyRationalOnSupport :=
+    A.virtualSurplusMaximizingAuction_isIncentiveCompatible_and_individuallyRationalOnSupport_of_isRegular
+      hA
+  exact ⟨
+    A.virtualSurplusMaximizingAuction_allocationRule_isVirtualSurplusOptimal,
+    A.virtualSurplusMaximizingAuction_isFeasible,
+    h1258.1,
+    h1258.2,
+    A.virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_of_isRegular
+      hA h⟩
+
+end RevenueOptimalityInterface
+
+end BayesianSingleItemAuction

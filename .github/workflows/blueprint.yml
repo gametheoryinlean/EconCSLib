@@ -1,0 +1,146 @@
+name: Build and Publish Blueprint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/knowledge/**"
+      - "EconCSLib/**/*.lean"
+      - "EconCSLib.lean"
+      - "lean-toolchain"
+      - "lakefile.toml"
+      - "lake-manifest.json"
+      - "README.md"
+      - "AGENTS.md"
+      - "scripts/check_knowledge_references.py"
+      - "tests/test_check_knowledge_references.py"
+      - ".github/workflows/blueprint.yml"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blueprint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_blueprint:
+    runs-on: ubuntu-latest
+    env:
+      BLUEPRINT_REPOSITORY: git@github.com:gametheoryinlean/blueprint.git
+      BLUEPRINT_BRANCH: gh-pages
+      MDBLUEPRINT_REF: main
+    steps:
+      - name: Checkout EconCS library
+        uses: actions/checkout@v4
+
+      - name: Checkout mdblueprint
+        run: |
+          git clone --depth 1 --branch "$MDBLUEPRINT_REF" \
+            https://github.com/gametheoryinlean/mdblueprint.git _mdblueprint
+
+      - name: Log mdblueprint revision
+        run: |
+          echo "EconCSLib revision:"
+          git rev-parse HEAD
+          git log -1 --oneline
+          echo "mdblueprint revision:"
+          git -C _mdblueprint rev-parse HEAD
+          git -C _mdblueprint log -1 --oneline
+
+      - name: Install mdblueprint
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -e "_mdblueprint[browser]"
+          python3 -m playwright install --with-deps chromium
+
+      - name: Test knowledge reference checker
+        run: python3 -m unittest tests/test_check_knowledge_references.py
+
+      - name: Check knowledge references
+        run: python3 scripts/check_knowledge_references.py docs/knowledge
+
+      - name: Check mdblueprint knowledge graph
+        run: mdblueprint-check docs/knowledge --lean-root .
+
+      - name: Publish mdblueprint site
+        run: |
+          rm -rf _site
+          mdblueprint-publish docs/knowledge _site
+          touch _site/.nojekyll
+
+      - name: Verify topic-first graph artifacts
+        run: |
+          test -f _site/graph_topics.json
+          test -f _site/dep_graph_document.html
+          test -f _site/graph.html
+          topic_subgraphs="$(find _site/subgraphs/topics -name '*.json' -type f | wc -l | tr -d ' ')"
+          node_payloads="$(find _site/node_payloads -name '*.json' -type f | wc -l | tr -d ' ')"
+          test "$topic_subgraphs" -gt 0
+          test "$node_payloads" -gt 0
+          echo "Topic subgraphs: $topic_subgraphs"
+          echo "Node payloads: $node_payloads"
+
+      - name: Check rendered blueprint pages
+        run: mdblueprint-render-check _site --timeout-ms 60000
+
+      - name: Upload blueprint artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blueprint-site
+          path: _site
+
+      - name: Configure blueprint deploy key
+        if: github.event_name != 'pull_request'
+        env:
+          BLUEPRINT_DEPLOY_KEY: ${{ secrets.BLUEPRINT_DEPLOY_KEY }}
+        run: |
+          if [ -z "$BLUEPRINT_DEPLOY_KEY" ]; then
+            echo "BLUEPRINT_DEPLOY_KEY secret is required to publish the blueprint."
+            exit 1
+          fi
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$BLUEPRINT_DEPLOY_KEY" > ~/.ssh/blueprint_deploy_key
+          chmod 600 ~/.ssh/blueprint_deploy_key
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+
+      - name: Publish to blueprint repository
+        if: github.event_name != 'pull_request'
+        env:
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/blueprint_deploy_key -o IdentitiesOnly=yes
+        run: |
+          set -euo pipefail
+
+          publish_dir="$(mktemp -d)"
+
+          if git ls-remote --exit-code --heads "$BLUEPRINT_REPOSITORY" "$BLUEPRINT_BRANCH" >/dev/null; then
+            git clone --depth 1 --branch "$BLUEPRINT_BRANCH" "$BLUEPRINT_REPOSITORY" "$publish_dir"
+          else
+            git clone --depth 1 "$BLUEPRINT_REPOSITORY" "$publish_dir"
+            (
+              cd "$publish_dir"
+              git checkout --orphan "$BLUEPRINT_BRANCH"
+              git rm -rf . >/dev/null 2>&1 || true
+            )
+          fi
+
+          rsync -a --delete --exclude .git _site/ "$publish_dir"/
+
+          cd "$publish_dir"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No blueprint changes to publish."
+            exit 0
+          fi
+
+          git commit \
+            -m "Build blueprint from EconCSLib ${GITHUB_SHA}" \
+            -m "Source: https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+          git push origin "$BLUEPRINT_BRANCH"

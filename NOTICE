@@ -1,0 +1,24 @@
+EconCSLib
+Copyright 2026 EconCSLib contributors
+
+This product is licensed under the Apache License, Version 2.0 (see
+LICENSE for the full license text).
+
+----------------------------------------------------------------------
+
+Third-party attributions
+========================
+
+EconCSLib incorporates and adapts source code from the following
+Apache 2.0 licensed projects. Each adaptation also retains its own
+copyright header inside the source file.
+
+1. leanprover/cslib
+   https://github.com/leanprover/cslib
+
+   File `Foundation/CostM.lean` adapts the monad core of
+   `Cslib/Algorithms/Lean/TimeM.lean`. Adapted from upstream revision
+   c7944a9fb44c3298f1a960a5e574ab23a6ab8ed5.
+
+   Original copyright (c) 2025 Sorrachai Yingchareonthawornhcai.
+   Original authors: Sorrachai Yingchareonthawornhcai, Eric Wieser.
