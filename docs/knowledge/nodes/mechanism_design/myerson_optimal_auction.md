@@ -25,6 +25,33 @@ lean:
     - BayesianSingleItemAuction.virtualSurplusMaximizingPaymentRule
     - BayesianSingleItemAuction.virtualSurplusMaximizingMechanism
     - BayesianSingleItemAuction.virtualSurplusMaximizingAuction
+    - BayesianSingleItemAuction.cdfVirtualValue
+    - BayesianSingleItemAuction.virtualValueCutoff
+    - BayesianSingleItemAuction.virtualValueCutoff_boundary_eq
+    - BayesianSingleItemAuction.virtualValueCutoff_boundary_eq_of_eq
+    - BayesianSingleItemAuction.positiveVirtualValueCutoff
+    - BayesianSingleItemAuction.VirtualValueReserve
+    - BayesianSingleItemAuction.VirtualValueReserve.of_continuousAt
+    - BayesianSingleItemAuction.VirtualValueReserve.virtualValueCutoffReserve_zero
+    - BayesianSingleItemAuction.VirtualValueCutoffReserve
+    - BayesianSingleItemAuction.VirtualValueCutoffReserve.of_continuousAt
+    - BayesianSingleItemAuction.VirtualValueCutoffReserve.virtualValueReserve_of_zero
+    - BayesianSingleItemAuction.IsVirtualValueCutoff
+    - BayesianSingleItemAuction.CommonRegularReserve
+    - BayesianSingleItemAuction.CommonCDFRegularReserve
+    - BayesianSingleItemAuction.CommonVirtualValueReserve
+    - BayesianSingleItemAuction.CommonVirtualValueReserve.of_continuousAt
+    - BayesianSingleItemAuction.CommonVirtualValueReserve.commonRegularReserve
+    - BayesianSingleItemAuction.CommonVirtualValueReserve.commonVirtualValueCutoffReserve
+    - BayesianSingleItemAuction.CommonVirtualValueCutoffReserve
+    - BayesianSingleItemAuction.CommonVirtualValueCutoffReserve.of_continuousAt
+    - BayesianSingleItemAuction.CommonCDFVirtualValueReserve
+    - BayesianSingleItemAuction.CommonCDFVirtualValueReserve.of_continuousAt
+    - BayesianSingleItemAuction.CommonCDFVirtualValueReserve.commonRegularReserve
+    - BayesianSingleItemAuction.CommonCDFVirtualValueReserve.commonCDFRegularReserve
+    - BayesianSingleItemAuction.CommonCDFVirtualValueReserve.commonCDFVirtualValueCutoffReserve
+    - BayesianSingleItemAuction.CommonCDFVirtualValueCutoffReserve
+    - BayesianSingleItemAuction.CommonCDFVirtualValueCutoffReserve.of_continuousAt
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions
     - BayesianSingleItemAuction.IsFeasibleICIRIntegrable
     - BayesianSingleItemAuction.IsRegularMyersonOptimalICIRAuction
@@ -64,6 +91,13 @@ withholds the item when all virtual values are nonpositive.
 The module `EconCSLib.MechanismDesign.Auction.OptimalSingleItem` defines:
 
 - `virtualValue` and `IsRegular`, the virtual-value and regularity layer.
+- `cdfVirtualValue`, `virtualValueCutoff`, `VirtualValueReserve`,
+  `IsVirtualValueCutoff`, and the
+  common virtual-value reserve wrappers, the reusable cutoff interface for
+  reserve-price and symmetric-environment specializations.  The boundary
+  equation at the cutoff can be derived from continuity either at the bare
+  virtual-value layer or directly at the common/common-CDF wrapper layer when
+  the strict superlevel set is nonempty and bounded below.
 - `virtualSurplus` and `expectedVirtualSurplus`, the pointwise and ex-ante
   virtual-surplus objectives.
 - `virtualSurplusMaximizingAllocationRule`, which allocates to the highest
@@ -108,17 +142,20 @@ inside the auction data.
 
 When bidders are symmetric and a reserve threshold is available, the allocation
 behavior specializes to the usual reserve-price interpretation tracked by
-[[mechanism_design.myerson.reserve_price]].  The current formal module proves
-reserve-threshold sale/no-sale behavior for the virtual-surplus allocation; the
-full symmetric equivalence to a second-price auction with optimal reserve is
-kept as the separate reserve-price node.
+[[mechanism_design.myerson.reserve_price]].  The separate reserve-price node now
+formalizes the MSZ 12.61 endpoint: under a common regular reserve, the reserve
+second-price auction is itself regular-Myerson optimal, with the boundary
+tie-convention handled by virtual-surplus and expected-revenue equality rather
+than global auction-object equality.
 
 ## References
 
-- [MSZ, Chapter 12, Section 12.10] Maschler, Solan, and Zamir, *Game Theory*. Virtual valuations and optimal auctions.
+- [MSZ, Chapter 12, Section 12.10] Maschler, Solan, and Zamir, *Game Theory*,
+  `references/GameTheory.pdf`. Virtual valuations and optimal auctions.
 - [Myerson 1981] Roger Myerson, "Optimal Auction Design", *Mathematics of
   Operations Research* 6(1):58-73. Original optimal-auction theorem.
-- [Krishna, Chapter 5] Vijay Krishna, *Auction Theory*, 2nd ed.. Revenue equivalence and optimal auctions.
+- [Krishna, Chapter 5] Vijay Krishna, *Auction Theory*, 2nd ed.,
+  `references/AuctionTheory.pdf`. Revenue equivalence and optimal auctions.
 - [AGT, Chapter 13] Nisan, Roughgarden, Tardos, and Vazirani, *Algorithmic
-  Game Theory*. Algorithmic mechanism
+  Game Theory*, `references/AlgorithmicGameTheory.pdf`. Algorithmic mechanism
   design view of virtual valuations.
