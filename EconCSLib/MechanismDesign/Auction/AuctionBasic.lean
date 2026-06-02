@@ -65,9 +65,10 @@ The following are mathematical tools for auction rules that rank bids.
 **They do not define any specific auction's winner** — each concrete auction specifies
 its own allocation rule, which may or may not select the highest bidder.
 
-* `Auction.maxBid` — the highest bid in a profile
-* `Auction.argmaxBid` — the bidder with the highest bid
-* `Auction.maxBidExcluding` — the highest bid excluding a given bidder
+* `Auction.maxBid` - the highest bid in a profile
+* `Auction.argmaxBid` - the bidder with the highest bid
+* `Auction.maxBidExcluding` - the highest bid excluding a given bidder
+* update lemmas for `argmaxBid` and `maxBidExcluding`
 
 ## References
 
@@ -233,6 +234,21 @@ variable [DecidableEq I]
 noncomputable def maxBidExcluding (i : I) : V :=
   (Finset.univ.erase i).sup' Finset.univ_nontrivial.erase_nonempty b
 
+/-- Any bidder other than `i` has bid at most the highest bid excluding `i`. -/
+lemma bid_le_maxBidExcluding_of_ne {i j : I} (hji : j ≠ i) :
+    b j ≤ maxBidExcluding b i := by
+  unfold maxBidExcluding
+  exact Finset.le_sup' b (Finset.mem_erase_of_ne_of_mem hji (Finset.mem_univ j))
+
+/-- Some bidder other than `i` attains the highest bid excluding `i`. -/
+lemma exists_maxBidExcluding (i : I) :
+    ∃ j, j ≠ i ∧ b j = maxBidExcluding b i := by
+  unfold maxBidExcluding
+  obtain ⟨j, hjmem, hj⟩ :=
+    Finset.exists_mem_eq_sup' (s := Finset.univ.erase i)
+      (H := Finset.univ_nontrivial.erase_nonempty) (f := b)
+  exact ⟨j, Finset.ne_of_mem_erase hjmem, hj.symm⟩
+
 /-- Excluding any bidder can only decrease the highest bid. -/
 lemma maxBidExcluding_le_maxBid (i : I) : maxBidExcluding b i ≤ maxBid b := by
   apply Finset.sup'_mono
@@ -259,6 +275,25 @@ lemma maxBidExcluding_update_self (i : I) (bi : V) :
   apply Finset.sup'_congr _ rfl
   intro j hj
   simp [Function.update_of_ne (Finset.ne_of_mem_erase hj)]
+
+/-- If the updated bid strictly exceeds every old bid excluding `i`, then `i`
+strictly outbids every other bidder after the update. -/
+lemma update_self_strict_max_of_maxBidExcluding_lt {i : I} {bi : V}
+    (hbi : maxBidExcluding b i < bi) :
+    ∀ j, j ≠ i → (Function.update b i bi) j < (Function.update b i bi) i := by
+  intro j hji
+  have hjle : b j ≤ maxBidExcluding b i :=
+    bid_le_maxBidExcluding_of_ne b hji
+  have hjlt : b j < bi := lt_of_le_of_lt hjle hbi
+  simpa [Function.update_of_ne hji, Function.update_self] using hjlt
+
+/-- If the updated bid strictly exceeds the old maximum excluding `i`, then
+`i` becomes the selected argmax bidder after the update. -/
+lemma argmaxBid_update_self_eq_of_maxBidExcluding_lt {i : I} {bi : V}
+    (hbi : maxBidExcluding b i < bi) :
+    argmaxBid (Function.update b i bi) = i := by
+  exact (eq_argmaxBid_of_strict_max (Function.update b i bi) i
+    (update_self_strict_max_of_maxBidExcluding_lt (b := b) hbi)).symm
 
 end Auction
 

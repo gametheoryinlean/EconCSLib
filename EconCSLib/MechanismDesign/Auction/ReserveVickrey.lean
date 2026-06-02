@@ -50,10 +50,14 @@ The winner, when the reserve is met, is the highest bidder selected by
 
 * `Auction.ReserveSecondPrice.allocation_eq_some_iff`
 * `Auction.ReserveSecondPrice.allocation_eq_none_iff`
+* `Auction.ReserveSecondPrice.allocation_ne_some_of_ne_winner`
 * `Auction.ReserveSecondPrice.clearingPrice_le_bid_of_allocation_eq_some`
 * `Auction.ReserveSecondPrice.mechanism_payment_of_allocation_eq_some`
 * `Auction.ReserveSecondPrice.mechanism_payment_of_allocation_ne_some`
+* `Auction.ReserveSecondPrice.mechanism_payment_eq_zero_of_ne_winner`
 * `Auction.ReserveSecondPrice.mechanism_payment_le_bid_of_allocation_eq_some`
+* `Auction.ReserveSecondPrice.mechanism_payment_abs_le_max_reserve_bid`
+* `Auction.ReserveSecondPrice.mechanism_payment_update_self_zero_of_nonneg_reserve`
 * `Auction.ReserveSecondPrice.game_eq_toStrategicGame`
 * `Auction.ReserveSecondPrice.mechanism_isDSIC`
 * `Auction.ReserveSecondPrice.utility_nonneg`
@@ -129,6 +133,14 @@ lemma allocation_eq_some_iff {reserve : U} {b : I → U} {i : I} :
   · simp [h]
 
 omit [DecidableEq I] [AddCommGroup U] [IsOrderedAddMonoid U] in
+/-- A bidder who is not the second-price winner is not allocated the item. -/
+lemma allocation_ne_some_of_ne_winner {reserve : U} {b : I → U} {i : I}
+    (hi : i ≠ SecondPrice.winner b) :
+    allocation reserve b ≠ some i := by
+  intro halloc
+  exact hi (winner_eq_of_allocation_eq_some halloc).symm
+
+omit [DecidableEq I] [AddCommGroup U] [IsOrderedAddMonoid U] in
 /-- The allocation is the second-price winner exactly when the winner's bid
 meets the reserve. -/
 lemma allocation_eq_some_winner_iff {reserve : U} {b : I → U} :
@@ -184,13 +196,12 @@ private lemma bid_le_clearing_threshold_of_not_allocation_update_self
       intro h
       exact hnot (by simpa [b', h] using halloc)
     have hb_le_winner : b' i ≤ b' (SecondPrice.winner b') := by
-      simpa [SecondPrice.winner] using Auction.bid_le_maxBid b' i
+      exact SecondPrice.bid_le_bid_winner b' i
     have hmax_eq : Auction.maxBidExcluding b' i = Auction.maxBid b' := by
-      exact Auction.maxBidExcluding_eq_maxBid_of_not_argmax b'
-        (by simpa [SecondPrice.winner] using hwin_ne.symm)
+      exact SecondPrice.maxBidExcluding_eq_maxBid_if_loser hwin_ne.symm
     have hle_excluding' : bi ≤ Auction.maxBidExcluding b' i := by
       have hbid_winner_eq_max : b' (SecondPrice.winner b') = Auction.maxBid b' := by
-        simpa [SecondPrice.winner] using Auction.argmaxBid_eq_maxBid b'
+        exact SecondPrice.bid_winner_eq_maxBid b'
       rw [hmax_eq, ← hbid_winner_eq_max]
       simpa [b'] using hb_le_winner
     have hupdate : Auction.maxBidExcluding b' i = Auction.maxBidExcluding b i := by
@@ -200,7 +211,7 @@ private lemma bid_le_clearing_threshold_of_not_allocation_update_self
     exact le_trans hle_excluding (le_max_right reserve (Auction.maxBidExcluding b i))
   · have hbid_le_reserve : bi ≤ reserve := by
       have hb_le_winner : b' i ≤ b' (SecondPrice.winner b') := by
-        simpa [SecondPrice.winner] using Auction.bid_le_maxBid b' i
+        exact SecondPrice.bid_le_bid_winner b' i
       have hwinner_le_reserve : b' (SecondPrice.winner b') ≤ reserve :=
         le_of_lt (lt_of_not_ge hsell)
       simpa [b'] using le_trans hb_le_winner hwinner_le_reserve
@@ -216,10 +227,13 @@ noncomputable def utility (reserve : U) (v b : I → U) (i : I) : U :=
 variable {reserve : U} {v : I → U}
 
 omit [IsOrderedAddMonoid U] in
+/-- If bidder `i` is allocated, her utility is value minus the reserve
+second-price clearing price. -/
 lemma utility_winner {b : I → U} {i : I} (h : allocation reserve b = some i) :
     utility reserve v b i = v i - clearingPrice reserve b := if_pos h
 
 omit [IsOrderedAddMonoid U] in
+/-- If bidder `i` is not allocated, her utility is zero. -/
 lemma utility_loser {b : I → U} {i : I} (h : allocation reserve b ≠ some i) :
     utility reserve v b i = 0 := if_neg h
 
@@ -291,11 +305,13 @@ noncomputable def mechanism (reserve : U) :
   paymentRule b i := if allocation reserve b = some i then clearingPrice reserve b else 0
 
 omit [IsOrderedAddMonoid U] in
+/-- The mechanism allocation rule is the reserve second-price allocation rule. -/
 @[simp] lemma mechanism_allocationRule (reserve : U) (b : I → U) :
     (mechanism reserve).allocationRule b = allocation reserve b :=
   rfl
 
 omit [IsOrderedAddMonoid U] in
+/-- The mechanism payment rule charges the clearing price exactly to the allocated bidder. -/
 @[simp] lemma mechanism_paymentRule (reserve : U) (b : I → U) (i : I) :
     (mechanism reserve).paymentRule b i =
       if allocation reserve b = some i then clearingPrice reserve b else 0 :=
@@ -323,12 +339,58 @@ lemma mechanism_payment_eq_zero_of_allocation_eq_none {reserve : U} {b : I → U
   exact mechanism_payment_of_allocation_ne_some (by intro h; simp [halloc] at h)
 
 omit [IsOrderedAddMonoid U] in
+/-- A non-winner pays zero. -/
+lemma mechanism_payment_eq_zero_of_ne_winner {reserve : U} {b : I → U} {i : I}
+    (hi : i ≠ SecondPrice.winner b) :
+    (mechanism reserve).paymentRule b i = 0 := by
+  exact mechanism_payment_of_allocation_ne_some
+    (allocation_ne_some_of_ne_winner hi)
+
+omit [IsOrderedAddMonoid U] in
 /-- The allocated bidder never pays more than her reported bid. -/
 lemma mechanism_payment_le_bid_of_allocation_eq_some {reserve : U} {b : I → U} {i : I}
     (halloc : allocation reserve b = some i) :
     (mechanism reserve).paymentRule b i ≤ b i := by
   rw [mechanism_payment_of_allocation_eq_some halloc]
   exact clearingPrice_le_bid_of_allocation_eq_some halloc
+
+/-- A reserve second-price payment is bounded by the reserve/bid scale. -/
+lemma mechanism_payment_abs_le_max_reserve_bid {reserve : U} {b : I → U} {i : I} :
+    |(mechanism reserve).paymentRule b i| ≤ max |reserve| |b i| := by
+  by_cases halloc : allocation reserve b = some i
+  · rw [mechanism_payment_of_allocation_eq_some halloc]
+    have hle : clearingPrice reserve b ≤ b i :=
+      clearingPrice_le_bid_of_allocation_eq_some halloc
+    have hge : reserve ≤ clearingPrice reserve b :=
+      reserve_le_clearingPrice reserve b
+    refine abs_le.mpr ⟨?_, ?_⟩
+    · exact le_trans
+        (le_trans (neg_le_neg (le_max_left |reserve| |b i|)) (neg_abs_le reserve)) hge
+    · exact le_trans hle (le_trans (le_abs_self (b i)) (le_max_right |reserve| |b i|))
+  · rw [mechanism_payment_of_allocation_ne_some halloc]
+    simp
+
+omit [IsOrderedAddMonoid U] in
+/-- With a nonnegative reserve, a bidder reporting zero pays zero when the
+other bids are held fixed. -/
+lemma mechanism_payment_update_self_zero_of_nonneg_reserve {reserve : U}
+    (hreserve : 0 ≤ reserve) (i : I) (b : I → U) :
+    (mechanism reserve).paymentRule (Function.update b i 0) i = 0 := by
+  by_cases halloc : allocation reserve (Function.update b i 0) = some i
+  · have hpay_le :
+        (mechanism reserve).paymentRule (Function.update b i 0) i ≤ 0 := by
+      simpa [Function.update_self] using
+        mechanism_payment_le_bid_of_allocation_eq_some halloc
+    have hpay_eq :
+        (mechanism reserve).paymentRule (Function.update b i 0) i =
+          clearingPrice reserve (Function.update b i 0) :=
+      mechanism_payment_of_allocation_eq_some halloc
+    have hpay_nonneg :
+        0 ≤ (mechanism reserve).paymentRule (Function.update b i 0) i := by
+      rw [hpay_eq]
+      exact le_trans hreserve (reserve_le_clearingPrice reserve (Function.update b i 0))
+    exact le_antisymm hpay_le hpay_nonneg
+  · exact mechanism_payment_of_allocation_ne_some halloc
 
 omit [IsOrderedAddMonoid U] in
 /-- `game reserve v` equals the strategic game induced by `mechanism reserve`. -/

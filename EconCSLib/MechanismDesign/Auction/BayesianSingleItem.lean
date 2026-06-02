@@ -1,8 +1,3 @@
-/-
-Copyright (c) 2026 EconCSLib contributors. All rights reserved.
-Released under Apache 2.0 license as described in the file LICENSE.
--/
-
 import EconCSLib.MechanismDesign.Auction.AuctionBasic
 import EconCSLib.MechanismDesign.Auction.MechBayesian
 import Mathlib.Analysis.Convex.Continuous
@@ -40,15 +35,20 @@ Interim objects are defined against an explicit family of opponent-type priors
 separate from any density-based formulas one may later derive under
 independence.
 
-## Structure hierarchy
+## Main definitions and tools
 
-```
-MechanismWithTransfers I (fun _ => ℝ) (I → ℝ) ℝ
-  └─ SingleParameterMechanism I ℝ                 -- allocation probabilities + payments
-       └─ BayesianSingleItemAuction I             -- prior + continuous type data
-            ├─ toDirectBayesianMechanismWithTransfers
-            └─ toSingleParameterMechanism
-```
+* `BayesianSingleItemAuction`, the single-item specialization of
+  `DirectBayesianMechanismWithTransfers`;
+* `IsFeasible` and `isFeasible_of_optionalWinnerAllocation`, including a
+  reusable feasibility route for deterministic optional-winner rules;
+* seller-side revenue and reserve-value surplus objects:
+  `sellerRevenue`, `expectedSellerRevenue`, `withheldProbability`,
+  `sellerSurplusWithReserveValue`;
+* product-prior and opponent-prior constructions, together with atomless and
+  almost-everywhere support facts under independent type priors;
+* interim allocation, payment, utility, and integrability interfaces;
+* Fubini-style identities and almost-everywhere congruence lemmas for expected
+  payment revenue.
 -/
 
 open MeasureTheory
@@ -167,6 +167,24 @@ def RespectsSingleItemCapacity [Fintype I] (A : BayesianSingleItemAuction I) : P
 def IsFeasible [Fintype I] (A : BayesianSingleItemAuction I) : Prop :=
   A.IsAllocFeasible ∧ A.RespectsSingleItemCapacity
 
+/-- A deterministic optional winner, encoded as a `{0,1}` allocation vector, is feasible. -/
+theorem isFeasible_of_optionalWinnerAllocation
+    [Fintype I] [DecidableEq I] (A : BayesianSingleItemAuction I)
+    (winner : (I → ℝ) → Option I)
+    (halloc : A.allocationRule = fun b i => if winner b = some i then (1 : ℝ) else 0) :
+    A.IsFeasible := by
+  constructor
+  · intro b i
+    rw [halloc]
+    by_cases hwin : winner b = some i <;> simp [hwin]
+  · intro b
+    rw [halloc]
+    cases hwin : winner b with
+    | none =>
+        simp [hwin]
+    | some k =>
+        simp [hwin, Finset.mem_univ]
+
 /-- Seller revenue at a report profile. -/
 noncomputable def sellerRevenue [Fintype I]
     (A : BayesianSingleItemAuction I) (t : ∀ _ : I, ℝ) : ℝ :=
@@ -176,6 +194,37 @@ noncomputable def sellerRevenue [Fintype I]
 noncomputable def expectedSellerRevenue [Fintype I]
     (A : BayesianSingleItemAuction I) : ℝ :=
   ∫ t, A.sellerRevenue t ∂A.prior
+
+/-- Probability that the item is withheld at a report profile.
+
+For feasible allocation rules this is the leftover single-item mass. -/
+noncomputable def withheldProbability [Fintype I]
+    (A : BayesianSingleItemAuction I) (t : ∀ _ : I, ℝ) : ℝ :=
+  1 - ∑ i, A.allocationRule t i
+
+/-- Seller surplus at a report profile when the seller values retaining the item
+at `sellerValue`. This extends seller revenue by adding the seller's value for
+the unsold item. -/
+noncomputable def sellerSurplusWithReserveValue [Fintype I]
+    (A : BayesianSingleItemAuction I) (sellerValue : ℝ) (t : ∀ _ : I, ℝ) : ℝ :=
+  A.sellerRevenue t + sellerValue * A.withheldProbability t
+
+/-- Ex-ante seller surplus with a seller reservation value. -/
+noncomputable def expectedSellerSurplusWithReserveValue [Fintype I]
+    (A : BayesianSingleItemAuction I) (sellerValue : ℝ) : ℝ :=
+  ∫ t, A.sellerSurplusWithReserveValue sellerValue t ∂A.prior
+
+/-- Zero seller value recovers pointwise seller revenue. -/
+@[simp] theorem sellerSurplusWithReserveValue_zero [Fintype I]
+    (A : BayesianSingleItemAuction I) (t : ∀ _ : I, ℝ) :
+    A.sellerSurplusWithReserveValue 0 t = A.sellerRevenue t := by
+  simp [sellerSurplusWithReserveValue]
+
+/-- Zero seller value recovers expected seller revenue. -/
+@[simp] theorem expectedSellerSurplusWithReserveValue_zero [Fintype I]
+    (A : BayesianSingleItemAuction I) :
+    A.expectedSellerSurplusWithReserveValue 0 = A.expectedSellerRevenue := by
+  simp [expectedSellerSurplusWithReserveValue, expectedSellerRevenue]
 
 /-- Agent `i`'s one-dimensional density, defined as the derivative of the
 stored CDF `Fᵢ`. -/
@@ -249,6 +298,129 @@ instance opponentProductPrior_isProbabilityMeasure [Fintype I] [DecidableEq I]
     IsProbabilityMeasure (A.opponentProductPrior i) := by
   dsimp [opponentProductPrior]
   infer_instance
+
+/-- Each one-dimensional type measure is atomless: it is obtained from a
+restriction of Lebesgue measure by a density. -/
+instance typeMeasure_noAtoms (A : BayesianSingleItemAuction I) (i : I) :
+    NoAtoms (A.typeMeasure i) := by
+  dsimp [typeMeasure]
+  infer_instance
+
+/-- A one-dimensional type drawn from `A.typeMeasure i` lies in its support
+interval almost surely. -/
+theorem ae_typeMeasure_mem_Ioc (A : BayesianSingleItemAuction I) (i : I) :
+    ∀ᵐ v ∂A.typeMeasure i, v ∈ Set.Ioc 0 (A.typeData.omega i) := by
+  dsimp [typeMeasure]
+  exact
+    (withDensity_absolutelyContinuous
+      (volume.restrict (Set.Ioc 0 (A.typeData.omega i)))
+      (fun v => ENNReal.ofReal (A.typeDensity i v))).ae_le
+      (ae_restrict_mem measurableSet_Ioc)
+
+/-- A one-dimensional type drawn from `A.typeMeasure i` is nonnegative almost
+surely. -/
+theorem ae_typeMeasure_nonneg (A : BayesianSingleItemAuction I) (i : I) :
+    ∀ᵐ v ∂A.typeMeasure i, 0 ≤ v := by
+  filter_upwards [A.ae_typeMeasure_mem_Ioc i] with v hv
+  exact le_of_lt hv.1
+
+/-- Under the product prior, a fixed bidder's type is almost surely different
+from any fixed scalar. -/
+theorem ae_eval_ne_productPrior [Fintype I] (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (i : I) (x : ℝ) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.productPrior, t i ≠ x := by
+  simpa [productPrior] using
+    (Measure.ae_eval_ne (μ := fun j : I => A.typeMeasure j) i x)
+
+/-- Under the opponent product prior, a fixed opponent coordinate is almost
+surely different from any fixed scalar. -/
+theorem ae_eval_ne_opponentProductPrior [Fintype I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (i : I) (j : {j // j ≠ i}) (x : ℝ) :
+    ∀ᵐ t : OpponentTypeProfile I i ∂A.opponentProductPrior i, t j ≠ x := by
+  simpa [opponentProductPrior] using
+    (Measure.ae_eval_ne (μ := fun k : {j // j ≠ i} => A.typeMeasure k) j x)
+
+/-- Under the product prior, a fixed bidder's type lies in its support interval
+almost surely. -/
+theorem ae_eval_mem_Ioc_productPrior [Fintype I] (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (i : I) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.productPrior, t i ∈ Set.Ioc 0 (A.typeData.omega i) := by
+  exact
+    (measurePreserving_eval (μ := fun j : I => A.typeMeasure j) i).quasiMeasurePreserving.ae
+      (A.ae_typeMeasure_mem_Ioc i)
+
+/-- Under the product prior, a fixed bidder's type is nonnegative almost surely. -/
+theorem ae_eval_nonneg_productPrior [Fintype I] (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (i : I) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.productPrior, 0 ≤ t i := by
+  exact
+    (measurePreserving_eval (μ := fun j : I => A.typeMeasure j) i).quasiMeasurePreserving.ae
+      (A.ae_typeMeasure_nonneg i)
+
+/-- Under independent atomless type priors, a fixed bidder's type is almost
+surely different from any fixed scalar. -/
+theorem ae_eval_ne_prior_of_hasIndependentTypePriors [Fintype I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.HasIndependentTypePriors) (i : I) (x : ℝ) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.prior, t i ≠ x := by
+  rw [h.1]
+  exact A.ae_eval_ne_productPrior i x
+
+/-- Under independent type priors, a fixed bidder's type lies in its support
+interval almost surely. -/
+theorem ae_eval_mem_Ioc_prior_of_hasIndependentTypePriors [Fintype I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.HasIndependentTypePriors) (i : I) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.prior, t i ∈ Set.Ioc 0 (A.typeData.omega i) := by
+  rw [h.1]
+  exact A.ae_eval_mem_Ioc_productPrior i
+
+/-- Under independent type priors, a fixed bidder's type is nonnegative almost
+surely. -/
+theorem ae_eval_nonneg_prior_of_hasIndependentTypePriors [Fintype I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.HasIndependentTypePriors) (i : I) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.prior, 0 ≤ t i := by
+  rw [h.1]
+  exact A.ae_eval_nonneg_productPrior i
+
+/-- Under independent atomless type priors, all coordinates are almost surely
+different from a fixed scalar. -/
+theorem ae_forall_eval_ne_const_prior_of_hasIndependentTypePriors
+    [Fintype I] [DecidableEq I] (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.HasIndependentTypePriors) (x : ℝ) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.prior, ∀ i : I, t i ≠ x := by
+  exact ae_all_iff.mpr fun i =>
+    A.ae_eval_ne_prior_of_hasIndependentTypePriors h i x
+
+/-- Under independent type priors, all coordinates are nonnegative almost
+surely. -/
+theorem ae_forall_eval_nonneg_prior_of_hasIndependentTypePriors
+    [Fintype I] [DecidableEq I] (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.HasIndependentTypePriors) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.prior, ∀ i : I, 0 ≤ t i := by
+  exact ae_all_iff.mpr fun i =>
+    A.ae_eval_nonneg_prior_of_hasIndependentTypePriors h i
+
+/-- Under independent atomless type priors, the selected highest bid is almost
+surely not equal to any fixed scalar. -/
+theorem ae_argmaxBid_ne_const_prior_of_hasIndependentTypePriors
+    [Fintype I] [Nontrivial I] [DecidableEq I] (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.HasIndependentTypePriors) (x : ℝ) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.prior, x ≠ t (Auction.argmaxBid t) := by
+  filter_upwards [A.ae_forall_eval_ne_const_prior_of_hasIndependentTypePriors h x] with t ht
+  exact (ht (Auction.argmaxBid t)).symm
 
 theorem productPrior_map_eval [Fintype I] (A : BayesianSingleItemAuction I)
     [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)] (i : I) :
@@ -539,6 +711,77 @@ theorem prior_map_profileSplitMeasurableEquiv_of_hasIndependentTypePriors
   rw [h.1]
   exact A.productPrior_map_profileSplitMeasurableEquiv i
 
+/-- Under the product prior, two distinct bidder coordinates are almost surely
+different. -/
+theorem ae_eval_ne_eval_productPrior [Fintype I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    {i j : I} (hji : j ≠ i) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.productPrior, t i ≠ t j := by
+  let j' : {j // j ≠ i} := ⟨j, hji⟩
+  let s : Set (ℝ × OpponentTypeProfile I i) := {p | p.1 ≠ p.2 j'}
+  have hmeas_j : Measurable (fun t : OpponentTypeProfile I i => t j') :=
+    measurable_pi_apply j'
+  have hs : MeasurableSet s := by
+    dsimp [s]
+    exact (measurableSet_eq_fun measurable_fst (hmeas_j.comp measurable_snd)).compl
+  have hprod :
+      ∀ᵐ p : ℝ × OpponentTypeProfile I i
+        ∂(A.typeMeasure i).prod (A.opponentProductPrior i),
+        p ∈ s := by
+    refine (Measure.ae_prod_iff_ae_ae
+      hs).2 ?_
+    filter_upwards with v
+    filter_upwards [A.ae_eval_ne_opponentProductPrior i j' v] with t ht
+    exact ht.symm
+  have hmap :
+      ∀ᵐ p : ℝ × OpponentTypeProfile I i
+        ∂A.productPrior.map (profileSplitMeasurableEquiv i),
+        p ∈ s := by
+    simpa [A.productPrior_map_profileSplitMeasurableEquiv i] using hprod
+  have hpull :
+      ∀ᵐ t : (∀ _ : I, ℝ) ∂A.productPrior,
+        profileSplitMeasurableEquiv i t ∈ s :=
+    (ae_map_iff (profileSplitMeasurableEquiv i).measurable.aemeasurable hs).1 hmap
+  simpa [s, j'] using hpull
+
+/-- Under independent atomless type priors, two distinct bidder coordinates are
+almost surely different. -/
+theorem ae_eval_ne_eval_prior_of_hasIndependentTypePriors [Fintype I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.HasIndependentTypePriors) {i j : I} (hji : j ≠ i) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.prior, t i ≠ t j := by
+  rw [h.1]
+  exact A.ae_eval_ne_eval_productPrior hji
+
+/-- Under independent atomless type priors, every bidder is almost surely
+different from every other bidder. -/
+theorem ae_pairwise_eval_ne_prior_of_hasIndependentTypePriors
+    [Fintype I] [DecidableEq I] (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.HasIndependentTypePriors) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.prior, ∀ i j : I, i ≠ j → t i ≠ t j := by
+  refine ae_all_iff.mpr fun i => ae_all_iff.mpr fun j => ?_
+  by_cases hij : i = j
+  · exact Filter.Eventually.of_forall fun _ hne => False.elim (hne hij)
+  · filter_upwards
+      [A.ae_eval_ne_eval_prior_of_hasIndependentTypePriors h (fun hji => hij hji.symm)]
+      with t ht _hne
+    exact ht
+
+/-- Under independent atomless type priors, the selected highest bid is almost
+surely unique. -/
+theorem ae_unique_argmaxBid_prior_of_hasIndependentTypePriors
+    [Fintype I] [Nontrivial I] [DecidableEq I] (A : BayesianSingleItemAuction I)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.HasIndependentTypePriors) :
+    ∀ᵐ t : (∀ _ : I, ℝ) ∂A.prior,
+      ∀ j, j ≠ Auction.argmaxBid t → t j < t (Auction.argmaxBid t) := by
+  filter_upwards [A.ae_pairwise_eval_ne_prior_of_hasIndependentTypePriors h] with t ht
+  intro j hj
+  exact lt_of_le_of_ne (Auction.bid_le_maxBid t j) (ht j (Auction.argmaxBid t) hj)
+
 theorem integral_comp_profileSplitMeasurableEquiv_productPrior
     [Fintype I] [DecidableEq I] (A : BayesianSingleItemAuction I)
     [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)] (i : I) {E : Type*}
@@ -654,8 +897,8 @@ theorem integral_prior_eq_integral_typeMeasure_opponentPrior_of_hasIndependentTy
 /-- Interim expectation of a full-profile observable after report `zᵢ`. -/
 noncomputable def interimExpectation
     (A : BayesianSingleItemAuction I) (i : I) (z_i : ℝ)
-    (f : (∀ _ : I, ℝ) → ℝ) : ℝ :=
-  ∫ t, f (reportProfile i z_i t) ∂A.opponentPrior i
+    (φ : (∀ _ : I, ℝ) → ℝ) : ℝ :=
+  ∫ t, φ (reportProfile i z_i t) ∂A.opponentPrior i
 
 /-- Allocation integrand for interim probability. -/
 noncomputable def interimAllocationIntegrand
@@ -892,11 +1135,61 @@ noncomputable def expectedSellerRevenueInEnvironment [Fintype I]
     (A B : BayesianSingleItemAuction I) : ℝ :=
   A.expectedPaymentRevenueInEnvironment B.paymentRule
 
+/-- Expected total payment revenue is unchanged by an almost-everywhere equal
+payment profile. -/
+theorem expectedPaymentRevenueInEnvironment_congr_ae [Fintype I]
+    (A : BayesianSingleItemAuction I)
+    {p q : (I → ℝ) → I → ℝ}
+    (h : p =ᵐ[A.prior] q) :
+    A.expectedPaymentRevenueInEnvironment p =
+      A.expectedPaymentRevenueInEnvironment q := by
+  dsimp [expectedPaymentRevenueInEnvironment]
+  refine integral_congr_ae ?_
+  filter_upwards [h] with t ht
+  rw [ht]
+
+/-- Pointwise bidder-wise almost-everywhere equality is enough for equality of
+expected total payment revenue. -/
+theorem expectedPaymentRevenueInEnvironment_congr_ae_pointwise [Fintype I]
+    (A : BayesianSingleItemAuction I)
+    {p q : (I → ℝ) → I → ℝ}
+    (h : ∀ i : I, (fun t => p t i) =ᵐ[A.prior] fun t => q t i) :
+    A.expectedPaymentRevenueInEnvironment p =
+      A.expectedPaymentRevenueInEnvironment q := by
+  dsimp [expectedPaymentRevenueInEnvironment]
+  refine integral_congr_ae ?_
+  filter_upwards [ae_all_iff.mpr h] with t ht
+  exact Finset.sum_congr rfl fun i _hi => ht i
+
+/-- Expected seller revenue is unchanged when the evaluated auction's payment
+rule is almost everywhere equal. -/
+theorem expectedSellerRevenueInEnvironment_congr_paymentRule_ae [Fintype I]
+    (A B C : BayesianSingleItemAuction I)
+    (h : B.paymentRule =ᵐ[A.prior] C.paymentRule) :
+    A.expectedSellerRevenueInEnvironment B =
+      A.expectedSellerRevenueInEnvironment C := by
+  simpa [expectedSellerRevenueInEnvironment] using
+    (A.expectedPaymentRevenueInEnvironment_congr_ae
+      (p := B.paymentRule) (q := C.paymentRule) h)
+
+/-- Bidder-wise almost-everywhere equality of payment rules is enough for
+equality of expected seller revenue. -/
+theorem expectedSellerRevenueInEnvironment_congr_paymentRule_ae_pointwise [Fintype I]
+    (A B C : BayesianSingleItemAuction I)
+    (h : ∀ i : I, (fun t => B.paymentRule t i) =ᵐ[A.prior] fun t => C.paymentRule t i) :
+    A.expectedSellerRevenueInEnvironment B =
+      A.expectedSellerRevenueInEnvironment C := by
+  simpa [expectedSellerRevenueInEnvironment] using
+    (A.expectedPaymentRevenueInEnvironment_congr_ae_pointwise
+      (p := B.paymentRule) (q := C.paymentRule) h)
+
 /-- Ex-ante revenue through interim expected payments. -/
 noncomputable def expectedInterimPaymentRevenue [Fintype I]
     (A B : BayesianSingleItemAuction I) : ℝ :=
   ∑ i, ∫ v in 0..A.typeData.omega i, B.interimExpectedPayment i v * A.typeDensity i v
 
+/-- Evaluating an auction's seller revenue in its own environment is its
+ordinary expected seller revenue. -/
 @[simp] theorem expectedSellerRevenueInEnvironment_self [Fintype I]
     (A : BayesianSingleItemAuction I) :
     A.expectedSellerRevenueInEnvironment A = A.expectedSellerRevenue := by
@@ -922,7 +1215,7 @@ theorem PaymentInterimFubiniAssumptions.expectedPaymentRevenueIntegrable
     [Fintype I] {A B : BayesianSingleItemAuction I}
     (h : A.PaymentInterimFubiniAssumptions B) :
     Integrable (fun t => ∑ i, B.paymentRule t i) A.prior :=
-  integrable_finset_sum Finset.univ fun i _ => h.payment_integrable i
+  integrable_finsetSum Finset.univ fun i _ => h.payment_integrable i
 
 theorem PaymentInterimFubiniAssumptions.hasExpectedRevenueInterimPaymentIdentity
     [Fintype I] {A B : BayesianSingleItemAuction I}
@@ -937,7 +1230,7 @@ theorem PaymentInterimFubiniAssumptions.hasExpectedRevenueInterimPaymentIdentity
     (∫ t, ∑ i, B.paymentRule t i ∂A.prior)
         = ∑ i, ∫ t, B.paymentRule t i ∂A.prior := by
           simpa using
-            (integral_finset_sum (s := Finset.univ)
+            (integral_finsetSum (s := Finset.univ)
               (f := fun i t => B.paymentRule t i)
               (fun i _ => h.payment_integrable i))
     _ = ∑ i, ∫ v in 0..A.typeData.omega i,
