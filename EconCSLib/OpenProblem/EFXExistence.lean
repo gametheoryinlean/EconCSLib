@@ -24,8 +24,6 @@ case is known in the literature but is not formalized here.
 * Chaudhury, Garg, and Mehlhorn, "EFX Allocations for Three Agents" (EC 2020).
 -/
 
-open Finset
-
 namespace SocialChoice
 namespace FairDivision
 namespace Indivisible

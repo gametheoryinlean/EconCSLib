@@ -91,6 +91,7 @@ where
     | .lam _ t b _ => go b (go t acc)
     | .forallE _ t b _ => go b (go t acc)
     | .letE _ t v b _ => go b (go v (go t acc))
+    | .proj _ _ e => go e acc
     | _ => acc
 
 def elabTermAndAnnotate (stx : TSyntax `term) (expectedType? : Option Expr)
@@ -101,7 +102,7 @@ def elabTermAndAnnotate (stx : TSyntax `term) (expectedType? : Option Expr)
     else
       elabTerm stx expectedType?
 
-/-- Indicates where the answer is in an open-problem statement. -/
+/-- Term elaborator for the `answer()` syntax in open-problem statements. -/
 @[term_elab answer]
 def answerElab : TermElab := fun stx expectedType? => do
   match stx with
