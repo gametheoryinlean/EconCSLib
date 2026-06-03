@@ -44,14 +44,14 @@ root:
 ```bash
 lake build
 lake build EconCSLib.Examples
-rg -n '\b(sorry|admit)\b' EconCSLib -g '*.lean'
+python3 scripts/check_lean_placeholders.py EconCSLib
 python3 -m unittest tests/test_check_knowledge_references.py
 python3 scripts/check_knowledge_references.py docs/knowledge
 mdblueprint-check docs/knowledge --lean-root .
 git diff --check
 ```
 
-The placeholder search must return no matches.
+The placeholder checker must pass.
 
 To build a preview:
 

@@ -19,7 +19,8 @@ blueprint nodes are all useful.
 Keep changes focused and follow nearby Lean style. Add public stable modules to
 `EconCSLib.lean`; keep examples and experimental open-problem interfaces opt-in.
 Do not add textbook PDFs, scans, OCR output, generated documentation sites, or
-Lean placeholders.
+ordinary Lean placeholders. Open-problem theorems may use the scoped
+`answer(sorry) ↔ P := by sorry` pattern under `EconCSLib/OpenProblem/`.
 
 Run the relevant checks before opening a pull request:
 
@@ -27,7 +28,7 @@ Run the relevant checks before opening a pull request:
 lake exe cache get
 lake build
 lake build EconCSLib.Examples
-rg -n '\b(sorry|admit)\b' EconCSLib -g '*.lean'
+python3 scripts/check_lean_placeholders.py EconCSLib
 git diff --check
 ```
 
@@ -39,7 +40,7 @@ python3 scripts/check_knowledge_references.py docs/knowledge
 mdblueprint-check docs/knowledge --lean-root .
 ```
 
-The placeholder search must return no matches.
+The placeholder checker must pass.
 
 ## Pull Requests
 

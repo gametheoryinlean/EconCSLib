@@ -5,21 +5,22 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 import EconCSLib.MechanismDesign.Auction.VCG
 import EconCSLib.Foundation.Utility.Lottery
+import EconCSLib.OpenProblem.Util.Answer
 import Mathlib.Analysis.SpecialFunctions.Exp
 
 open scoped BigOperators
 
 /-!
-# EconCSLib.OpenProblem.OpenProblem1
+# EconCSLib.OpenProblem.SubmodularWelfareDemandOracle
 
 This file formalizes the interface of one open problem in algorithmic mechanism
 design: randomized submodular welfare maximization with demand queries.
 
 The development is intentionally interface-level. It defines bundle valuations,
 value and demand oracles, disjoint bundle allocations, the induced social
-welfare and optimum, a randomized algorithm interface, and a final proposition
-stating the existence of a polynomial-time demand-oracle algorithm beating the
-`1 - 1/e` barrier.
+welfare and optimum, a randomized algorithm interface, and a final open-problem
+statement asking whether a polynomial-time demand-oracle algorithm can beat the
+`1 - 1/e` barrier by some fixed positive constant.
 
 ## References
 
@@ -244,14 +245,19 @@ noncomputable def expectedBundlePartitionSocialWelfare
 -/
 
 /-- Named predicate for polynomial running time in the number of agents and
-items. This is an interface-level placeholder until a concrete cost model is
-chosen. -/
+items.
+
+This is an interface-level hook until a concrete cost model is chosen; it should
+not be read as a completed formalization of polynomial-time computation. -/
 def PolynomialTimeInAgentsItems (_agents _items : ℕ) : Prop :=
   True
 
 /-- Named predicate for polynomially many bundle-oracle queries in the number
-of agents and items. This covers value and demand queries to `BundleOracle`
-packages in this file. -/
+of agents and items.
+
+This is an interface-level hook covering value and demand queries to
+`BundleOracle` packages in this file; it is not yet a completed query-complexity
+model. -/
 def PolynomialBundleOracleQueryBound (_agents _items : ℕ) : Prop :=
   True
 
@@ -266,15 +272,30 @@ def RandomizedSubmodularWelfareAlgorithm.IsPolynomial
   PolynomialTimeInAgentsItems (n I) M.card ∧
     PolynomialBundleOracleQueryBound (n I) M.card
 
-/-- Open problem: there exists a randomized demand-oracle SWM algorithm beating
-the `1 - 1/e` barrier by `0.01` for the fixed agent, item, and seed domains. -/
-noncomputable def ExistsDemandOracleSWMAlgorithmBeatingOneMinusInvE
+/-- Open-problem statement: for the fixed agent, item, and seed domains, there
+is a randomized demand-oracle SWM algorithm beating the `1 - 1/e` barrier by
+some fixed positive constant. -/
+noncomputable def DemandOracleSWMBeatsOneMinusInvEStatement
     (I Ω : Type*) {G : Type*} [Fintype I] [Fintype Ω] [DecidableEq G]
     (M : Finset G) [Fintype (BundlePartitionAllocation I M)]
     [Nonempty (BundlePartitionAllocation I M)] : Prop :=
-  ∃ alg : RandomizedSubmodularWelfareAlgorithm I Ω M,
-    alg.IsPolynomial ∧
-      ∀ profile : SubmodularWelfareMaximizationProfile I M,
-        (1 - 1 / Real.exp 1 + (1 / 100 : ℝ)) *
-            OPT (fun i => (profile.oracle i).valuation) ≤
-          expectedBundlePartitionSocialWelfare alg profile
+  ∃ ε : ℝ, 0 < ε ∧
+    ∃ alg : RandomizedSubmodularWelfareAlgorithm I Ω M,
+      alg.IsPolynomial ∧
+        ∀ profile : SubmodularWelfareMaximizationProfile I M,
+          (1 - 1 / Real.exp 1 + ε) *
+              OPT (fun i => (profile.oracle i).valuation) ≤
+            expectedBundlePartitionSocialWelfare alg profile
+
+/-- English version: "Is there a randomized demand-oracle algorithm for
+submodular welfare maximization that beats the `1 - 1/e` approximation barrier
+by a fixed positive constant?"
+
+The `answer(sorry)` marker records that the mathematical answer is unresolved;
+it is not a proof of either side of the question. -/
+theorem demandOracleSWMBeatsOneMinusInvE
+    (I Ω : Type*) {G : Type*} [Fintype I] [Fintype Ω] [DecidableEq G]
+    (M : Finset G) [Fintype (BundlePartitionAllocation I M)]
+    [Nonempty (BundlePartitionAllocation I M)] :
+    answer(sorry) ↔ DemandOracleSWMBeatsOneMinusInvEStatement I Ω M := by
+  sorry
