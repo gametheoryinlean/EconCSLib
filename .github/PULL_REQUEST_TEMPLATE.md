@@ -10,7 +10,7 @@ List the Lean modules, blueprint nodes, or documentation files affected.
 
 - [ ] `lake build`
 - [ ] `lake build EconCSLib.Examples`
-- [ ] `rg -n '\b(sorry|admit)\b' EconCSLib -g '*.lean'` returned no matches
+- [ ] `python3 scripts/check_lean_placeholders.py EconCSLib` passed
 - [ ] `git diff --check`
 - [ ] Blueprint checks run when `docs/knowledge/` changed
 

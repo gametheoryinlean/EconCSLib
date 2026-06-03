@@ -46,11 +46,7 @@ jobs:
         run: lake build EconCSLib.Examples
 
       - name: Check Lean sources for placeholders
-        run: |
-          if rg -n '\b(sorry|admit)\b' EconCSLib -g '*.lean'; then
-            echo "Lean source modules must not contain sorry or admit."
-            exit 1
-          fi
+        run: python3 scripts/check_lean_placeholders.py EconCSLib
 
       - name: Check diff whitespace
         run: |

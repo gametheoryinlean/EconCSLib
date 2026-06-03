@@ -100,7 +100,9 @@ improve readability.
 
 ## Placeholder Policy
 
-Lean source under `EconCSLib/` must not contain `sorry` or `admit`.
+Lean source under `EconCSLib/` must not contain ordinary `sorry` or `admit`.
+Open-problem theorems under `EconCSLib/OpenProblem/` may use only the scoped
+`answer(sorry) ↔ P := by sorry` pattern.
 
 When a mathematical target is not ready for implementation:
 
@@ -148,10 +150,10 @@ Run checks from the repository root and scale them to the files changed.
 ```bash
 lake build
 lake build EconCSLib.Examples
-rg -n '\b(sorry|admit)\b' EconCSLib -g '*.lean'
+python3 scripts/check_lean_placeholders.py EconCSLib
 ```
 
-The final `rg` command must return no matches.
+The placeholder checker must pass.
 
 ### Knowledge-base changes
 
@@ -185,7 +187,7 @@ git diff --check
 ## CI Workflows
 
 - `.github/workflows/build.yml`: builds the stable library and examples,
-  rejects Lean placeholders, and checks diff whitespace.
+  rejects disallowed Lean placeholders, and checks diff whitespace.
 - `.github/workflows/blueprint.yml`: validates the blueprint on pull requests
   and deploys the generated site only from `main`.
 - `.github/workflows/docs.yml`: builds and deploys API reference output from

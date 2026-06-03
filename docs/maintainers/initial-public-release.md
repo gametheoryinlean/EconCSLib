@@ -114,14 +114,14 @@ Confirm that deletions match the intended cleanup:
 ```bash
 git diff --name-only --diff-filter=D
 git ls-files | rg '\.(pdf|zip|jsonl|pyc)$|(^|/)__pycache__/|^references/' || true
-rg -n '\b(sorry|admit)\b' EconCSLib -g '*.lean' || true
+python3 scripts/check_lean_placeholders.py EconCSLib
 rg -n 'docs/dev|PLAN\.md|\.sorry-crusher|maschler_statements' \
   README.md AGENTS.md CONTRIBUTING.md docs scripts .github EconCSLib \
   -g '!initial-public-release.md' || true
 ```
 
-The last three commands must return no tracked artifacts, source placeholders,
-or stale private-development paths.
+The artifact and private-path searches must return no matches, and the
+placeholder checker must pass.
 
 Run the local checks:
 
@@ -129,15 +129,15 @@ Run the local checks:
 lake exe cache get
 lake build
 lake build EconCSLib.Examples
-rg -n '\b(sorry|admit)\b' EconCSLib/Examples -g '*.lean'
+python3 scripts/check_lean_placeholders.py EconCSLib
 python3 -m unittest tests/test_check_knowledge_references.py
 python3 scripts/check_knowledge_references.py docs/knowledge
 mdblueprint-check docs/knowledge --lean-root .
 git diff --check
 ```
 
-The example placeholder search must return no matches. `mdblueprint-check`
-should finish with `0 error(s), 0 warning(s)`.
+The placeholder checker must pass. `mdblueprint-check` should finish with
+`0 error(s), 0 warning(s)`.
 
 Build both generated documentation products once:
 
@@ -449,14 +449,15 @@ Confirm that private and generated artifacts did not enter the snapshot:
 
 ```bash
 git ls-files | rg '\.(pdf|zip|jsonl|pyc)$|(^|/)__pycache__/|^references/' || true
-rg -n '\b(sorry|admit)\b' EconCSLib -g '*.lean' || true
+python3 scripts/check_lean_placeholders.py EconCSLib
 rg -n 'docs/dev|PLAN\.md|\.sorry-crusher|maschler_statements' \
   README.md AGENTS.md CONTRIBUTING.md docs scripts .github EconCSLib \
   -g '!initial-public-release.md' || true
 git status --short
 ```
 
-The repository should be clean, and the searches should return no matches.
+The repository should be clean, the artifact/private-path searches should
+return no matches, and the placeholder checker should pass.
 
 Run the release checks in the snapshot:
 
@@ -464,15 +465,15 @@ Run the release checks in the snapshot:
 lake exe cache get
 lake build
 lake build EconCSLib.Examples
-rg -n '\b(sorry|admit)\b' EconCSLib/Examples -g '*.lean'
+python3 scripts/check_lean_placeholders.py EconCSLib
 python3 -m unittest tests/test_check_knowledge_references.py
 python3 scripts/check_knowledge_references.py docs/knowledge
 mdblueprint-check docs/knowledge --lean-root .
 git diff --check
 ```
 
-The example placeholder search must return no matches. The build may emit the
-known Lean deprecation and linter warnings.
+The placeholder checker must pass. The build may emit the known Lean
+deprecation and linter warnings.
 
 ## Phase 7: Push and Observe the First Public CI Run
 
@@ -616,14 +617,14 @@ cd "$VERIFY_DIR"
 lake exe cache get
 lake build
 lake build EconCSLib.Examples
-rg -n '\b(sorry|admit)\b' EconCSLib -g '*.lean'
+python3 scripts/check_lean_placeholders.py EconCSLib
 python3 -m unittest tests/test_check_knowledge_references.py
 python3 scripts/check_knowledge_references.py docs/knowledge
 mdblueprint-check docs/knowledge --lean-root .
 git diff --check
 ```
 
-The placeholder search must return no matches.
+The placeholder checker must pass.
 
 ## Phase 10: Tag and Publish `v0.1.0`
 

@@ -52,11 +52,18 @@ Foundation/   Math/
   import is clear.
 - Add intended stable modules to `EconCSLib.lean`.
 
-### Keep the Lean tree placeholder-free
+### Keep the stable Lean tree placeholder-free
 
-Public Lean source under `EconCSLib/` must not contain `sorry` or `admit`.
+Public Lean source under `EconCSLib/` must not contain ordinary `sorry` or
+`admit`.
 Mathematical targets that are not yet implemented belong in the knowledge
 blueprint or issue tracker, not as deferred Lean declarations.
+
+Experimental open-problem interfaces under `EconCSLib/OpenProblem/` have one
+scoped exception: theorem statements may use `answer(sorry) ↔ P := by sorry` to
+record an unresolved yes/no answer in the style of Formal Conjectures. This
+exception is checked by `scripts/check_lean_placeholders.py`; ordinary `sorry`
+and all `admit` uses remain forbidden.
 
 ## Source Layout
 
