@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2026 EconCSLib contributors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+
 import EconCSLib.MechanismDesign.Auction.AuctionBasic
 import EconCSLib.MechanismDesign.Auction.MechBayesian
 import Mathlib.Analysis.Convex.Continuous
@@ -267,18 +272,21 @@ def HasSameSellingEnvironment
     B.opponentPrior = A.opponentPrior ∧
       B.typeData = A.typeData
 
+/-- Same-environment auctions have the same ex-ante prior. -/
 theorem HasSameSellingEnvironment.prior_eq
     {A B : BayesianSingleItemAuction I}
     (h : A.HasSameSellingEnvironment B) :
     B.prior = A.prior :=
   h.1
 
+/-- Same-environment auctions have the same conditional opponent priors. -/
 theorem HasSameSellingEnvironment.opponentPrior_eq
     {A B : BayesianSingleItemAuction I}
     (h : A.HasSameSellingEnvironment B) :
     B.opponentPrior = A.opponentPrior :=
   h.2.1
 
+/-- Same-environment auctions have the same continuous type data. -/
 theorem HasSameSellingEnvironment.typeData_eq
     {A B : BayesianSingleItemAuction I}
     (h : A.HasSameSellingEnvironment B) :
@@ -422,12 +430,16 @@ theorem ae_argmaxBid_ne_const_prior_of_hasIndependentTypePriors
   filter_upwards [A.ae_forall_eval_ne_const_prior_of_hasIndependentTypePriors h x] with t ht
   exact (ht (Auction.argmaxBid t)).symm
 
+/-- Under the product prior, projecting to coordinate `i` recovers bidder `i`'s
+type measure. -/
 theorem productPrior_map_eval [Fintype I] (A : BayesianSingleItemAuction I)
     [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)] (i : I) :
     A.productPrior.map (Function.eval i) = A.typeMeasure i := by
   simpa [productPrior] using
     (measurePreserving_eval (μ := fun j : I => A.typeMeasure j) i).map_eq
 
+/-- Under the product opponent prior, projecting to opponent coordinate `j`
+recovers that opponent's type measure. -/
 theorem opponentProductPrior_map_eval [Fintype I] [DecidableEq I]
     (A : BayesianSingleItemAuction I)
     [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)] (i : I)
@@ -436,6 +448,8 @@ theorem opponentProductPrior_map_eval [Fintype I] [DecidableEq I]
   simpa [opponentProductPrior] using
     (measurePreserving_eval (μ := fun k : {j // j ≠ i} => A.typeMeasure k) j).map_eq
 
+/-- Under independent type priors, the stored prior has the prescribed marginal
+type measure in every coordinate. -/
 theorem prior_map_eval_of_hasIndependentTypePriors [Fintype I] [DecidableEq I]
     (A : BayesianSingleItemAuction I)
     [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
@@ -444,6 +458,8 @@ theorem prior_map_eval_of_hasIndependentTypePriors [Fintype I] [DecidableEq I]
   rw [h.1]
   exact A.productPrior_map_eval i
 
+/-- Under independent type priors, the stored opponent prior has the prescribed
+marginal type measure in every opponent coordinate. -/
 theorem opponentPrior_map_eval_of_hasIndependentTypePriors [Fintype I] [DecidableEq I]
     (A : BayesianSingleItemAuction I)
     [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
@@ -655,6 +671,8 @@ noncomputable def profileSplitMeasurableEquiv
     (i : I) (v : ℝ) (t : OpponentTypeProfile I i) :
     (profileSplitMeasurableEquiv i).symm (v, t) = reportProfile i v t := rfl
 
+/-- Splitting a product type profile into bidder `i`'s coordinate and the
+opponent profile is measure-preserving for product priors. -/
 theorem measurePreserving_profileSplitMeasurableEquiv_productPrior
     [Fintype I] [DecidableEq I] (A : BayesianSingleItemAuction I)
     [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)] (i : I) :
@@ -695,6 +713,8 @@ theorem measurePreserving_profileSplitMeasurableEquiv_productPrior
     simpa [e₁, MeasurableEquiv.prodCongr] using hfirst.prod hright
   simpa [profileSplitMeasurableEquiv, e₀, e₁] using h₀.trans h₁
 
+/-- The product prior factors into bidder `i`'s type measure and the opponent
+product prior under profile splitting. -/
 theorem productPrior_map_profileSplitMeasurableEquiv
     [Fintype I] [DecidableEq I] (A : BayesianSingleItemAuction I)
     [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)] (i : I) :
@@ -702,6 +722,8 @@ theorem productPrior_map_profileSplitMeasurableEquiv
       (A.typeMeasure i).prod (A.opponentProductPrior i) :=
   (A.measurePreserving_profileSplitMeasurableEquiv_productPrior i).map_eq
 
+/-- Under independent type priors, the stored prior factors into own type and
+opponent product priors under profile splitting. -/
 theorem prior_map_profileSplitMeasurableEquiv_of_hasIndependentTypePriors
     [Fintype I] [DecidableEq I] (A : BayesianSingleItemAuction I)
     [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
@@ -1211,12 +1233,14 @@ structure PaymentInterimFubiniAssumptions [Fintype I]
       (∫ t, B.paymentRule t i ∂A.prior) =
         ∫ v in 0..A.typeData.omega i, B.interimExpectedPayment i v * A.typeDensity i v
 
+/-- Payment-side Fubini assumptions imply integrability of total payment revenue. -/
 theorem PaymentInterimFubiniAssumptions.expectedPaymentRevenueIntegrable
     [Fintype I] {A B : BayesianSingleItemAuction I}
     (h : A.PaymentInterimFubiniAssumptions B) :
     Integrable (fun t => ∑ i, B.paymentRule t i) A.prior :=
   integrable_finsetSum Finset.univ fun i _ => h.payment_integrable i
 
+/-- Payment-side Fubini assumptions give the ex-ante/interim revenue identity. -/
 theorem PaymentInterimFubiniAssumptions.hasExpectedRevenueInterimPaymentIdentity
     [Fintype I] {A B : BayesianSingleItemAuction I}
     (h : A.PaymentInterimFubiniAssumptions B) :

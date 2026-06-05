@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2026 EconCSLib contributors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+
 import EconCSLib.MechanismDesign.Auction.BayesianSingleItem
 import EconCSLib.MechanismDesign.Auction.Myerson
 import Mathlib.Data.Prod.Lex
@@ -22,7 +27,7 @@ MSZ 12.59. The main public result is
 * `virtualValue`, `IsRegular`, `IsReserveThreshold`
 * `IsVirtualValueCutoff`, `virtualValueCutoff`, `VirtualValueReserve`,
   `VirtualValueCutoffReserve`
-* `CommonRegularReserve`, `CommonCDFRegularReserve`, and common cutoff wrappers
+* `CommonRegularReserve` and reserve-presentation wrappers
 * `virtualSurplus`, `expectedVirtualSurplus`
 * `IsSingleItemAllocationRule`, `IsVirtualSurplusOptimalAllocationRule`
 * `IsRevenueComparable`, `IsRevenueUpperBounded`
@@ -319,7 +324,15 @@ theorem isVirtualValueCutoff_common_strictMono_of_common_eq
     (A.hasStrictVirtualValueOrder_of_common_strictMono hcommon hφ).isRegular
     (by simpa [hcommon i ρ] using hcross)
 
-/-- Common regular reserve: one strictly increasing virtual value, zero at `rho`. -/
+/-! ## Common reserve presentations -/
+
+/-!
+`CommonRegularReserve` is the minimal reserve interface used by the bridge
+theorems. The virtual-value and common-CDF structures below are presentation
+wrappers that can be coerced back to this interface.
+-/
+
+/-- Minimal common-reserve interface: one strictly increasing virtual value, zero at `rho`. -/
 structure CommonRegularReserve (A : BayesianSingleItemAuction I) (rho : ℝ) where
   /-- Common virtual-value function. -/
   phi : ℝ → ℝ
@@ -330,7 +343,7 @@ structure CommonRegularReserve (A : BayesianSingleItemAuction I) (rho : ℝ) whe
   /-- Reserve zero. -/
   reserve_zero : phi rho = 0
 
-/-- Common regular reserve presented by the positive-virtual-value cutoff. -/
+/-- Positive-virtual-value cutoff presentation of a common regular reserve. -/
 structure CommonVirtualValueReserve (A : BayesianSingleItemAuction I) (rho : ℝ) where
   /-- Common virtual-value function. -/
   phi : ℝ → ℝ
@@ -341,7 +354,7 @@ structure CommonVirtualValueReserve (A : BayesianSingleItemAuction I) (rho : ℝ
   /-- Virtual-value reserve equation. -/
   virtualValue_reserve : VirtualValueReserve phi rho
 
-/-- Common virtual-value cutoff reserve presented by a common virtual value. -/
+/-- Common comparison-cutoff presentation of a virtual-value reserve. -/
 structure CommonVirtualValueCutoffReserve
     (A : BayesianSingleItemAuction I) (κ rho : ℝ) where
   /-- Common virtual-value function. -/
@@ -353,6 +366,8 @@ structure CommonVirtualValueCutoffReserve
   /-- Virtual-value cutoff reserve equation. -/
   cutoff_reserve : VirtualValueCutoffReserve phi κ rho
 
+/-- Forget the cutoff presentation of a common virtual-value reserve, retaining
+only the common regular reserve data used by reserve-threshold lemmas. -/
 noncomputable def CommonVirtualValueReserve.commonRegularReserve
     {A : BayesianSingleItemAuction I} {rho : ℝ}
     (h : A.CommonVirtualValueReserve rho) :
@@ -362,6 +377,8 @@ noncomputable def CommonVirtualValueReserve.commonRegularReserve
   strictMono_phi := h.strictMono_phi
   reserve_zero := h.virtualValue_reserve.reserve_zero
 
+/-- View a common virtual-value reserve as the corresponding zero-level
+virtual-value cutoff reserve. -/
 noncomputable def CommonVirtualValueReserve.commonVirtualValueCutoffReserve
     {A : BayesianSingleItemAuction I} {rho : ℝ}
     (h : A.CommonVirtualValueReserve rho) :
@@ -445,7 +462,7 @@ theorem CommonVirtualValueCutoffReserve.isVirtualValueCutoff
   A.isVirtualValueCutoff_common_strictMono_of_common_eq
     h.common_virtualValue h.strictMono_phi h.cutoff_reserve.reserve_eq_cutoff
 
-/-- Common-CDF version of `CommonRegularReserve`. -/
+/-- CDF presentation of `CommonRegularReserve`. -/
 structure CommonCDFRegularReserve (A : BayesianSingleItemAuction I) (rho : ℝ) where
   /-- Common CDF. -/
   cdf : ℝ → ℝ
@@ -456,7 +473,7 @@ structure CommonCDFRegularReserve (A : BayesianSingleItemAuction I) (rho : ℝ) 
   /-- Reserve zero. -/
   reserve_zero : cdfVirtualValue cdf rho = 0
 
-/-- Common-CDF virtual-value reserve, using `rho = inf {t | 0 < ψ(t)}`. -/
+/-- CDF presentation using the positive-virtual-value reserve. -/
 structure CommonCDFVirtualValueReserve (A : BayesianSingleItemAuction I) (rho : ℝ) where
   /-- Common CDF. -/
   cdf : ℝ → ℝ
@@ -467,7 +484,7 @@ structure CommonCDFVirtualValueReserve (A : BayesianSingleItemAuction I) (rho : 
   /-- Virtual-value reserve equation for the induced virtual value. -/
   virtualValue_reserve : VirtualValueReserve (cdfVirtualValue cdf) rho
 
-/-- Common-CDF virtual-value cutoff reserve. -/
+/-- CDF presentation using a comparison-value cutoff reserve. -/
 structure CommonCDFVirtualValueCutoffReserve
     (A : BayesianSingleItemAuction I) (κ rho : ℝ) where
   /-- Common CDF. -/
@@ -1264,6 +1281,7 @@ section Feasibility
 
 /-! ## Feasibility -/
 
+/-- The virtual-surplus-maximizing allocation assigns nonnegative probabilities. -/
 lemma virtualSurplusMaximizingAllocationRule_nonneg
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) :
@@ -1274,6 +1292,7 @@ lemma virtualSurplusMaximizingAllocationRule_nonneg
     by_cases hi : i = A.virtualSurplusMaximizingWinner b <;> simp [hi]
   · rw [A.virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos b hpos]
 
+/-- The virtual-surplus-maximizing allocation assigns probabilities at most one. -/
 lemma virtualSurplusMaximizingAllocationRule_le_one
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) :
@@ -1285,6 +1304,7 @@ lemma virtualSurplusMaximizingAllocationRule_le_one
   · rw [A.virtualSurplusMaximizingAllocationRule_eq_zero_of_not_pos b hpos]
     simp
 
+/-- The virtual-surplus-maximizing allocation allocates to at most one bidder. -/
 lemma virtualSurplusMaximizingAllocationRule_respectsSingleItemCapacity
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) (b : I → ℝ) :
@@ -1624,6 +1644,8 @@ theorem expectedVirtualSurplus_le_virtualSurplusMaximizingAuction_allocationRule
     A.expectedVirtualSurplus_le_virtualSurplusMaximizingAllocationRule
       (x := x) hx hx_int hopt_int
 
+/-- Feasibility of a Bayesian candidate is enough to compare its expected
+virtual surplus with the virtual-surplus-maximizing auction. -/
 theorem expectedVirtualSurplus_le_virtualSurplusMaximizingAuction_of_isFeasible
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A B : BayesianSingleItemAuction I)
@@ -2055,6 +2077,7 @@ theorem virtualSurplusMaximizingAuction_hasIntegrableInterimObjects_of_isRegular
     (A.aestronglyMeasurable_virtualSurplusMaximizingAuction_interimPaymentIntegrand_of_measurable_virtualValue
       (A.measurable_virtualValue_of_isRegular hA))
 
+/-- The Myerson payment rule charges zero to a bidder reporting zero. -/
 theorem virtualSurplusMaximizingPaymentRule_zeroNormalized
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) :
@@ -2063,6 +2086,7 @@ theorem virtualSurplusMaximizingPaymentRule_zeroNormalized
     SingleParameterMechanism.myersonPayment_zeroNormalized
       A.virtualSurplusMaximizingAllocationRule
 
+/-- The lifted virtual-surplus-maximizing Bayesian auction is zero-normalized. -/
 theorem virtualSurplusMaximizingAuction_isZeroNormalized
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) :
@@ -2071,6 +2095,8 @@ theorem virtualSurplusMaximizingAuction_isZeroNormalized
     virtualSurplusMaximizingMechanism] using
     A.virtualSurplusMaximizingPaymentRule_zeroNormalized
 
+/-- Quasilinear utility under the Myerson payment rule equals the envelope
+expression: current surplus plus accumulated allocation. -/
 theorem virtualSurplusMaximizingMechanism_quasiLinearUtility_eq
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) (v b : I → ℝ) (i : I) :
@@ -2081,6 +2107,8 @@ theorem virtualSurplusMaximizingMechanism_quasiLinearUtility_eq
     SingleParameterMechanism.withMyersonPayment_quasiLinearUtility_eq
       A.virtualSurplusMaximizingAllocationRule v b i
 
+/-- Regular virtual values make the virtual-surplus-maximizing allocation
+implementable by Myerson's monotonicity criterion. -/
 theorem virtualSurplusMaximizingAllocationRule_isImplementable_of_isRegular
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
@@ -2091,6 +2119,8 @@ theorem virtualSurplusMaximizingAllocationRule_isImplementable_of_isRegular
         simpa [virtualSurplusMaximizingPaymentRule] using
           A.virtualSurplusMaximizingAllocationRule_isMonotone_of_isRegular hA)
 
+/-- Any zero-normalized DSIC payment rule implementing the virtual-surplus-maximizing
+allocation is the canonical Myerson payment rule. -/
 theorem paymentRule_eq_virtualSurplusMaximizingPaymentRule_of_isDSIC_of_zeroNormalized
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {p : (I → ℝ) → I → ℝ}
@@ -2103,6 +2133,8 @@ theorem paymentRule_eq_virtualSurplusMaximizingPaymentRule_of_isDSIC_of_zeroNorm
     SingleParameterMechanism.payment_eq_myersonPayment_of_isDSIC_of_zeroNormalized
       (x := A.virtualSurplusMaximizingAllocationRule) (p := p) hdsic hzero
 
+/-- The canonical Myerson payment rule is the unique zero-normalized DSIC
+payment rule for the virtual-surplus-maximizing allocation. -/
 theorem existsUnique_zeroNormalized_paymentRule_for_virtualSurplusMaximizingAllocationRule
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) (hA : A.IsRegular) :
@@ -3136,7 +3168,13 @@ theorem IsFeasibleICIRIntegrable.integrableVirtualSurplus
     A.IntegrableVirtualSurplus B.allocationRule :=
   hB.2.2.2.2
 
-/-- Analytic assumptions for MSZ 12.59. -/
+/-! ## Analytic package for MSZ 12.59 -/
+
+/-- Analytic package for the MSZ 12.59 IC/IR revenue comparison.
+
+It keeps the economic hypotheses separate from measure-theoretic Fubini and
+integrability obligations for arbitrary feasible IC/IR candidates.
+-/
 structure RegularMyersonICIRAnalyticAssumptions
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) : Prop where
@@ -3172,7 +3210,9 @@ structure RegularMyersonICIRAnalyticAssumptions
                   B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
                 ((A.typeMeasure i).prod (B.opponentPrior i))
 
-/-- The analytic assumptions make every one-dimensional type measure a probability measure. -/
+/-! ### Projections from the analytic package -/
+
+/-- Projection: each one-dimensional type measure is a probability measure. -/
 theorem RegularMyersonICIRAnalyticAssumptions.typeMeasure_isProbabilityMeasure
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I}
@@ -3180,7 +3220,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.typeMeasure_isProbabilityMeasure
     IsProbabilityMeasure (A.typeMeasure i) :=
   h.envelope_environment.typeMeasure_isProbabilityMeasure i
 
-/-- The analytic assumptions provide a.e. nonnegativity of each type density. -/
+/-- Projection: each type density is a.e. nonnegative on its support interval. -/
 theorem RegularMyersonICIRAnalyticAssumptions.typeDensity_nonnegative_ae
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I}
@@ -3189,7 +3229,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.typeDensity_nonnegative_ae
       0 ≤ A.typeDensity i v :=
   h.envelope_environment.typeDensity_nonnegative_ae i
 
-/-- Candidate payment integrability as a one-dimensional density integral. -/
+/-- Projection: candidate payment integrability as a one-dimensional density integral. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_density_integrable
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I}
@@ -3209,7 +3249,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_density_integrab
     (h.typeDensity_nonnegative_ae i)
     (h.candidate_payment_profileSplit_integrable B hfeas hIC hIR i)
 
-/-- Candidate interim virtual-surplus integrability as a one-dimensional density integral. -/
+/-- Projection: candidate virtual-surplus integrability as a density integral. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_interim_virtual_surplus_density_integrable
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I}
@@ -3230,7 +3270,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_interim_virtual_surplus_
       (h.typeDensity_nonnegative_ae i)
       (h.candidate_virtual_surplus_profileSplit_integrable B hfeas hIC hIR i)
 
-/-- The envelope survival term is interval-integrable for every feasible IC/IR candidate. -/
+/-- Projection: the envelope survival term is interval-integrable. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_allocation_survival_integrable
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I}
@@ -3248,7 +3288,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_allocation_survival_inte
     hIC i 0 (A.typeData.omega i)).mul_continuousOn
       (continuousOn_const.sub (h.envelope_environment.cdf_absolutelyContinuous i).continuousOn)
 
-/-- Build the envelope/virtual-surplus analytic package for a feasible IC/IR candidate. -/
+/-- Projection: build the envelope/virtual-surplus analytic package for a candidate. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_envelope_analytic
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I}
@@ -3265,7 +3305,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_envelope_analytic
     (h.candidate_allocation_survival_integrable B hfeas hIC hIR)
     (h.candidate_interim_virtual_surplus_density_integrable B hfeas hIC hIR)
 
-/-- Build type-measure Fubini hypotheses for a feasible IC/IR candidate. -/
+/-- Projection: build type-measure Fubini hypotheses for a candidate. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_typeMeasure_interim_fubini
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I}
@@ -3285,7 +3325,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_typeMeasure_interim_fubi
     (h.candidate_payment_profileSplit_integrable B hfeas hIC hIR)
     (h.candidate_virtual_surplus_profileSplit_integrable B hfeas hIC hIR)
 
-/-- Convert the candidate's type-measure Fubini package to the prior-level interim package. -/
+/-- Projection: convert type-measure Fubini to the prior-level interim package. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_interim_fubini
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I}
@@ -3298,7 +3338,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_interim_fubini
     A.InterimFubiniAnalyticAssumptions B :=
   (h.candidate_typeMeasure_interim_fubini B henv hfeas hIC hIR).toInterimFubini
 
-/-- The analytic assumptions give virtual-surplus integrability for feasible IC/IR candidates. -/
+/-- Projection: feasible IC/IR candidates have integrable virtual surplus. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_integrableVirtualSurplus
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I}
@@ -3601,8 +3641,9 @@ theorem hasInterimPaymentEnvelopeUpperBound_of_isIncentiveCompatible_of_isIndivi
       BayesianSingleItemAuction.interimExpectedPayment_le_alloc_mul_sub_integral_of_isIncentiveCompatible_of_isIndividuallyRationalOnSupport
         B hIC hIR i v)
 
-/-- Analytic assumptions turn feasible IC/IR candidates into candidates satisfying
-the interim payment/envelope upper bound. -/
+/-! ### Revenue-identity projections from the analytic package -/
+
+/-- Projection: feasible IC/IR candidates satisfy the interim payment/envelope upper bound. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_envelope_upper
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A B : BayesianSingleItemAuction I}
@@ -3618,8 +3659,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_envelope_upper
       (h.candidate_envelope_analytic B hfeas hIC hIR).envelope_density_integrable i)
     hIC hIR
 
-/-- Analytic assumptions give the ex-ante/interim payment-revenue identity for a
-feasible IC/IR candidate in the same selling environment. -/
+/-- Projection: ex-ante revenue equals interim payment for same-environment candidates. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_revenue_interim_identity
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A B : BayesianSingleItemAuction I}
@@ -3632,8 +3672,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_revenue_interim_identity
   (h.candidate_interim_fubini B henv hfeas hIC hIR)
     |>.hasExpectedRevenueInterimPaymentIdentity
 
-/-- Analytic assumptions give the ex-ante/interim virtual-surplus identity for a
-feasible IC/IR candidate in the same selling environment. -/
+/-- Projection: ex-ante virtual surplus equals the interim virtual-surplus expression. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_virtual_surplus_interim_identity
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A B : BayesianSingleItemAuction I}

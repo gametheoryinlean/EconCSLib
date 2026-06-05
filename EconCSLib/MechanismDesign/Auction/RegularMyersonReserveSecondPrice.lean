@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2026 EconCSLib contributors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+
 import EconCSLib.MechanismDesign.Auction.OptimalSingleItem
 import EconCSLib.MechanismDesign.Auction.ReserveVickrey
 
@@ -6,34 +11,20 @@ import EconCSLib.MechanismDesign.Auction.ReserveVickrey
 
 Regular Myerson auctions and reserve second-price auctions.
 
-This file connects the virtual-surplus-maximizing auction from
-`OptimalSingleItem` with the reserve Vickrey auction from `ReserveVickrey`.
+A bridge from the MSZ 12.59 Myerson optimality theorem in `OptimalSingleItem`
+to the MSZ 12.61 reserve second-price corollary.
 
-## Main definitions
+Main objects:
+* `reserveSecondPriceAuction`: reserve second-price in a Bayesian environment.
+* `StrictReserveBidProfile`: pointwise no-tie/no-boundary profiles.
+* `TieAlignedReserveBidProfile`: pointwise winner-alignment profiles.
 
-* `reserveSecondPriceAuction`, the reserve second-price mechanism lifted into
-  the Bayesian single-item interface while preserving `prior`, `opponentPrior`,
-  and `typeData`;
-* `StrictReserveBidProfile`, the pointwise no-tie/no-reserve-boundary condition
-  under which Myerson and reserve second-price agree as mechanisms;
-* `TieAlignedReserveBidProfile`, a weaker bridge condition separating highest
-  bidder tie alignment from the reserve boundary condition.
+Main result: common-regular-reserve MSZ 12.61 optimality.
 
-## Main results
+At `rho = max b`, reserve second-price sells while the present Myerson allocation
+withholds. The proof compares virtual surplus and expected revenue.
 
-* Feasibility, DSIC, zero-normalization, interim-integrability, IC, and IR facts
-  for `reserveSecondPriceAuction`, mostly obtained from the reusable
-  `ReserveSecondPrice` API;
-* pointwise allocation and payment bridges away from reserve ties;
-* almost-everywhere strict-profile bridges under atomless independent priors;
-* expected-revenue equality between the virtual-surplus-maximizing auction and
-  reserve second-price;
-* the MSZ 12.61 endpoint: reserve second-price is regular-Myerson optimal among
-  feasible IC/IR candidates under the analytic assumptions.
-
-At `rho = max b`, reserve second-price sells while the current Myerson
-allocation withholds.  The final optimality theorem avoids false object equality:
-the boundary has zero virtual surplus and is null under the analytic assumptions.
+This file was generated with AI assistance and reviewed by Ma Yuxuan.
 
 References:
 * Maschler, Solan, Zamir, *Game Theory*, Corollary 12.61.
@@ -49,11 +40,7 @@ section ReserveSecondPriceAuction
 
 /-! ## Basic objects -/
 
-/-- Profiles where the reserve second-price auction and the Myerson auction agree pointwise.
-
-The assumptions rule out three sources of ambiguity: negative bids/reserve
-values, ties for the highest bid, and equality of the highest bid with the
-reserve. -/
+/-- Strict reserve profiles: nonnegative bids, unique argmax, and no reserve tie. -/
 structure StrictReserveBidProfile
     [Fintype I] [Nontrivial I] (rho : ℝ) (b : I → ℝ) : Prop where
   /-- Nonnegative reserve. -/
@@ -65,10 +52,7 @@ structure StrictReserveBidProfile
   /-- No exact reserve tie. -/
   no_reserve_tie : rho ≠ b (Auction.argmaxBid b)
 
-/-- Profiles where Myerson and reserve second-price choose the same highest bidder.
-
-This is weaker than `StrictReserveBidProfile`: it records the conclusion needed
-by allocation bridge lemmas after tie alignment has already been proved. -/
+/-- Profiles where Myerson's winner is `argmaxBid` and no reserve tie occurs. -/
 structure TieAlignedReserveBidProfile
     [Fintype I] [Nontrivial I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) (rho : ℝ) (b : I → ℝ) : Prop where
@@ -89,7 +73,7 @@ theorem StrictReserveBidProfile.toTieAlignedReserveBidProfile_of_commonRegularRe
       hreserve.hasStrictVirtualValueOrder hb.unique_argmax
   no_reserve_tie := hb.no_reserve_tie
 
-/-- Common-CDF version of strict-profile tie alignment. -/
+/-- Common-CDF presentation of strict-profile tie alignment. -/
 theorem StrictReserveBidProfile.toTieAlignedReserveBidProfile_of_commonCDFRegularReserve
     [Fintype I] [Nontrivial I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ} {b : I → ℝ}
@@ -116,11 +100,7 @@ theorem reserveTie_virtualSurplusMaximizingAllocationRule_eq_zero
     · rw [heq, hreserve.common_virtualValue i rho, hreserve.reserve_zero]
   exact A.virtualSurplusMaximizingAllocationRule_eq_zero_of_forall_virtualValue_nonpos hnonpos
 
-/-- Reserve second-price auction in the Bayesian single-item interface.
-
-The mechanism part is `ReserveSecondPrice.mechanism rho`; the Bayesian
-environment is copied from `A`, so this construction can be compared with
-`A.virtualSurplusMaximizingAuction` in the same prior/type-data environment. -/
+/-- Reserve second-price auction with `A`'s prior, opponent priors, and type data. -/
 noncomputable def reserveSecondPriceAuction [Fintype I] [Nontrivial I] [DecidableEq I]
     (A : BayesianSingleItemAuction I) (rho : ℝ) : BayesianSingleItemAuction I where
   allocationRule b i :=
@@ -165,7 +145,7 @@ noncomputable def reserveSecondPriceAuction [Fintype I] [Nontrivial I] [Decidabl
   rfl
 
 /-- When the highest bid meets the reserve, reserve second-price allocates to `argmaxBid`. -/
-theorem reserveSecondPrice_allocation_eq_some_argmaxBid_of_commonReserve_le_argmaxBid
+theorem reserveSecondPrice_allocation_eq_some_argmaxBid_of_reserve_le_argmaxBid
     [Fintype I] [Nontrivial I] [DecidableEq I] {rho : ℝ} {b : I → ℝ}
     (hb : rho ≤ b (Auction.argmaxBid b)) :
     Auction.ReserveSecondPrice.allocation rho b = some (Auction.argmaxBid b) := by
@@ -179,15 +159,15 @@ theorem reserveSecondPrice_allocation_eq_some_argmaxBid_of_commonReserve_le_argm
   simpa [Auction.SecondPrice.winner] using halloc
 
 /-- Above the reserve, reserve second-price allocates to `argmaxBid`. -/
-theorem reserveSecondPrice_allocation_eq_some_argmaxBid_of_commonReserve_lt_argmaxBid
+theorem reserveSecondPrice_allocation_eq_some_argmaxBid_of_reserve_lt_argmaxBid
     [Fintype I] [Nontrivial I] [DecidableEq I] {rho : ℝ} {b : I → ℝ}
     (hb : rho < b (Auction.argmaxBid b)) :
     Auction.ReserveSecondPrice.allocation rho b = some (Auction.argmaxBid b) := by
-  exact reserveSecondPrice_allocation_eq_some_argmaxBid_of_commonReserve_le_argmaxBid
+  exact reserveSecondPrice_allocation_eq_some_argmaxBid_of_reserve_le_argmaxBid
     (le_of_lt hb)
 
 /-- Below the reserve, reserve second-price withholds. -/
-theorem reserveSecondPrice_allocation_eq_none_of_argmaxBid_lt_commonReserve
+theorem reserveSecondPrice_allocation_eq_none_of_argmaxBid_lt_reserve
     [Fintype I] [Nontrivial I] [DecidableEq I] {rho : ℝ} {b : I → ℝ}
     (hb : b (Auction.argmaxBid b) < rho) :
     Auction.ReserveSecondPrice.allocation rho b = none := by
@@ -204,7 +184,7 @@ theorem reserveTie_reserveSecondPriceAuction_allocationRule_eq_one
     (A.reserveSecondPriceAuction rho).allocationRule b (Auction.argmaxBid b) = 1 := by
   have halloc :
       Auction.ReserveSecondPrice.allocation rho b = some (Auction.argmaxBid b) := by
-    exact reserveSecondPrice_allocation_eq_some_argmaxBid_of_commonReserve_le_argmaxBid
+    exact reserveSecondPrice_allocation_eq_some_argmaxBid_of_reserve_le_argmaxBid
       (by simp [htie])
   simp [halloc]
 
@@ -238,10 +218,7 @@ theorem reserveSecondPriceAuction_hasSameSellingEnvironment
     A.HasSameSellingEnvironment (A.reserveSecondPriceAuction rho) := by
   exact ⟨rfl, rfl, rfl⟩
 
-/-- The lifted reserve second-price allocation is a feasible single-item allocation.
-
-This is just the generic optional-winner feasibility lemma applied to
-`ReserveSecondPrice.allocation`. -/
+/-- Reserve second-price is feasible as an optional-winner rule. -/
 theorem reserveSecondPriceAuction_isFeasible
     [Fintype I] [Nontrivial I] [DecidableEq I]
     (A : BayesianSingleItemAuction I) (rho : ℝ) :
@@ -271,10 +248,7 @@ theorem reserveSecondPriceAuction_interimPaymentIntegrand_norm_le_max_reserve_re
     Auction.ReserveSecondPrice.mechanism_payment_abs_le_max_reserve_bid
       (reserve := rho) (b := b) (i := i)
 
-/-- A measurability-only route to interim integrability for reserve second-price.
-
-The required bounds are pointwise: allocation is in `{0,1}`, and the winner's
-payment lies between the reserve and her fixed report. -/
+/-- Measurable reserve second-price integrands are interim-integrable by bounds. -/
 theorem reserveSecondPriceAuction_hasIntegrableInterimObjects_of_aestronglyMeasurable
     [Fintype I] [Nontrivial I] [DecidableEq I]
     (A : BayesianSingleItemAuction I) (rho : ℝ)
@@ -371,10 +345,7 @@ theorem reserveSecondPriceAuction_isIndividuallyRationalOnSupport
       |>.isIndividuallyRationalOnSupport_of_isZeroNormalized_of_hasInterimEnvelopeFormula
         (A.reserveSecondPriceAuction_isZeroNormalized hrho) henv hnonneg
 
-/-- Package reserve second-price as a feasible IC/IR candidate.
-
-This version takes virtual-surplus integrability as an explicit hypothesis, so
-it can be used without the global analytic assumptions from `OptimalSingleItem`. -/
+/-- Reserve second-price as a feasible IC/IR integrable candidate. -/
 theorem reserveSecondPriceAuction_isFeasibleICIRIntegrable
     [Fintype I] [Nontrivial I] [DecidableEq I]
     (A : BayesianSingleItemAuction I) {rho : ℝ}
@@ -389,11 +360,7 @@ theorem reserveSecondPriceAuction_isFeasibleICIRIntegrable
     A.reserveSecondPriceAuction_isIndividuallyRationalOnSupport hrho hint,
     hvirt⟩
 
-/-- Package reserve second-price as a feasible IC/IR candidate under analytic assumptions.
-
-Compared with `reserveSecondPriceAuction_isFeasibleICIRIntegrable`, this version
-derives virtual-surplus integrability from
-`RegularMyersonICIRAnalyticAssumptions`. -/
+/-- Analytic-assumption entry point for reserve second-price as a feasible IC/IR candidate. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I}
@@ -420,7 +387,7 @@ section ThresholdOrderFacts
 
 /-! ## Local threshold order facts -/
 
-private lemma max_commonReserve_maxBidExcluding_le_bid_of_argmax
+private lemma max_reserve_maxBidExcluding_le_bid_of_argmax
     [Fintype I] [Nontrivial I] [DecidableEq I] {rho : ℝ} {b : I → ℝ} {i : I}
     (hi : i = Auction.argmaxBid b) (hrho : rho ≤ b i) :
     max rho (Auction.maxBidExcluding b i) ≤ b i := by
@@ -428,7 +395,7 @@ private lemma max_commonReserve_maxBidExcluding_le_bid_of_argmax
     simpa [hi] using Auction.maxBidExcluding_le_argmaxBid_bid (b := b)
   exact max_le hrho hexcl
 
-private lemma bid_le_max_commonReserve_maxBidExcluding_of_ne_argmax
+private lemma bid_le_max_reserve_maxBidExcluding_of_ne_argmax
     [Fintype I] [Nontrivial I] [DecidableEq I] {rho : ℝ} {b : I → ℝ} {i : I}
     (hi : i ≠ Auction.argmaxBid b) :
     b i ≤ max rho (Auction.maxBidExcluding b i) := by
@@ -439,7 +406,7 @@ private lemma bid_le_max_commonReserve_maxBidExcluding_of_ne_argmax
       hle_max
   exact le_trans hle_excl (le_max_right rho (Auction.maxBidExcluding b i))
 
-private lemma bid_le_max_commonReserve_maxBidExcluding_of_argmaxBid_lt_commonReserve
+private lemma bid_le_max_reserve_maxBidExcluding_of_argmaxBid_lt_reserve
     [Fintype I] [Nontrivial I] [DecidableEq I] {rho : ℝ} {b : I → ℝ}
     (hb : b (Auction.argmaxBid b) < rho) (i : I) :
     b i ≤ max rho (Auction.maxBidExcluding b i) := by
@@ -452,8 +419,8 @@ section PaymentBridge
 
 /-! ## Payment bridge -/
 
-/-- Along one bidder's report, the Myerson allocation is the critical-value step. -/
-theorem virtualSurplusMaximizingAllocationRule_update_self_eq_step_of_commonReserve
+/-- Along one report coordinate, the Myerson allocation is a reserve-threshold step. -/
+theorem virtualSurplusMaximizingAllocationRule_update_self_eq_step_of_reserveThreshold
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) (hA : A.HasStrictVirtualValueOrder)
     {rho : ℝ} {b : I → ℝ} {i : I}
@@ -540,8 +507,8 @@ theorem virtualSurplusMaximizingAllocationRule_update_self_eq_step_of_commonRese
     have hz_lt_c : z < c := lt_of_le_of_ne hz_le_threshold hz_ne
     simpa [c, hz_threshold] using hzero_below hz_lt_c
 
-/-- The Myerson payment is the reserve/excluding-bid critical value. -/
-theorem virtualSurplusMaximizingPaymentRule_eq_max_commonReserve_maxBidExcluding
+/-- The Myerson payment is the maximum of reserve and excluding-bid price. -/
+theorem virtualSurplusMaximizingPaymentRule_eq_max_reserve_maxBidExcluding
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) (hA : A.HasStrictVirtualValueOrder)
     {rho : ℝ} {b : I → ℝ} {i : I}
@@ -565,10 +532,10 @@ theorem virtualSurplusMaximizingPaymentRule_eq_max_commonReserve_maxBidExcluding
   have hbi : rho ≤ b i := by
     simpa [hi] using le_of_lt hb
   have hcy : max rho (Auction.maxBidExcluding b i) ≤ b i :=
-    max_commonReserve_maxBidExcluding_le_bid_of_argmax hi hbi
+    max_reserve_maxBidExcluding_le_bid_of_argmax hi hbi
   exact A.virtualSurplusMaximizingPaymentRule_eq_criticalValue_of_ae_stepAllocation
     hc0 hcy halloc
-    (A.virtualSurplusMaximizingAllocationRule_update_self_eq_step_of_commonReserve
+    (A.virtualSurplusMaximizingAllocationRule_update_self_eq_step_of_reserveThreshold
       hA hrho)
 
 /-- In the strict sale case, the Myerson payment equals the clearing price. -/
@@ -586,12 +553,12 @@ theorem virtualSurplusMaximizingPaymentRule_eq_reserveSecondPrice_clearingPrice_
   have hpay :
       A.virtualSurplusMaximizingPaymentRule b i =
         max rho (Auction.maxBidExcluding b i) :=
-    A.virtualSurplusMaximizingPaymentRule_eq_max_commonReserve_maxBidExcluding
+    A.virtualSurplusMaximizingPaymentRule_eq_max_reserve_maxBidExcluding
       hA hrho hrho0 hstrict hb hi
   have halloc :
       Auction.ReserveSecondPrice.allocation rho b = some i := by
     simpa [hi] using
-      reserveSecondPrice_allocation_eq_some_argmaxBid_of_commonReserve_lt_argmaxBid
+      reserveSecondPrice_allocation_eq_some_argmaxBid_of_reserve_lt_argmaxBid
         (rho := rho) (b := b) hb
   have hprice :
       Auction.ReserveSecondPrice.clearingPrice rho b =
@@ -615,7 +582,7 @@ theorem virtualSurplusMaximizingPaymentRule_eq_reserveSecondPrice_paymentRule_of
   have halloc :
       Auction.ReserveSecondPrice.allocation rho b = some i := by
     simpa [hi] using
-      reserveSecondPrice_allocation_eq_some_argmaxBid_of_commonReserve_lt_argmaxBid
+      reserveSecondPrice_allocation_eq_some_argmaxBid_of_reserve_lt_argmaxBid
         (rho := rho) (b := b) hb
   rw [Auction.ReserveSecondPrice.mechanism_payment_of_allocation_eq_some halloc]
   exact
@@ -643,9 +610,9 @@ theorem virtualSurplusMaximizingPaymentRule_eq_zero_of_ne_argmaxBid_commonReserv
     simp [hi]
   exact A.virtualSurplusMaximizingPaymentRule_eq_zero_of_ae_stepAllocation
     (hb_nonneg i)
-    (bid_le_max_commonReserve_maxBidExcluding_of_ne_argmax hi)
+    (bid_le_max_reserve_maxBidExcluding_of_ne_argmax hi)
     halloc
-    (A.virtualSurplusMaximizingAllocationRule_update_self_eq_step_of_commonReserve
+    (A.virtualSurplusMaximizingAllocationRule_update_self_eq_step_of_reserveThreshold
       hA hrho)
 
 /-- Payment-vector equality in the strict sale case. -/
@@ -724,7 +691,7 @@ theorem virtualSurplusMaximizingPaymentRule_eq_zero_of_argmaxBid_lt_commonReserv
     simp [hnlt]
   exact A.virtualSurplusMaximizingPaymentRule_eq_zero_of_ae_stepAllocation
     (hb_nonneg i)
-    (bid_le_max_commonReserve_maxBidExcluding_of_argmaxBid_lt_commonReserve hb i)
+    (bid_le_max_reserve_maxBidExcluding_of_argmaxBid_lt_reserve hb i)
     halloc hstep
 
 /-- Payment-vector equality in the strict no-sale case. -/
@@ -744,7 +711,7 @@ theorem virtualSurplusMaximizingPaymentRule_eq_reserveSecondPrice_paymentRule_of
       hrho hb_nonneg hb
   have hreserve :
       Auction.ReserveSecondPrice.allocation rho b = none := by
-    exact reserveSecondPrice_allocation_eq_none_of_argmaxBid_lt_commonReserve
+    exact reserveSecondPrice_allocation_eq_none_of_argmaxBid_lt_reserve
       (rho := rho) (b := b) hb
   rw [hmyerson,
     Auction.ReserveSecondPrice.mechanism_payment_eq_zero_of_allocation_eq_none hreserve]
@@ -772,7 +739,7 @@ theorem virtualSurplusMaximizingAllocationRule_eq_reserveSecondPriceIndicator_of
       hA hrho hstrict hb
   have hreserve :
       Auction.ReserveSecondPrice.allocation rho b = some (Auction.argmaxBid b) :=
-    reserveSecondPrice_allocation_eq_some_argmaxBid_of_commonReserve_lt_argmaxBid hb
+    reserveSecondPrice_allocation_eq_some_argmaxBid_of_reserve_lt_argmaxBid hb
   rw [hmyerson, hreserve]
   funext i
   by_cases hi : i = Auction.argmaxBid b
@@ -828,7 +795,7 @@ theorem virtualSurplusMaximizingAllocationRule_eq_reserveSecondPriceIndicator_of
         b hpos
   have hreserve_alloc :
       Auction.ReserveSecondPrice.allocation rho b = some (Auction.argmaxBid b) :=
-    reserveSecondPrice_allocation_eq_some_argmaxBid_of_commonReserve_lt_argmaxBid hb
+    reserveSecondPrice_allocation_eq_some_argmaxBid_of_reserve_lt_argmaxBid hb
   rw [hmyerson, hreserve_alloc]
   funext i
   by_cases hi : i = Auction.argmaxBid b
@@ -851,7 +818,7 @@ theorem virtualSurplusMaximizingAllocationRule_eq_reserveSecondPriceIndicator_of
     A.virtualSurplusMaximizingAllocationRule_eq_zero_of_argmaxBid_lt_commonReserve hrho hb
   have hreserve :
       Auction.ReserveSecondPrice.allocation rho b = none :=
-    reserveSecondPrice_allocation_eq_none_of_argmaxBid_lt_commonReserve hb
+    reserveSecondPrice_allocation_eq_none_of_argmaxBid_lt_reserve hb
   rw [hmyerson, hreserve]
   funext i
   simp
@@ -872,7 +839,7 @@ theorem virtualSurplusMaximizingAllocationRule_eq_reserveSecondPriceIndicator_of
       A.virtualSurplusMaximizingAllocationRule_eq_reserveSecondPriceIndicator_of_argmaxBid_lt_commonReserve
         hreserve.isReserveThreshold hbelow
 
-/-- Common-CDF version of the tie-aligned allocation bridge. -/
+/-- Common-CDF presentation of the tie-aligned allocation bridge. -/
 theorem virtualSurplusMaximizingAllocationRule_eq_reserveSecondPriceIndicator_of_commonCDFRegularReserve_tieAligned
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ} {b : I → ℝ}
@@ -889,6 +856,11 @@ end AllocationBridge
 section MechanismBridge
 
 /-! ## Mechanism bridge -/
+
+/-!
+Public bridge lemmas are layered by assumptions: generic threshold hypotheses,
+packaged common regular reserves, then common-CDF presentations.
+-/
 
 /-- Mechanism equality in the strict sale case. -/
 theorem virtualSurplusMaximizingMechanism_eq_reserveSecondPriceMechanism_of_commonReserve_lt_argmaxBid
@@ -1018,7 +990,9 @@ theorem virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_strictRe
   exact ⟨by simpa [virtualSurplusMaximizingAuction] using hbridge.1,
     by simpa [virtualSurplusMaximizingAuction] using hbridge.2⟩
 
-/-- Common-regular-reserve version of the mechanism bridge. -/
+/-! ### Common regular-reserve wrappers -/
+
+/-- Packaged common regular-reserve presentation of the mechanism bridge. -/
 theorem virtualSurplusMaximizingMechanism_eq_reserveSecondPriceMechanism_of_commonRegularReserve_noReserveTie
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ} {b : I → ℝ}
@@ -1117,7 +1091,9 @@ theorem virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_on_strictRe
     A.virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_commonRegularReserve
       hreserve hb
 
-/-- Common-CDF version of auction-interface equality at a strict profile. -/
+/-! ### Common-CDF wrappers -/
+
+/-- Common-CDF presentation of auction-interface equality away from reserve ties. -/
 theorem virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_commonCDFRegularReserve_noReserveTie
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ} {b : I → ℝ}
@@ -1165,8 +1141,7 @@ theorem virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_on_strictRe
 
 /-! ## Expected revenue and optimality -/
 
-/-- Analytic assumptions package the almost-everywhere strict reserve profile
-condition once an almost-everywhere unique highest bid is supplied. -/
+/-- A.e. unique highest bids give a.e. strict reserve profiles. -/
 theorem RegularMyersonICIRAnalyticAssumptions.ae_strictReserveBidProfile_of_ae_unique_argmax
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1184,8 +1159,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.ae_strictReserveBidProfile_of_ae_u
       hae_unique] with b hb_nonneg hb_reserve_ne hb_unique
   exact ⟨hrho0, hb_nonneg, hb_unique, hb_reserve_ne⟩
 
-/-- Analytic assumptions make reserve profiles strict almost everywhere for a
-nonnegative reserve. -/
+/-- Nonnegative reserves give a.e. strict reserve profiles. -/
 theorem RegularMyersonICIRAnalyticAssumptions.ae_strictReserveBidProfile
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1198,11 +1172,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.ae_strictReserveBidProfile
     RegularMyersonICIRAnalyticAssumptions.ae_strictReserveBidProfile_of_ae_unique_argmax h hrho0
       (A.ae_unique_argmaxBid_prior_of_hasIndependentTypePriors h.independent_type_priors)
 
-/-- Expected-revenue equality from strict-profile equality almost everywhere.
-
-This is the measure-theoretic bridge used by 12.61: pointwise mechanism equality
-is only required off a null reserve-tie set, and seller revenue depends only on
-the payment rule. -/
+/-- A.e. strict-profile equality gives expected seller-revenue equality. -/
 theorem expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_strictReserveBidProfile_commonRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ}
@@ -1219,7 +1189,7 @@ theorem expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_re
     (A.virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_commonRegularReserve
       hreserve hb).2
 
-/-- Common-CDF version of the a.e. expected-revenue bridge. -/
+/-- Common-CDF presentation of the a.e. expected-revenue bridge. -/
 theorem expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_strictReserveBidProfile_commonCDFRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ}
@@ -1231,7 +1201,9 @@ theorem expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_re
     A.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_strictReserveBidProfile_commonRegularReserve
       hreserve.commonRegularReserve hae
 
-/-- Analytic-assumption expected-revenue bridge with explicit a.e. unique argmax. -/
+/-! ### Analytic expected-revenue wrappers -/
+
+/-- Analytic expected-revenue bridge with explicit a.e. unique highest bids. -/
 theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_unique_argmax_commonRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1249,7 +1221,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment
         (RegularMyersonICIRAnalyticAssumptions.ae_strictReserveBidProfile_of_ae_unique_argmax
           h hrho0 hae_unique)
 
-/-- Common-CDF version of the analytic-assumption expected-revenue bridge. -/
+/-- Common-CDF presentation with explicit a.e. unique highest bids. -/
 theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_unique_argmax_commonCDFRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1265,11 +1237,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment
     h.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_unique_argmax_commonRegularReserve
       hreserve.commonRegularReserve hrho0 hae_unique
 
-/-- Analytic-assumption expected-revenue bridge under a common regular reserve.
-
-Atomless independent priors make the highest-bid tie and reserve-boundary sets
-null, so the pointwise strict-profile bridge integrates to equality of expected
-seller revenue. -/
+/-- Common regular-reserve expected-revenue equality under analytic assumptions. -/
 theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_commonRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1283,7 +1251,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment
       hreserve
         (RegularMyersonICIRAnalyticAssumptions.ae_strictReserveBidProfile h hrho0)
 
-/-- Common-CDF version of the analytic-assumption expected-revenue bridge. -/
+/-- Common-CDF presentation using analytic assumptions' a.e. strict profiles. -/
 theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_commonCDFRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1296,7 +1264,9 @@ theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment
     h.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_commonRegularReserve
       hreserve.commonRegularReserve hrho0
 
-/-- Virtual-value reserve version of expected-revenue equality. -/
+/-! ### Reserve-presentation wrappers for expected revenue -/
+
+/-- Positive-virtual-value reserve presentation of expected-revenue equality. -/
 theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_commonVirtualValueReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1308,7 +1278,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment
   h.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_commonRegularReserve
     hreserve.commonRegularReserve hrho0
 
-/-- Common-CDF virtual-value reserve version of expected-revenue equality. -/
+/-- Common-CDF positive-virtual-value reserve presentation of expected-revenue equality. -/
 theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_commonCDFVirtualValueReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1353,7 +1323,7 @@ theorem virtualSurplus_reserveSecondPriceAuction_allocationRule_eq_max_argmaxBid
   by_cases hsell : rho ≤ b (Auction.argmaxBid b)
   · have halloc :
         Auction.ReserveSecondPrice.allocation rho b = some (Auction.argmaxBid b) := by
-      exact reserveSecondPrice_allocation_eq_some_argmaxBid_of_commonReserve_le_argmaxBid
+      exact reserveSecondPrice_allocation_eq_some_argmaxBid_of_reserve_le_argmaxBid
         (rho := rho) (b := b) hsell
     have hnonneg : 0 ≤ A.virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b)) := by
       have hphi_nonneg :
@@ -1367,7 +1337,7 @@ theorem virtualSurplus_reserveSecondPriceAuction_allocationRule_eq_max_argmaxBid
   · have hlt : b (Auction.argmaxBid b) < rho := lt_of_not_ge hsell
     have halloc :
         Auction.ReserveSecondPrice.allocation rho b = none :=
-      reserveSecondPrice_allocation_eq_none_of_argmaxBid_lt_commonReserve hlt
+      reserveSecondPrice_allocation_eq_none_of_argmaxBid_lt_reserve hlt
     have hnonpos : A.virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b)) ≤ 0 := by
       have hphi_nonpos :
           hreserve.phi (b (Auction.argmaxBid b)) ≤ 0 := by
@@ -1378,11 +1348,7 @@ theorem virtualSurplus_reserveSecondPriceAuction_allocationRule_eq_max_argmaxBid
       max_eq_right hnonpos]
     simp
 
-/-- Reserve second-price and Myerson have the same virtual surplus pointwise.
-
-This avoids claiming that the two allocation rules are equal at the reserve
-boundary.  Both rules achieve the same positive part of the highest virtual
-value, which is the quantity needed for virtual-surplus optimality. -/
+/-- Reserve second-price and Myerson have equal virtual surplus pointwise. -/
 theorem virtualSurplus_reserveSecondPriceAuction_allocationRule_eq_virtualSurplusMaximizingAllocationRule_of_commonRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ} (hreserve : A.CommonRegularReserve rho)
@@ -1396,11 +1362,7 @@ theorem virtualSurplus_reserveSecondPriceAuction_allocationRule_eq_virtualSurplu
       b,
     hreserve.winningVirtualValue_eq_argmaxBid b]
 
-/-- Reserve second-price allocation is virtual-surplus optimal.
-
-The proof compares virtual surplus directly, so it remains valid even though
-reserve second-price and the current Myerson allocation convention differ at
-`rho = max b`. -/
+/-- Reserve second-price allocation is virtual-surplus optimal. -/
 theorem reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ} (hreserve : A.CommonRegularReserve rho) :
@@ -1418,7 +1380,9 @@ theorem reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_comm
               (A.virtualSurplus_reserveSecondPriceAuction_allocationRule_eq_virtualSurplusMaximizingAllocationRule_of_commonRegularReserve
                 hreserve b).symm
 
-/-- Common-CDF wrapper for reserve second-price virtual-surplus optimality. -/
+/-! ### Reserve-presentation wrappers for virtual-surplus optimality -/
+
+/-- Common-CDF presentation of reserve second-price virtual-surplus optimality. -/
 theorem reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonCDFRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ} (hreserve : A.CommonCDFRegularReserve rho) :
@@ -1427,7 +1391,7 @@ theorem reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_comm
   A.reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonRegularReserve
     hreserve.commonRegularReserve
 
-/-- Virtual-value reserve wrapper for reserve second-price virtual-surplus optimality. -/
+/-- Positive-virtual-value reserve presentation of virtual-surplus optimality. -/
 theorem reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonVirtualValueReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ}
@@ -1437,7 +1401,7 @@ theorem reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_comm
   A.reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonRegularReserve
     hreserve.commonRegularReserve
 
-/-- Common-CDF virtual-value reserve wrapper for reserve second-price virtual-surplus optimality. -/
+/-- Common-CDF positive-virtual-value reserve presentation of virtual-surplus optimality. -/
 theorem reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonCDFVirtualValueReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ}
@@ -1447,10 +1411,9 @@ theorem reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_comm
   A.reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonRegularReserve
     hreserve.commonRegularReserve
 
-/-- Reserve second-price is expected-revenue optimal among feasible IC/IR candidates.
+/-! ### Expected-revenue optimality wrappers -/
 
-The theorem transfers the abstract Myerson optimality result from
-`OptimalSingleItem` through the a.e. expected-revenue equality bridge above. -/
+/-- Reserve second-price is expected-revenue optimal among feasible IC/IR candidates. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1481,7 +1444,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpect
         hreserve hrho0
     simpa [heq] using hle
 
-/-- Common-CDF version of reserve second-price expected-revenue optimality. -/
+/-- Common-CDF presentation of reserve second-price expected-revenue optimality. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1495,7 +1458,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpect
   h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
     hreserve.commonRegularReserve hrho0 hint
 
-/-- Virtual-value reserve version of reserve second-price expected-revenue optimality. -/
+/-- Positive-virtual-value reserve presentation of expected-revenue optimality. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonVirtualValueReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1509,7 +1472,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpect
   h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
     hreserve.commonRegularReserve hrho0 hint
 
-/-- Common-CDF virtual-value reserve version of expected-revenue optimality. -/
+/-- Common-CDF positive-virtual-value reserve presentation of expected-revenue optimality. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFVirtualValueReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1523,11 +1486,9 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpect
   h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
     hreserve.commonRegularReserve hrho0 hint
 
-/-- MSZ 12.61: reserve second-price is regular-Myerson optimal.
+/-! ### MSZ 12.61 endpoint wrappers -/
 
-This is the main endpoint for a common regular reserve: reserve second-price is
-feasible, IC, IR, virtual-surplus optimal, and expected-seller-revenue optimal
-among feasible IC/IR integrable candidates. -/
+/-- MSZ 12.61: reserve second-price is regular-Myerson optimal. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1547,7 +1508,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegula
     h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
       hreserve hrho0 hint⟩
 
-/-- Common-CDF wrapper for the MSZ 12.61 reserve second-price optimality endpoint. -/
+/-- Common-CDF presentation of the MSZ 12.61 endpoint. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1559,7 +1520,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegula
   h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve
     hreserve.commonRegularReserve hrho0 hint
 
-/-- MSZ 12.61 wrapper using `rho = inf {t | 0 < phi t}` and `phi rho = 0`. -/
+/-- Positive-virtual-value reserve presentation of the MSZ 12.61 endpoint. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
@@ -1571,7 +1532,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegula
   h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve
     hreserve.commonRegularReserve hrho0 hint
 
-/-- Common-CDF positive-virtual-value MSZ 12.61 wrapper. -/
+/-- Common-CDF positive-virtual-value reserve presentation of the MSZ 12.61 endpoint. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFVirtualValueReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
