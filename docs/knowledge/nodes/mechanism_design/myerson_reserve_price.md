@@ -25,6 +25,10 @@ lean:
     - BayesianSingleItemAuction.reserveSecondPriceAuction
     - BayesianSingleItemAuction.ReserveSecondPriceAEUniqueArgmax
     - BayesianSingleItemAuction.ReserveSecondPriceInterimMeasurabilityAssumptions
+    - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions
+    - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions.of_interimMeasurable
+    - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions.of_ae_unique_argmax
+    - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions.hasIntegrableInterimObjects
     - BayesianSingleItemAuction.AEUniqueArgmaxPrior
     - BayesianSingleItemAuction.AENonnegativeBidsPrior
     - BayesianSingleItemAuction.AENoReserveTiePrior
@@ -74,11 +78,16 @@ lean:
     - BayesianSingleItemAuction.reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonCDFVirtualValueReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable_of_interimMeasurable
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable_of_candidateAssumptions
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable_of_ae_unique_argmax
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFRegularReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonVirtualValueReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFVirtualValueReserve
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_candidateAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFRegularReserve_of_candidateAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonVirtualValueReserve_of_candidateAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFVirtualValueReserve_of_candidateAssumptions
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve
@@ -87,6 +96,10 @@ lean:
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve_of_interimMeasurable
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve_of_interimMeasurable
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFVirtualValueReserve_of_interimMeasurable
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_candidateAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve_of_candidateAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve_of_candidateAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFVirtualValueReserve_of_candidateAssumptions
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_ae_unique_argmax
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve_of_ae_unique_argmax
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve_of_ae_unique_argmax
@@ -170,9 +183,11 @@ adds the reserve-price layer on top of those interfaces:
 - `reserveSecondPriceAuction` wraps the reserve Vickrey auction as a
   `BayesianSingleItemAuction`, reusing the original prior and type data.
 - `ReserveSecondPriceInterimMeasurabilityAssumptions`,
+  `ReserveSecondPriceCandidateAssumptions`,
   `ReserveSecondPriceAEUniqueArgmax`, and the prior-level a.e. packages
-  isolate the measurability, uniqueness, nonnegative-bid, and no-reserve-tie
-  obligations used to make reserve second-price an IC/IR integrable candidate.
+  isolate the measurability, nonnegative-reserve, uniqueness, nonnegative-bid,
+  and no-reserve-tie obligations used to make reserve second-price an IC/IR
+  integrable candidate.
 - The expected-revenue equality bridge has both explicit `AEUniqueArgmaxPrior`
   entry points and analytic-assumption entry points, including the common
   virtual-value cutoff presentations.
@@ -185,11 +200,12 @@ adds the reserve-price layer on top of those interfaces:
   and its common-CDF version package the same optimality result through the
   virtual-value cutoff interface.
 - The final optimality endpoint also has variants from packaged interim
-  measurability and from a.e. unique interim-slice highest-bid assumptions, for
-  each common reserve presentation.
+  measurability, from `ReserveSecondPriceCandidateAssumptions`, and from a.e.
+  unique interim-slice highest-bid assumptions, for each common reserve
+  presentation.
 
 The corresponding `commonCDFRegularReserve` theorems package the same result
-for the common-CDF presentation used in symmetric IPV examples.
+for the common-CDF presentation used in symmetric IPV specializations.
 
 ## Virtual-value cutoffs
 

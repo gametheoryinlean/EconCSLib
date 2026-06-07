@@ -20,11 +20,21 @@ uses:
   - mechanism_design.auction.bayesian.interim_and_ic
 lean:
   modules:
+    - EconCSLib.MechanismDesign.Auction.BayesianSingleItem
     - EconCSLib.MechanismDesign.Auction.OptimalSingleItem
   declarations:
+    - BayesianSingleItemAuction.IsIndividuallyRationalOnSupport
+    - BayesianSingleItemAuction.isIndividuallyRationalOnSupport_iff_interimExpectedPayment_zero_nonpos
+    - BayesianSingleItemAuction.virtualSurplusMaximizingAllocationRule
     - BayesianSingleItemAuction.virtualSurplusMaximizingPaymentRule
     - BayesianSingleItemAuction.virtualSurplusMaximizingMechanism
     - BayesianSingleItemAuction.virtualSurplusMaximizingAuction
+    - BayesianSingleItemAuction.virtualValue
+    - BayesianSingleItemAuction.IsRegular
+    - BayesianSingleItemAuction.HasPositiveDensityOnSupport
+    - BayesianSingleItemAuction.EnvelopeVirtualSurplusEnvironmentAssumptions
+    - BayesianSingleItemAuction.EnvelopeVirtualSurplusEnvironmentAssumptions.typeMeasure_isProbabilityMeasure
+    - BayesianSingleItemAuction.EnvelopeVirtualSurplusEnvironmentAssumptions.virtualValue_integrable_all
     - BayesianSingleItemAuction.cdfVirtualValue
     - BayesianSingleItemAuction.virtualValueCutoff
     - BayesianSingleItemAuction.virtualValueCutoff_boundary_eq
@@ -52,9 +62,23 @@ lean:
     - BayesianSingleItemAuction.CommonCDFVirtualValueReserve.commonCDFVirtualValueCutoffReserve
     - BayesianSingleItemAuction.CommonCDFVirtualValueCutoffReserve
     - BayesianSingleItemAuction.CommonCDFVirtualValueCutoffReserve.of_continuousAt
+    - BayesianSingleItemAuction.virtualValue_mul_typeDensity_eq_valueDensity_sub_survival_onSupport
+    - BayesianSingleItemAuction.integral_virtualValue_mul_typeDensity_eq_valueDensity_sub_survival
+    - BayesianSingleItemAuction.integral_virtualValue_mul_typeDensity_eq_zero_of_valueDensity_eq_survival
+    - BayesianSingleItemAuction.VirtualValueMeanZeroAnalyticAssumptions
+    - BayesianSingleItemAuction.VirtualValueMeanZeroAnalyticAssumptions.integral_virtualValue_mul_typeDensity_eq_zero
+    - BayesianSingleItemAuction.VirtualValueMeanZeroAnalyticAssumptions.integral_virtualValue_typeMeasure_eq_zero
     - BayesianSingleItemAuction.ProfileSplitMeasurabilityAssumptions
     - BayesianSingleItemAuction.ProfileSplitIntegrabilityAssumptions
+    - BayesianSingleItemAuction.ProfileSplitIntegrabilityAssumptions.toProfileSplitMeasurabilityAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIREnvironmentAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIREnvironmentAssumptions.typeMeasure_isProbabilityMeasure
+    - BayesianSingleItemAuction.RegularMyersonICIREnvironmentAssumptions.virtualValue_integrable_all
+    - BayesianSingleItemAuction.RegularMyersonICIRCandidateProfileSplitAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIRCandidateProfileSplitAssumptions.candidate_profileSplitIntegrabilityAssumptions
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.of_candidateProfileSplitAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.of_environment_candidateProfileSplitAssumptions
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.toIsFeasibleICIRIntegrable
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.candidate_isRevenueUpperBounded
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.candidate_isRevenueUpperBounded_of_sameEnvironment_of_isFeasibleICIR
@@ -71,6 +95,9 @@ lean:
     - BayesianSingleItemAuction.IsRegularMyersonOptimalICIRAuction.hasSameSellingEnvironment
     - BayesianSingleItemAuction.IsRegularMyersonOptimalICIRAuction.integrableVirtualSurplus
     - BayesianSingleItemAuction.IsRegularMyersonOptimalICIRAuction.expectedSellerRevenue_le
+    - BayesianSingleItemAuction.virtualSurplusMaximizingAuction_isIncentiveCompatible_of_isRegular
+    - BayesianSingleItemAuction.virtualSurplusMaximizingAuction_isIndividuallyRationalOnSupport_of_isRegular
+    - BayesianSingleItemAuction.virtualSurplusMaximizingAuction_isIncentiveCompatible_and_individuallyRationalOnSupport_of_isRegular
     - BayesianSingleItemAuction.virtualSurplusMaximizingAuction_regularMyersonOptimalICIR_of_isRegular
 verification:
   statement: accepted
@@ -107,6 +134,24 @@ This matches [MSZ Theorem 12.59]: when the virtual valuation functions are
 monotone, the mechanism defined by the virtual-surplus-maximizing allocation
 and its payment rule maximizes expected seller revenue among IC and IR direct
 selling mechanisms.  Lean makes the accompanying analytic assumptions explicit.
+
+The same file also exposes the abstract content of [MSZ Theorem 12.56].  The
+package `VirtualValueMeanZeroAnalyticAssumptions` records the tail-integral
+identity equating the value-density integral with the survival integral, and it
+derives the type-measure statement that each bidder's virtual value integrates
+to zero.  This is kept as an analytic interface rather than as a calculation for
+any particular distribution.
+
+Within Section 12.10, [MSZ Definition 12.51] is represented by
+`IsIndividuallyRationalOnSupport`, [MSZ Theorem 12.52] by
+`isIndividuallyRationalOnSupport_iff_interimExpectedPayment_zero_nonpos`, and
+MSZ Assumption (B) by `HasPositiveDensityOnSupport`.  [MSZ Definition 12.57]
+is represented by `virtualSurplusMaximizingAllocationRule` together with
+`virtualSurplusMaximizingPaymentRule`.  [MSZ Theorem 12.58] is represented by
+the IC/IR wrappers for `virtualSurplusMaximizingAuction`, and [MSZ Theorem
+12.59] by the regular-Myerson optimality theorem and its revenue-comparison
+wrappers.  The computational distribution examples in MSZ 12.54, 12.55, and
+12.60 are intentionally not formalized in this abstract node.
 
 ## Formalization
 
@@ -156,9 +201,18 @@ The proof follows the standard Myerson route:
 The Lean theorem is intentionally explicit about analytic side conditions.  The
 structure `RegularMyersonICIRAnalyticAssumptions` records the independent-prior
 environment, the CDF/density/envelope assumptions, and the profile-split
-integrability package for feasible IC/IR candidates.  Projection theorems then
-derive the Fubini packages, envelope upper bound, and revenue-upper-bound
-interface used in the MSZ 12.59 proof.  The final comparison is also exposed as
+integrability package for feasible IC/IR candidates.  The environment-side
+package `RegularMyersonICIREnvironmentAssumptions` separates the product-prior
+and envelope/virtual-value integrability hypotheses from candidate-mechanism
+obligations.  The candidate-side package
+`RegularMyersonICIRCandidateProfileSplitAssumptions` gives a finer entry point:
+profile-split measurability plus profile-split payment bounds, together with
+environment-level virtual-value integrability, reconstruct the candidate
+integrability package.  The wrapper
+`of_environment_candidateProfileSplitAssumptions` assembles these two abstract
+packages back into the compact analytic package.  Projection theorems then derive the Fubini packages,
+envelope upper bound, and revenue-upper-bound interface used in the MSZ 12.59
+proof.  The final comparison is also exposed as
 `candidate_expectedSellerRevenue_le_virtualSurplusMaximizingAuction_of_isRegular`,
 with a raw-assumption wrapper
 `candidate_expectedSellerRevenue_le_virtualSurplusMaximizingAuction_of_isRegular_of_sameEnvironment_of_isFeasibleICIR`

@@ -14,6 +14,11 @@ Regular Myerson auctions and reserve second-price auctions.
 A bridge from the MSZ 12.59 Myerson optimality theorem in `OptimalSingleItem`
 to the MSZ 12.61 reserve second-price corollary.
 
+Design: the reserve mechanism is defined as an ordinary Bayesian single-item
+auction, while no-tie, measurability, and candidate obligations are kept as
+separate predicates and assumption packages. This mirrors the assumption-explicit
+style used elsewhere in the library.
+
 Main objects:
 * `reserveSecondPriceAuction`: reserve second-price in a Bayesian environment.
 * `StrictReserveBidProfile`: pointwise no-tie/no-boundary profiles.
@@ -22,6 +27,9 @@ Main objects:
   highest bid.
 * `ReserveSecondPriceInterimMeasurabilityAssumptions`: interim measurability
   obligations for reserve second-price.
+* `ReserveSecondPriceCandidateAssumptions`: nonnegative-reserve and interim
+  measurability obligations for using reserve second-price as an IC/IR
+  candidate.
 
 Main result: common-regular-reserve MSZ 12.61 optimality.
 
@@ -833,6 +841,61 @@ theorem ReserveSecondPriceAEUniqueArgmax.toInterimMeasurabilityAssumptions
     A.ReserveSecondPriceInterimMeasurabilityAssumptions rho :=
   ReserveSecondPriceInterimMeasurabilityAssumptions.of_ae_unique_argmax A rho h
 
+/-- Candidate assumptions for reserve second-price.
+
+This package records the reserve-side data needed to use reserve second-price
+as a feasible IC/IR integrable candidate: a nonnegative reserve and measurable
+interim allocation/payment integrands. Integrability follows from the built-in
+reserve second-price bounds.
+-/
+structure ReserveSecondPriceCandidateAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ) : Prop where
+  /-- The reserve is nonnegative, so zero-normalization gives interim IR. -/
+  reserve_nonnegative :
+    0 ≤ rho
+  /-- Reserve second-price interim allocation/payment integrands are measurable. -/
+  interim_measurability :
+    A.ReserveSecondPriceInterimMeasurabilityAssumptions rho
+
+/-- Projection: the reserve is nonnegative. -/
+theorem ReserveSecondPriceCandidateAssumptions.reserveNonnegative
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.ReserveSecondPriceCandidateAssumptions rho) :
+    0 ≤ rho :=
+  h.reserve_nonnegative
+
+/-- Projection: reserve second-price interim measurability. -/
+theorem ReserveSecondPriceCandidateAssumptions.interimMeasurability
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.ReserveSecondPriceCandidateAssumptions rho) :
+    A.ReserveSecondPriceInterimMeasurabilityAssumptions rho :=
+  h.interim_measurability
+
+/-- Package nonnegative reserve and interim measurability as reserve second-price
+candidate assumptions. -/
+theorem ReserveSecondPriceCandidateAssumptions.of_interimMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (hrho0 : 0 ≤ rho)
+    (hmeas : A.ReserveSecondPriceInterimMeasurabilityAssumptions rho) :
+    A.ReserveSecondPriceCandidateAssumptions rho where
+  reserve_nonnegative := hrho0
+  interim_measurability := hmeas
+
+/-- Package nonnegative reserve and a.e. unique highest bids as reserve
+second-price candidate assumptions. -/
+theorem ReserveSecondPriceCandidateAssumptions.of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (hrho0 : 0 ≤ rho)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.ReserveSecondPriceCandidateAssumptions rho :=
+  ReserveSecondPriceCandidateAssumptions.of_interimMeasurable
+    hrho0 hae_unique.toInterimMeasurabilityAssumptions
+
 /-- Measurable reserve second-price integrands are interim-integrable by bounds. -/
 theorem reserveSecondPriceAuction_hasIntegrableInterimObjects_of_aestronglyMeasurable
     [Fintype I] [Nontrivial I] [DecidableEq I]
@@ -867,6 +930,14 @@ theorem ReserveSecondPriceInterimMeasurabilityAssumptions.hasIntegrableInterimOb
     (A.reserveSecondPriceAuction rho).HasIntegrableInterimObjects :=
   A.reserveSecondPriceAuction_hasIntegrableInterimObjects_of_aestronglyMeasurable
     rho h.allocation_aestronglyMeasurable h.payment_aestronglyMeasurable
+
+/-- Candidate-side assumptions imply reserve second-price interim integrability. -/
+theorem ReserveSecondPriceCandidateAssumptions.hasIntegrableInterimObjects
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.ReserveSecondPriceCandidateAssumptions rho) :
+    (A.reserveSecondPriceAuction rho).HasIntegrableInterimObjects :=
+  h.interimMeasurability.hasIntegrableInterimObjects
 
 /-- A.e. uniqueness gives reserve second-price interim integrability. -/
 theorem ReserveSecondPriceAEUniqueArgmax.hasIntegrableInterimObjects
@@ -1020,6 +1091,18 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasib
     A.IsFeasibleICIRIntegrable (A.reserveSecondPriceAuction rho) :=
   h.reserveSecondPriceAuction_isFeasibleICIRIntegrable
     hrho hmeas.hasIntegrableInterimObjects
+
+/-- Analytic-assumption entry point for reserve second-price as a feasible IC/IR
+candidate from the reserve-side candidate package. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable_of_candidateAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    {rho : ℝ}
+    (hcand : A.ReserveSecondPriceCandidateAssumptions rho) :
+    A.IsFeasibleICIRIntegrable (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isFeasibleICIRIntegrable
+    hcand.reserveNonnegative hcand.hasIntegrableInterimObjects
 
 /-- Analytic-assumption entry point for reserve second-price as a feasible IC/IR
 candidate from a.e. unique highest bids. -/
@@ -2317,6 +2400,64 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpect
   h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_interimMeasurable
     hreserve.commonRegularReserve hrho0 hmeas
 
+/-! ### Expected-revenue optimality from reserve-side candidate assumptions -/
+
+/-- Reserve second-price is expected-revenue optimal from the reserve-side
+candidate package. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_candidateAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonRegularReserve rho)
+    (hcand : A.ReserveSecondPriceCandidateAssumptions rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
+    hreserve hcand.reserveNonnegative hcand.hasIntegrableInterimObjects
+
+/-- Common-CDF presentation of expected-revenue optimality from the reserve-side
+candidate package. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFRegularReserve_of_candidateAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFRegularReserve rho)
+    (hcand : A.ReserveSecondPriceCandidateAssumptions rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_candidateAssumptions
+    hreserve.commonRegularReserve hcand
+
+/-- Positive-virtual-value presentation of expected-revenue optimality from the
+reserve-side candidate package. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonVirtualValueReserve_of_candidateAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonVirtualValueReserve rho)
+    (hcand : A.ReserveSecondPriceCandidateAssumptions rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_candidateAssumptions
+    hreserve.commonRegularReserve hcand
+
+/-- Common-CDF positive-virtual-value presentation of expected-revenue
+optimality from the reserve-side candidate package. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFVirtualValueReserve_of_candidateAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFVirtualValueReserve rho)
+    (hcand : A.ReserveSecondPriceCandidateAssumptions rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_candidateAssumptions
+    hreserve.commonRegularReserve hcand
+
 /-! ### Expected-revenue optimality from a.e. unique highest bids -/
 
 /-- Reserve second-price is expected-revenue optimal from a.e. unique highest bids. -/
@@ -2482,6 +2623,54 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegula
     A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
   h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_interimMeasurable
     hreserve.commonRegularReserve hrho0 hmeas
+
+/-! ### MSZ 12.61 endpoint wrappers from reserve-side candidate assumptions -/
+
+/-- MSZ 12.61 from the reserve-side candidate package. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_candidateAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonRegularReserve rho)
+    (hcand : A.ReserveSecondPriceCandidateAssumptions rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve
+    hreserve hcand.reserveNonnegative hcand.hasIntegrableInterimObjects
+
+/-- Common-CDF presentation of MSZ 12.61 from the reserve-side candidate package. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve_of_candidateAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFRegularReserve rho)
+    (hcand : A.ReserveSecondPriceCandidateAssumptions rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_candidateAssumptions
+    hreserve.commonRegularReserve hcand
+
+/-- Positive-virtual-value presentation of MSZ 12.61 from the reserve-side
+candidate package. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve_of_candidateAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonVirtualValueReserve rho)
+    (hcand : A.ReserveSecondPriceCandidateAssumptions rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_candidateAssumptions
+    hreserve.commonRegularReserve hcand
+
+/-- Common-CDF positive-virtual-value presentation of MSZ 12.61 from the
+reserve-side candidate package. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFVirtualValueReserve_of_candidateAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFVirtualValueReserve rho)
+    (hcand : A.ReserveSecondPriceCandidateAssumptions rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_candidateAssumptions
+    hreserve.commonRegularReserve hcand
 
 /-! ### MSZ 12.61 endpoint from a.e. unique highest bids -/
 

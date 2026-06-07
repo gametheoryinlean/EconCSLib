@@ -22,6 +22,14 @@ rule, its Myerson payment rule, and the IC/IR revenue-optimality interface for
 MSZ 12.59. The main public result is
 `virtualSurplusMaximizingAuction_regularMyersonOptimalICIR_of_isRegular`.
 
+## Design
+
+The base auction record is kept separate from analytic side conditions.  As in
+the fair-division `Allocation` / `IsAllocation` split and the extensive-game
+`FiniteExtractable` package, regularity, density, Fubini, integrability, and
+candidate-mechanism obligations are exposed through `Is...` predicates and
+`*Assumptions` structures at theorem entry points.
+
 ## Main definitions
 
 * `virtualValue`, `IsRegular`, `IsReserveThreshold`
@@ -33,8 +41,11 @@ MSZ 12.59. The main public result is
 * `IsRevenueComparable`, `IsRevenueUpperBounded`
 * `IsFeasibleICIRIntegrable`
 * `InterimFubiniAnalyticAssumptions`
+* `VirtualValueMeanZeroAnalyticAssumptions`
 * `ProfileSplitMeasurabilityAssumptions`
 * `ProfileSplitIntegrabilityAssumptions`
+* `RegularMyersonICIREnvironmentAssumptions`
+* `RegularMyersonICIRCandidateProfileSplitAssumptions`
 * `RegularMyersonICIRAnalyticAssumptions`
 * `IsRegularMyersonOptimalICIRAuction`
 * `virtualSurplusMaximizingAllocationRule`
@@ -2553,6 +2564,159 @@ theorem HasPositiveDensityOnSupport.nonzero_on_support
     A.typeDensity i v ≠ 0 :=
   (A.typeDensity_pos_of_hasPositiveDensityOnSupport hA h0 homega).ne'
 
+/-- On support, virtual-value density equals value density minus survival probability. -/
+theorem virtualValue_mul_typeDensity_eq_valueDensity_sub_survival_onSupport
+    (A : BayesianSingleItemAuction I)
+    (hA : A.HasPositiveDensityOnSupport) (i : I) :
+    Set.EqOn
+      (fun v => A.virtualValue i v * A.typeDensity i v)
+      (fun v => v * A.typeDensity i v - (1 - (A.typeData.cdf i).cdf v))
+      (Set.uIoc 0 (A.typeData.omega i)) := by
+  intro v hv
+  have hv' : v ∈ Set.Ioc 0 (A.typeData.omega i) := by
+    simpa [Set.uIoc_of_le (A.typeData.cdf i).omega_nonneg] using hv
+  have h0 : 0 < v := hv'.1
+  have homega : v ≤ A.typeData.omega i := hv'.2
+  have homega_lt_or_eq : v < A.typeData.omega i ∨ v = A.typeData.omega i :=
+    lt_or_eq_of_le homega
+  rcases homega_lt_or_eq with homega_lt | rfl
+  · have hdens_ne : A.typeDensity i v ≠ 0 :=
+      hA.nonzero_on_support A h0 homega_lt
+    simp [virtualValue, sub_mul, div_eq_mul_inv, hdens_ne]
+  · have hFω : (A.typeData.cdf i).cdf (A.typeData.omega i) = 1 :=
+      (A.typeData.cdf i).cdf_upper
+    have hsurv_zero : 1 - (A.typeData.cdf i).cdf (A.typeData.omega i) = 0 := by
+      rw [hFω]
+      ring
+    simp [virtualValue, hsurv_zero]
+
+/-- Density-side virtual-value integral as value-density minus survival. -/
+theorem integral_virtualValue_mul_typeDensity_eq_valueDensity_sub_survival
+    (A : BayesianSingleItemAuction I)
+    (hA : A.HasPositiveDensityOnSupport) (i : I)
+    (hvalue :
+      IntervalIntegrable
+        (fun v => v * A.typeDensity i v)
+        volume 0 (A.typeData.omega i))
+    (hsurvival :
+      IntervalIntegrable
+        (fun v => 1 - (A.typeData.cdf i).cdf v)
+        volume 0 (A.typeData.omega i)) :
+    (∫ v in 0..A.typeData.omega i, A.virtualValue i v * A.typeDensity i v) =
+      (∫ v in 0..A.typeData.omega i, v * A.typeDensity i v) -
+        ∫ v in 0..A.typeData.omega i, 1 - (A.typeData.cdf i).cdf v := by
+  calc
+    (∫ v in 0..A.typeData.omega i, A.virtualValue i v * A.typeDensity i v)
+        =
+          ∫ v in 0..A.typeData.omega i,
+            v * A.typeDensity i v - (1 - (A.typeData.cdf i).cdf v) := by
+          refine intervalIntegral.integral_congr_ae ?_
+          filter_upwards with v hv
+          exact
+            A.virtualValue_mul_typeDensity_eq_valueDensity_sub_survival_onSupport
+              hA i hv
+    _ = (∫ v in 0..A.typeData.omega i, v * A.typeDensity i v) -
+          ∫ v in 0..A.typeData.omega i, 1 - (A.typeData.cdf i).cdf v := by
+          rw [intervalIntegral.integral_sub hvalue hsurvival]
+
+/-- Density-side MSZ 12.56: the virtual-value integral is zero when the
+value-density integral equals the survival integral. -/
+theorem integral_virtualValue_mul_typeDensity_eq_zero_of_valueDensity_eq_survival
+    (A : BayesianSingleItemAuction I)
+    (hA : A.HasPositiveDensityOnSupport) (i : I)
+    (hvalue :
+      IntervalIntegrable
+        (fun v => v * A.typeDensity i v)
+        volume 0 (A.typeData.omega i))
+    (hsurvival :
+      IntervalIntegrable
+        (fun v => 1 - (A.typeData.cdf i).cdf v)
+        volume 0 (A.typeData.omega i))
+    (hmean :
+      (∫ v in 0..A.typeData.omega i, v * A.typeDensity i v) =
+        ∫ v in 0..A.typeData.omega i, 1 - (A.typeData.cdf i).cdf v) :
+    (∫ v in 0..A.typeData.omega i, A.virtualValue i v * A.typeDensity i v) = 0 := by
+  rw [A.integral_virtualValue_mul_typeDensity_eq_valueDensity_sub_survival hA i hvalue hsurvival,
+    hmean]
+  ring
+
+/-- Assumptions for the MSZ 12.56 virtual-value mean-zero identity.
+
+It records the density-side value integral, the survival integral, and the
+tail-integral identity equating them.  Together with the environment-level
+positive-density assumptions, it implies that each bidder's virtual value has
+zero expectation.
+-/
+structure VirtualValueMeanZeroAnalyticAssumptions
+    (A : BayesianSingleItemAuction I) : Prop where
+  /-- The value-density integrand is interval-integrable on support. -/
+  value_density_integrable :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => v * A.typeDensity i v)
+        volume 0 (A.typeData.omega i)
+  /-- The survival function is interval-integrable on support. -/
+  survival_integrable :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => 1 - (A.typeData.cdf i).cdf v)
+        volume 0 (A.typeData.omega i)
+  /-- The value-density integral agrees with the survival integral. -/
+  value_density_eq_survival :
+    ∀ i : I,
+      (∫ v in 0..A.typeData.omega i, v * A.typeDensity i v) =
+        ∫ v in 0..A.typeData.omega i, 1 - (A.typeData.cdf i).cdf v
+
+/-- Projection: value-density integrability for MSZ 12.56. -/
+theorem VirtualValueMeanZeroAnalyticAssumptions.valueDensity_integrable
+    {A : BayesianSingleItemAuction I}
+    (h : A.VirtualValueMeanZeroAnalyticAssumptions) (i : I) :
+    IntervalIntegrable
+      (fun v => v * A.typeDensity i v)
+      volume 0 (A.typeData.omega i) :=
+  h.value_density_integrable i
+
+/-- Projection: survival integrability for MSZ 12.56. -/
+theorem VirtualValueMeanZeroAnalyticAssumptions.survival_integrable_onSupport
+    {A : BayesianSingleItemAuction I}
+    (h : A.VirtualValueMeanZeroAnalyticAssumptions) (i : I) :
+    IntervalIntegrable
+      (fun v => 1 - (A.typeData.cdf i).cdf v)
+      volume 0 (A.typeData.omega i) :=
+  h.survival_integrable i
+
+/-- Projection: the tail-integral identity used in MSZ 12.56. -/
+theorem VirtualValueMeanZeroAnalyticAssumptions.valueDensity_eq_survival
+    {A : BayesianSingleItemAuction I}
+    (h : A.VirtualValueMeanZeroAnalyticAssumptions) (i : I) :
+    (∫ v in 0..A.typeData.omega i, v * A.typeDensity i v) =
+      ∫ v in 0..A.typeData.omega i, 1 - (A.typeData.cdf i).cdf v :=
+  h.value_density_eq_survival i
+
+/-- Density-side MSZ 12.56 from the packaged tail-integral identity. -/
+theorem VirtualValueMeanZeroAnalyticAssumptions.integral_virtualValue_mul_typeDensity_eq_zero
+    {A : BayesianSingleItemAuction I}
+    (h : A.VirtualValueMeanZeroAnalyticAssumptions)
+    (hpos : A.HasPositiveDensityOnSupport) (i : I) :
+    (∫ v in 0..A.typeData.omega i, A.virtualValue i v * A.typeDensity i v) = 0 :=
+  A.integral_virtualValue_mul_typeDensity_eq_zero_of_valueDensity_eq_survival
+    hpos i
+    (h.valueDensity_integrable i)
+    (h.survival_integrable_onSupport i)
+    (h.valueDensity_eq_survival i)
+
+/-- MSZ 12.56 in type-measure form: each virtual value has zero expectation. -/
+theorem VirtualValueMeanZeroAnalyticAssumptions.integral_virtualValue_typeMeasure_eq_zero
+    {A : BayesianSingleItemAuction I}
+    (h : A.VirtualValueMeanZeroAnalyticAssumptions)
+    (henv : A.EnvelopeVirtualSurplusEnvironmentAssumptions) (i : I) :
+    (∫ v, A.virtualValue i v ∂A.typeMeasure i) = 0 := by
+  rw [A.integral_typeMeasure_eq_intervalIntegral_mul i
+    (A.virtualValue i)
+    (A.typeDensity_ennreal_ofReal_aemeasurable i)
+    (henv.typeDensity_nonnegative_ae i)]
+  exact h.integral_virtualValue_mul_typeDensity_eq_zero henv.positive_density_on_support i
+
 theorem EnvelopeVirtualSurplusAnalyticAssumptions.interim_allocation_intervalIntegrableOnSupport
     {A B : BayesianSingleItemAuction I}
     (h : A.EnvelopeVirtualSurplusAnalyticAssumptions B) (i : I) :
@@ -3186,6 +3350,15 @@ structure ProfileSplitMeasurabilityAssumptions
           B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
         ((A.typeMeasure i).prod (B.opponentPrior i))
 
+/-- Profile-split integrability implies profile-split measurability. -/
+theorem ProfileSplitIntegrabilityAssumptions.toProfileSplitMeasurabilityAssumptions
+    {A B : BayesianSingleItemAuction I}
+    (h : A.ProfileSplitIntegrabilityAssumptions B) :
+    A.ProfileSplitMeasurabilityAssumptions B where
+  payment_aestronglyMeasurable := fun i => (h.payment_integrable i).aestronglyMeasurable
+  virtual_surplus_aestronglyMeasurable :=
+    fun i => (h.virtual_surplus_integrable i).aestronglyMeasurable
+
 /-- Measurable profile-split integrands give the a.e.-strong measurability package. -/
 theorem ProfileSplitMeasurabilityAssumptions.of_measurable
     {A B : BayesianSingleItemAuction I}
@@ -3613,6 +3786,138 @@ theorem ProfileSplitIntegrabilityAssumptions.toIsFeasibleICIRIntegrable
     A.IsFeasibleICIRIntegrable B :=
   ⟨henv, hfeas, hIC, hIR, h.integrableVirtualSurplus hind henv⟩
 
+/-! ## Environment assumptions for MSZ 12.59 -/
+
+/-- Environment assumptions for the MSZ 12.59 IC/IR revenue comparison.
+
+This package isolates the selling environment from candidate-specific
+profile-split obligations.
+-/
+structure RegularMyersonICIREnvironmentAssumptions
+    [Fintype I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) : Prop where
+  /-- The auction environment has independent type priors. -/
+  independent_type_priors :
+    A.HasIndependentTypePriors
+  /-- CDF, density, and envelope assumptions used to compare interim payments
+  with interim virtual surplus. -/
+  envelope_environment :
+    A.EnvelopeVirtualSurplusEnvironmentAssumptions
+
+/-- Projection: the auction environment has independent type priors. -/
+theorem RegularMyersonICIREnvironmentAssumptions.hasIndependentTypePriors
+    [Fintype I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIREnvironmentAssumptions) :
+    A.HasIndependentTypePriors :=
+  h.independent_type_priors
+
+/-- Projection: the environment-level envelope/virtual-surplus assumptions. -/
+theorem RegularMyersonICIREnvironmentAssumptions.envelopeEnvironment
+    [Fintype I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIREnvironmentAssumptions) :
+    A.EnvelopeVirtualSurplusEnvironmentAssumptions :=
+  h.envelope_environment
+
+/-- Projection: type measures are probability measures under the environment package. -/
+theorem RegularMyersonICIREnvironmentAssumptions.typeMeasure_isProbabilityMeasure
+    [Fintype I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIREnvironmentAssumptions) (i : I) :
+    IsProbabilityMeasure (A.typeMeasure i) :=
+  h.envelopeEnvironment.typeMeasure_isProbabilityMeasure i
+
+/-- Projection: virtual values are type-measure integrable under the environment package. -/
+theorem RegularMyersonICIREnvironmentAssumptions.virtualValue_integrable_on_typeMeasure
+    [Fintype I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIREnvironmentAssumptions) (i : I) :
+    Integrable (A.virtualValue i) (A.typeMeasure i) :=
+  h.envelopeEnvironment.virtualValue_integrable_on_typeMeasure i
+
+/-- Projection: all virtual values are type-measure integrable under the environment package. -/
+theorem RegularMyersonICIREnvironmentAssumptions.virtualValue_integrable_all
+    [Fintype I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIREnvironmentAssumptions) :
+    ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i) :=
+  h.envelopeEnvironment.virtualValue_integrable_all
+
+/-! ## Candidate assumptions for MSZ 12.59 -/
+
+/-- Candidate assumptions that imply profile-split integrability.
+
+This package separates candidate measurability from payment bounds.  Together
+with the environment-level virtual-value integrability and candidate
+feasibility, it reconstructs `ProfileSplitIntegrabilityAssumptions`.
+-/
+structure RegularMyersonICIRCandidateProfileSplitAssumptions
+    [Fintype I] (A : BayesianSingleItemAuction I) : Prop where
+  /-- Candidate payments and allocation-weighted virtual surplus are measurable
+  after splitting profiles into one bidder's type and the opponents' profile. -/
+  candidate_profileSplit_measurability :
+    ∀ B : BayesianSingleItemAuction I,
+      B.IsFeasible →
+        B.IsIncentiveCompatible →
+          B.IsIndividuallyRationalOnSupport →
+            A.ProfileSplitMeasurabilityAssumptions B
+  /-- Candidate payments are a.e. bounded after profile splitting. -/
+  candidate_payment_bound :
+    ∀ B : BayesianSingleItemAuction I,
+      B.IsFeasible →
+        B.IsIncentiveCompatible →
+          B.IsIndividuallyRationalOnSupport →
+            ∀ i : I,
+              ∃ C : ℝ,
+                ∀ᵐ p ∂((A.typeMeasure i).prod (B.opponentPrior i)),
+                  ‖B.paymentRule (reportProfile i p.1 p.2) i‖ ≤ C
+
+/-- Projection: candidate profile-split measurability. -/
+theorem RegularMyersonICIRCandidateProfileSplitAssumptions.candidate_profileSplitMeasurabilityAssumptions
+    [Fintype I] {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRCandidateProfileSplitAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.ProfileSplitMeasurabilityAssumptions B :=
+  h.candidate_profileSplit_measurability B hfeas hIC hIR
+
+/-- Projection: candidate profile-split payment bounds. -/
+theorem RegularMyersonICIRCandidateProfileSplitAssumptions.candidate_paymentBound
+    [Fintype I] {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRCandidateProfileSplitAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    ∀ i : I,
+      ∃ C : ℝ,
+        ∀ᵐ p ∂((A.typeMeasure i).prod (B.opponentPrior i)),
+          ‖B.paymentRule (reportProfile i p.1 p.2) i‖ ≤ C :=
+  h.candidate_payment_bound B hfeas hIC hIR
+
+/-- Candidate-side measurability and payment bounds imply profile-split
+integrability under the environment-level virtual-value assumptions. -/
+theorem RegularMyersonICIRCandidateProfileSplitAssumptions.candidate_profileSplitIntegrabilityAssumptions
+    [Fintype I] {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRCandidateProfileSplitAssumptions)
+    (henv : A.EnvelopeVirtualSurplusEnvironmentAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.ProfileSplitIntegrabilityAssumptions B := by
+  haveI : ∀ i : I, IsProbabilityMeasure (A.typeMeasure i) :=
+    henv.typeMeasure_isProbabilityMeasure
+  exact
+    (h.candidate_profileSplitMeasurabilityAssumptions B hfeas hIC hIR)
+      |>.toProfileSplitIntegrabilityAssumptions_of_paymentBound_of_virtualValue_integrable
+        hfeas
+        (h.candidate_paymentBound B hfeas hIC hIR)
+        henv.virtualValue_integrable_all
+
 /-! ## Analytic package for MSZ 12.59 -/
 
 /-- Analytic package for the MSZ 12.59 IC/IR revenue comparison.
@@ -3637,6 +3942,32 @@ structure RegularMyersonICIRAnalyticAssumptions
         B.IsIncentiveCompatible →
           B.IsIndividuallyRationalOnSupport →
             A.ProfileSplitIntegrabilityAssumptions B
+
+/-- Build the regular Myerson analytic package from candidate-side
+profile-split measurability and payment bounds. -/
+theorem RegularMyersonICIRAnalyticAssumptions.of_candidateProfileSplitAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (hind : A.HasIndependentTypePriors)
+    (henv : A.EnvelopeVirtualSurplusEnvironmentAssumptions)
+    (hcand : A.RegularMyersonICIRCandidateProfileSplitAssumptions) :
+    A.RegularMyersonICIRAnalyticAssumptions where
+  independent_type_priors := hind
+  envelope_environment := henv
+  candidate_profileSplit_integrability := by
+    intro B hfeas hIC hIR
+    exact hcand.candidate_profileSplitIntegrabilityAssumptions henv B hfeas hIC hIR
+
+/-- Build the regular Myerson analytic package from the environment package and
+candidate-side profile-split assumptions. -/
+theorem RegularMyersonICIRAnalyticAssumptions.of_environment_candidateProfileSplitAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (henv : A.RegularMyersonICIREnvironmentAssumptions)
+    (hcand : A.RegularMyersonICIRCandidateProfileSplitAssumptions) :
+    A.RegularMyersonICIRAnalyticAssumptions :=
+  RegularMyersonICIRAnalyticAssumptions.of_candidateProfileSplitAssumptions
+    henv.hasIndependentTypePriors henv.envelopeEnvironment hcand
 
 /-! ### Projections from the analytic package -/
 
