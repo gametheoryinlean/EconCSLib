@@ -23,6 +23,12 @@ lean:
     - EconCSLib.MechanismDesign.Auction.RegularMyersonReserveSecondPrice
   declarations:
     - BayesianSingleItemAuction.reserveSecondPriceAuction
+    - BayesianSingleItemAuction.ReserveSecondPriceAEUniqueArgmax
+    - BayesianSingleItemAuction.ReserveSecondPriceInterimMeasurabilityAssumptions
+    - BayesianSingleItemAuction.AEUniqueArgmaxPrior
+    - BayesianSingleItemAuction.AENonnegativeBidsPrior
+    - BayesianSingleItemAuction.AENoReserveTiePrior
+    - BayesianSingleItemAuction.AEStrictReserveBidProfile
     - BayesianSingleItemAuction.withheldProbability
     - BayesianSingleItemAuction.sellerSurplusWithReserveValue
     - BayesianSingleItemAuction.expectedSellerSurplusWithReserveValue
@@ -54,6 +60,10 @@ lean:
     - BayesianSingleItemAuction.CommonCDFVirtualValueCutoffReserve.of_continuousAt
     - BayesianSingleItemAuction.virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_commonRegularReserve
     - BayesianSingleItemAuction.virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_commonCDFRegularReserve
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_unique_argmax_commonRegularReserve
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_unique_argmax_commonCDFRegularReserve
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_unique_argmax_commonVirtualValueReserve
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_unique_argmax_commonCDFVirtualValueReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_commonRegularReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_commonCDFRegularReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_commonVirtualValueReserve
@@ -62,6 +72,9 @@ lean:
     - BayesianSingleItemAuction.reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonCDFRegularReserve
     - BayesianSingleItemAuction.reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonVirtualValueReserve
     - BayesianSingleItemAuction.reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonCDFVirtualValueReserve
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable_of_interimMeasurable
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable_of_ae_unique_argmax
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFRegularReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonVirtualValueReserve
@@ -70,6 +83,14 @@ lean:
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFVirtualValueReserve
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_interimMeasurable
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve_of_interimMeasurable
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve_of_interimMeasurable
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFVirtualValueReserve_of_interimMeasurable
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_ae_unique_argmax
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve_of_ae_unique_argmax
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve_of_ae_unique_argmax
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFVirtualValueReserve_of_ae_unique_argmax
 verification:
   statement: accepted
   proof: accepted
@@ -95,6 +116,8 @@ second-price auction with reserve \(\rho\)
 regular-Myerson optimal: it is feasible, incentive compatible, interim
 individually rational, and expected-revenue optimal among the formal
 feasible IC/IR candidate class.
+Here \(\phi\) is the common presentation of the MSZ virtual valuation functions
+\(c_i\), represented in Lean by `CommonRegularReserve.common_virtualValue`.
 
 The virtual-value cutoff interface can also package the reserve as
 \[
@@ -108,6 +131,12 @@ below.  This abstract form covers the infimum presentation used in
 This is the Lean formalisation of the reserve-price endpoint of Myerson's
 regular optimal-auction theorem ([[mechanism_design.myerson.optimal_auction]]),
 corresponding to the MSZ reserve-price corollary cited below.
+
+[MSZ Corollary 12.61] specializes Theorem 12.59 to IID private values: under
+regularity, the optimal IC direct selling mechanism is a sealed-bid second-price
+auction with a reserve price.  Lean represents the IID/common-value content
+through common regular-reserve and common-CDF reserve interfaces, with analytic
+null-set and integrability assumptions exposed separately.
 
 ## Formalization
 
@@ -140,6 +169,13 @@ adds the reserve-price layer on top of those interfaces:
 
 - `reserveSecondPriceAuction` wraps the reserve Vickrey auction as a
   `BayesianSingleItemAuction`, reusing the original prior and type data.
+- `ReserveSecondPriceInterimMeasurabilityAssumptions`,
+  `ReserveSecondPriceAEUniqueArgmax`, and the prior-level a.e. packages
+  isolate the measurability, uniqueness, nonnegative-bid, and no-reserve-tie
+  obligations used to make reserve second-price an IC/IR integrable candidate.
+- The expected-revenue equality bridge has both explicit `AEUniqueArgmaxPrior`
+  entry points and analytic-assumption entry points, including the common
+  virtual-value cutoff presentations.
 - `reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonRegularReserve`
   proves that the reserve second-price allocation is pointwise
   virtual-surplus optimal.
@@ -148,6 +184,9 @@ adds the reserve-price layer on top of those interfaces:
 - `RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve`
   and its common-CDF version package the same optimality result through the
   virtual-value cutoff interface.
+- The final optimality endpoint also has variants from packaged interim
+  measurability and from a.e. unique interim-slice highest-bid assumptions, for
+  each common reserve presentation.
 
 The corresponding `commonCDFRegularReserve` theorems package the same result
 for the common-CDF presentation used in symmetric IPV examples.
@@ -165,8 +204,8 @@ express the abstract cutoff equation \(\phi(\rho)=κ\).  The comparison level
 only one later application.
 
 This layer is intentionally not stated as part of the MSZ 12.61 optimality
- theorem.  [MSZ Corollary 12.61] is a revenue-maximization statement with zero seller
-reservation value.  The cutoff and seller-payoff definitions are reusable
+theorem. [MSZ Corollary 12.61] is a revenue-maximization statement with zero
+seller reservation value. The cutoff and seller-payoff definitions are reusable
 groundwork for later optimality statements with nonzero virtual-value cutoffs or
 a retained-object payoff.
 

@@ -33,6 +33,8 @@ MSZ 12.59. The main public result is
 * `IsRevenueComparable`, `IsRevenueUpperBounded`
 * `IsFeasibleICIRIntegrable`
 * `InterimFubiniAnalyticAssumptions`
+* `ProfileSplitMeasurabilityAssumptions`
+* `ProfileSplitIntegrabilityAssumptions`
 * `RegularMyersonICIRAnalyticAssumptions`
 * `IsRegularMyersonOptimalICIRAuction`
 * `virtualSurplusMaximizingAllocationRule`
@@ -440,12 +442,53 @@ theorem CommonRegularReserve.isReserveThreshold
   A.isReserveThreshold_common_strictMono_of_common_zero
     h.common_virtualValue h.strictMono_phi h.reserve_zero
 
-/-- Virtual-value reserves give common regular reserves. -/
+/-- Above a common regular reserve, each bidder's virtual value is nonnegative. -/
+theorem CommonRegularReserve.virtualValue_nonneg_of_reserve_le
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.CommonRegularReserve rho) {i : I} {v : ℝ}
+    (hv : rho ≤ v) :
+    0 ≤ A.virtualValue i v :=
+  A.virtualValue_nonneg_of_isReserveThreshold (h.isReserveThreshold i) hv
+
+/-- At a common regular reserve, each bidder's virtual value is zero. -/
+theorem CommonRegularReserve.virtualValue_eq_zero
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.CommonRegularReserve rho) (i : I) :
+    A.virtualValue i rho = 0 := by
+  rw [h.common_virtualValue i rho, h.reserve_zero]
+
+/-- Strictly above a common regular reserve, each bidder's virtual value is positive. -/
+theorem CommonRegularReserve.virtualValue_pos_of_reserve_lt
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.CommonRegularReserve rho) {i : I} {v : ℝ}
+    (hv : rho < v) :
+    0 < A.virtualValue i v := by
+  calc
+    0 = h.phi rho := h.reserve_zero.symm
+    _ < h.phi v := h.strictMono_phi hv
+    _ = A.virtualValue i v := (h.common_virtualValue i v).symm
+
+/-- Below a common regular reserve, each bidder's virtual value is nonpositive. -/
+theorem CommonRegularReserve.virtualValue_nonpos_of_lt_reserve
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.CommonRegularReserve rho) {i : I} {v : ℝ}
+    (hv : v < rho) :
+    A.virtualValue i v ≤ 0 :=
+  A.virtualValue_nonpos_of_lt_isReserveThreshold (h.isReserveThreshold i) hv
+
+/-- Virtual-value reserves give strict cross-bidder virtual-value order. -/
+theorem CommonVirtualValueReserve.hasStrictVirtualValueOrder
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.CommonVirtualValueReserve rho) :
+    A.HasStrictVirtualValueOrder :=
+  h.commonRegularReserve.hasStrictVirtualValueOrder
+
+/-- Virtual-value reserves are regular. -/
 theorem CommonVirtualValueReserve.isRegular
     {A : BayesianSingleItemAuction I} {rho : ℝ}
     (h : A.CommonVirtualValueReserve rho) :
     A.IsRegular :=
-  h.commonRegularReserve.isRegular
+  h.hasStrictVirtualValueOrder.isRegular
 
 /-- Virtual-value reserves are reserve thresholds for every bidder. -/
 theorem CommonVirtualValueReserve.isReserveThreshold
@@ -453,6 +496,20 @@ theorem CommonVirtualValueReserve.isReserveThreshold
     (h : A.CommonVirtualValueReserve rho) :
     ∀ i, A.IsReserveThreshold i rho :=
   h.commonRegularReserve.isReserveThreshold
+
+/-- Common virtual-value cutoff reserves give strict cross-bidder virtual-value order. -/
+theorem CommonVirtualValueCutoffReserve.hasStrictVirtualValueOrder
+    {A : BayesianSingleItemAuction I} {κ rho : ℝ}
+    (h : A.CommonVirtualValueCutoffReserve κ rho) :
+    A.HasStrictVirtualValueOrder :=
+  A.hasStrictVirtualValueOrder_of_common_strictMono h.common_virtualValue h.strictMono_phi
+
+/-- Common virtual-value cutoff reserves are regular. -/
+theorem CommonVirtualValueCutoffReserve.isRegular
+    {A : BayesianSingleItemAuction I} {κ rho : ℝ}
+    (h : A.CommonVirtualValueCutoffReserve κ rho) :
+    A.IsRegular :=
+  h.hasStrictVirtualValueOrder.isRegular
 
 /-- Common virtual-value cutoff reserves are virtual-value cutoffs for every bidder. -/
 theorem CommonVirtualValueCutoffReserve.isVirtualValueCutoff
@@ -610,12 +667,19 @@ theorem CommonCDFRegularReserve.isReserveThreshold
     ∀ i, A.IsReserveThreshold i rho :=
   h.commonRegularReserve.isReserveThreshold
 
+/-- Common-CDF virtual-value reserves give strict cross-bidder virtual-value order. -/
+theorem CommonCDFVirtualValueReserve.hasStrictVirtualValueOrder
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.CommonCDFVirtualValueReserve rho) :
+    A.HasStrictVirtualValueOrder :=
+  h.commonRegularReserve.hasStrictVirtualValueOrder
+
 /-- Common-CDF virtual-value reserves are regular. -/
 theorem CommonCDFVirtualValueReserve.isRegular
     {A : BayesianSingleItemAuction I} {rho : ℝ}
     (h : A.CommonCDFVirtualValueReserve rho) :
     A.IsRegular :=
-  h.commonRegularReserve.isRegular
+  h.hasStrictVirtualValueOrder.isRegular
 
 /-- Common-CDF virtual-value reserves are reserve thresholds for every bidder. -/
 theorem CommonCDFVirtualValueReserve.isReserveThreshold
@@ -623,6 +687,20 @@ theorem CommonCDFVirtualValueReserve.isReserveThreshold
     (h : A.CommonCDFVirtualValueReserve rho) :
     ∀ i, A.IsReserveThreshold i rho :=
   h.commonRegularReserve.isReserveThreshold
+
+/-- Common-CDF virtual-value cutoff reserves give strict cross-bidder virtual-value order. -/
+theorem CommonCDFVirtualValueCutoffReserve.hasStrictVirtualValueOrder
+    {A : BayesianSingleItemAuction I} {κ rho : ℝ}
+    (h : A.CommonCDFVirtualValueCutoffReserve κ rho) :
+    A.HasStrictVirtualValueOrder :=
+  h.commonVirtualValueCutoffReserve.hasStrictVirtualValueOrder
+
+/-- Common-CDF virtual-value cutoff reserves are regular. -/
+theorem CommonCDFVirtualValueCutoffReserve.isRegular
+    {A : BayesianSingleItemAuction I} {κ rho : ℝ}
+    (h : A.CommonCDFVirtualValueCutoffReserve κ rho) :
+    A.IsRegular :=
+  h.hasStrictVirtualValueOrder.isRegular
 
 /-- Common-CDF virtual-value cutoff reserves are virtual-value cutoffs for every bidder. -/
 theorem CommonCDFVirtualValueCutoffReserve.isVirtualValueCutoff
@@ -2409,10 +2487,15 @@ structure EnvelopeVirtualSurplusAnalyticAssumptions
 comparison. -/
 structure EnvelopeVirtualSurplusEnvironmentAssumptions
     (A : BayesianSingleItemAuction I) : Prop where
+  /-- Type CDFs are absolutely continuous on their support intervals. -/
   cdf_absolutelyContinuous :
     ∀ i : I, AbsolutelyContinuousOnInterval (A.typeData.cdf i).cdf 0 (A.typeData.omega i)
+  /-- Type densities are positive on support. -/
   positive_density_on_support :
     A.HasPositiveDensityOnSupport
+  /-- Virtual values are integrable under the one-dimensional type measures. -/
+  virtualValue_integrable :
+    ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i)
 
 theorem EnvelopeVirtualSurplusEnvironmentAssumptions.typeDensity_nonnegative_ae
     {A : BayesianSingleItemAuction I}
@@ -2428,6 +2511,18 @@ theorem EnvelopeVirtualSurplusEnvironmentAssumptions.typeMeasure_isProbabilityMe
     IsProbabilityMeasure (A.typeMeasure i) :=
   A.typeMeasure_isProbabilityMeasure_of_cdf_absolutelyContinuous_of_positiveDensity
     h.positive_density_on_support i (h.cdf_absolutelyContinuous i)
+
+theorem EnvelopeVirtualSurplusEnvironmentAssumptions.virtualValue_integrable_on_typeMeasure
+    {A : BayesianSingleItemAuction I}
+    (h : A.EnvelopeVirtualSurplusEnvironmentAssumptions) (i : I) :
+    Integrable (A.virtualValue i) (A.typeMeasure i) :=
+  h.virtualValue_integrable i
+
+theorem EnvelopeVirtualSurplusEnvironmentAssumptions.virtualValue_integrable_all
+    {A : BayesianSingleItemAuction I}
+    (h : A.EnvelopeVirtualSurplusEnvironmentAssumptions) :
+    ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i) :=
+  h.virtualValue_integrable
 
 theorem envelopeVirtualSurplusAnalyticAssumptions_of_environment
     {A B : BayesianSingleItemAuction I}
@@ -3052,6 +3147,342 @@ theorem interimFubiniAnalyticAssumptions_of_independentTypePriors
   (A.typeMeasureInterimFubiniAnalyticAssumptions_of_independentTypePriors
     hdens_ae hind henv hpay_prod_int hvs_prod_int).toInterimFubini
 
+/-- Product-side profile-split integrability for one candidate auction. -/
+structure ProfileSplitIntegrabilityAssumptions
+    (A B : BayesianSingleItemAuction I) : Prop where
+  /-- Candidate payments are integrable after splitting each profile into one
+  bidder's type and the opponents' profile. -/
+  payment_integrable :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.paymentRule (reportProfile i p.1 p.2) i)
+        ((A.typeMeasure i).prod (B.opponentPrior i))
+  /-- Candidate allocation-weighted virtual surplus is integrable after the same
+  one-coordinate/opponent-profile split. -/
+  virtual_surplus_integrable :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+        ((A.typeMeasure i).prod (B.opponentPrior i))
+
+/-- Product-side profile-split measurability for one candidate auction. -/
+structure ProfileSplitMeasurabilityAssumptions
+    (A B : BayesianSingleItemAuction I) : Prop where
+  /-- Candidate payments are a.e. strongly measurable after profile splitting. -/
+  payment_aestronglyMeasurable :
+    ∀ i : I,
+      AEStronglyMeasurable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.paymentRule (reportProfile i p.1 p.2) i)
+        ((A.typeMeasure i).prod (B.opponentPrior i))
+  /-- Candidate allocation-weighted virtual surplus is a.e. strongly measurable
+  after profile splitting. -/
+  virtual_surplus_aestronglyMeasurable :
+    ∀ i : I,
+      AEStronglyMeasurable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+        ((A.typeMeasure i).prod (B.opponentPrior i))
+
+/-- Measurable profile-split integrands give the a.e.-strong measurability package. -/
+theorem ProfileSplitMeasurabilityAssumptions.of_measurable
+    {A B : BayesianSingleItemAuction I}
+    (hpay_meas :
+      ∀ i : I,
+        Measurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.paymentRule (reportProfile i p.1 p.2) i))
+    (hvs_meas :
+      ∀ i : I,
+        Measurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)) :
+    A.ProfileSplitMeasurabilityAssumptions B where
+  payment_aestronglyMeasurable := fun i => (hpay_meas i).aestronglyMeasurable
+  virtual_surplus_aestronglyMeasurable := fun i => (hvs_meas i).aestronglyMeasurable
+
+/-- A.e. strong measurability and bounds imply profile-split payment integrability. -/
+theorem profileSplit_payment_integrable_of_aestronglyMeasurable_of_bound
+    {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (hpay_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.paymentRule (reportProfile i p.1 p.2) i)
+          ((A.typeMeasure i).prod (B.opponentPrior i)))
+    (hpay_bound :
+      ∀ i : I,
+        ∃ C : ℝ,
+          ∀ᵐ p ∂((A.typeMeasure i).prod (B.opponentPrior i)),
+            ‖B.paymentRule (reportProfile i p.1 p.2) i‖ ≤ C) :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.paymentRule (reportProfile i p.1 p.2) i)
+        ((A.typeMeasure i).prod (B.opponentPrior i)) := by
+  intro i
+  rcases hpay_bound i with ⟨C, hC⟩
+  exact Integrable.of_bound (hpay_meas i) C hC
+
+/-- A.e. strong measurability and bounds imply profile-split virtual-surplus integrability. -/
+theorem profileSplit_virtual_surplus_integrable_of_aestronglyMeasurable_of_bound
+    {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (hvs_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+          ((A.typeMeasure i).prod (B.opponentPrior i)))
+    (hvs_bound :
+      ∀ i : I,
+        ∃ C : ℝ,
+          ∀ᵐ p ∂((A.typeMeasure i).prod (B.opponentPrior i)),
+            ‖B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1‖ ≤ C) :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+        ((A.typeMeasure i).prod (B.opponentPrior i)) := by
+  intro i
+  rcases hvs_bound i with ⟨C, hC⟩
+  exact Integrable.of_bound (hvs_meas i) C hC
+
+/-- A.e. strong measurability and bounds imply profile-split integrability. -/
+theorem profileSplitIntegrabilityAssumptions_of_aestronglyMeasurable_of_bound
+    {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (hpay_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.paymentRule (reportProfile i p.1 p.2) i)
+          ((A.typeMeasure i).prod (B.opponentPrior i)))
+    (hvs_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+          ((A.typeMeasure i).prod (B.opponentPrior i)))
+    (hpay_bound :
+      ∀ i : I,
+        ∃ C : ℝ,
+          ∀ᵐ p ∂((A.typeMeasure i).prod (B.opponentPrior i)),
+            ‖B.paymentRule (reportProfile i p.1 p.2) i‖ ≤ C)
+    (hvs_bound :
+      ∀ i : I,
+        ∃ C : ℝ,
+          ∀ᵐ p ∂((A.typeMeasure i).prod (B.opponentPrior i)),
+            ‖B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1‖ ≤ C) :
+    A.ProfileSplitIntegrabilityAssumptions B where
+  payment_integrable :=
+    profileSplit_payment_integrable_of_aestronglyMeasurable_of_bound
+      hpay_meas hpay_bound
+  virtual_surplus_integrable :=
+    profileSplit_virtual_surplus_integrable_of_aestronglyMeasurable_of_bound
+      hvs_meas hvs_bound
+
+/-- Profile-split payment measurability and bounds imply payment integrability. -/
+theorem ProfileSplitMeasurabilityAssumptions.payment_integrable_of_bound
+    {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.ProfileSplitMeasurabilityAssumptions B)
+    (hpay_bound :
+      ∀ i : I,
+        ∃ C : ℝ,
+          ∀ᵐ p ∂((A.typeMeasure i).prod (B.opponentPrior i)),
+            ‖B.paymentRule (reportProfile i p.1 p.2) i‖ ≤ C) :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.paymentRule (reportProfile i p.1 p.2) i)
+        ((A.typeMeasure i).prod (B.opponentPrior i)) :=
+  profileSplit_payment_integrable_of_aestronglyMeasurable_of_bound
+    h.payment_aestronglyMeasurable hpay_bound
+
+/-- Profile-split virtual-surplus measurability and bounds imply integrability. -/
+theorem ProfileSplitMeasurabilityAssumptions.virtual_surplus_integrable_of_bound
+    {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.ProfileSplitMeasurabilityAssumptions B)
+    (hvs_bound :
+      ∀ i : I,
+        ∃ C : ℝ,
+          ∀ᵐ p ∂((A.typeMeasure i).prod (B.opponentPrior i)),
+            ‖B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1‖ ≤ C) :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+        ((A.typeMeasure i).prod (B.opponentPrior i)) :=
+  profileSplit_virtual_surplus_integrable_of_aestronglyMeasurable_of_bound
+    h.virtual_surplus_aestronglyMeasurable hvs_bound
+
+/-- Profile-split measurability and bounds imply profile-split integrability. -/
+theorem ProfileSplitMeasurabilityAssumptions.toProfileSplitIntegrabilityAssumptions_of_bound
+    {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.ProfileSplitMeasurabilityAssumptions B)
+    (hpay_bound :
+      ∀ i : I,
+        ∃ C : ℝ,
+          ∀ᵐ p ∂((A.typeMeasure i).prod (B.opponentPrior i)),
+            ‖B.paymentRule (reportProfile i p.1 p.2) i‖ ≤ C)
+    (hvs_bound :
+      ∀ i : I,
+        ∃ C : ℝ,
+          ∀ᵐ p ∂((A.typeMeasure i).prod (B.opponentPrior i)),
+            ‖B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1‖ ≤ C) :
+    A.ProfileSplitIntegrabilityAssumptions B :=
+  { payment_integrable := h.payment_integrable_of_bound hpay_bound
+    virtual_surplus_integrable := h.virtual_surplus_integrable_of_bound hvs_bound }
+
+/-- Feasibility and one-dimensional virtual-value integrability imply
+profile-split virtual-surplus integrability. -/
+theorem profileSplit_virtual_surplus_integrable_of_virtualValue_integrable
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (hfeas : B.IsFeasible)
+    (hvirt : ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i))
+    (hvs_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+          ((A.typeMeasure i).prod (B.opponentPrior i))) :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+        ((A.typeMeasure i).prod (B.opponentPrior i)) := by
+  intro i
+  let μ := (A.typeMeasure i).prod (B.opponentPrior i)
+  have hbase :
+      Integrable (fun p : ℝ × OpponentTypeProfile I i => A.virtualValue i p.1) μ := by
+    simpa [μ] using (hvirt i).comp_fst (B.opponentPrior i)
+  refine hbase.mono (hvs_meas i) ?_
+  filter_upwards with p
+  have halloc := hfeas.1 (reportProfile i p.1 p.2) i
+  rw [Real.norm_eq_abs, abs_mul, abs_of_nonneg halloc.1, ← Real.norm_eq_abs]
+  exact mul_le_of_le_one_left (norm_nonneg _) halloc.2
+
+/-- Profile-split measurability, feasibility, and one-dimensional virtual-value
+integrability imply profile-split virtual-surplus integrability. -/
+theorem ProfileSplitMeasurabilityAssumptions.virtual_surplus_integrable_of_virtualValue_integrable
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (h : A.ProfileSplitMeasurabilityAssumptions B)
+    (hfeas : B.IsFeasible)
+    (hvirt : ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i)) :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+        ((A.typeMeasure i).prod (B.opponentPrior i)) :=
+  profileSplit_virtual_surplus_integrable_of_virtualValue_integrable
+    hfeas hvirt h.virtual_surplus_aestronglyMeasurable
+
+/-- Profile-split measurability, payment bounds, feasibility, and one-dimensional
+virtual-value integrability imply profile-split integrability. -/
+theorem ProfileSplitMeasurabilityAssumptions.toProfileSplitIntegrabilityAssumptions_of_paymentBound_of_virtualValue_integrable
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.ProfileSplitMeasurabilityAssumptions B)
+    (hfeas : B.IsFeasible)
+    (hpay_bound :
+      ∀ i : I,
+        ∃ C : ℝ,
+          ∀ᵐ p ∂((A.typeMeasure i).prod (B.opponentPrior i)),
+            ‖B.paymentRule (reportProfile i p.1 p.2) i‖ ≤ C)
+    (hvirt : ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i)) :
+    A.ProfileSplitIntegrabilityAssumptions B where
+  payment_integrable := by
+    intro i
+    rcases hpay_bound i with ⟨C, hC⟩
+    exact Integrable.of_bound (h.payment_aestronglyMeasurable i) C hC
+  virtual_surplus_integrable :=
+    h.virtual_surplus_integrable_of_virtualValue_integrable hfeas hvirt
+
+/-- Profile-split payment integrability gives density-integrable interim payments. -/
+theorem ProfileSplitIntegrabilityAssumptions.payment_density_integrable
+    {A B : BayesianSingleItemAuction I}
+    (h : A.ProfileSplitIntegrabilityAssumptions B)
+    (hdens_ae :
+      ∀ i : I,
+        ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+          0 ≤ A.typeDensity i v) :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => B.interimExpectedPayment i v * A.typeDensity i v)
+        volume 0 (A.typeData.omega i) := by
+  intro i
+  exact A.intervalIntegrable_interimExpectedPayment_mul_typeDensity_of_profileSplit_integrable
+    i
+    (A.typeDensity_ennreal_ofReal_aemeasurable i)
+    (hdens_ae i)
+    (h.payment_integrable i)
+
+/-- Profile-split virtual-surplus integrability gives the interim density form. -/
+theorem ProfileSplitIntegrabilityAssumptions.virtual_surplus_density_integrable
+    {A B : BayesianSingleItemAuction I}
+    (h : A.ProfileSplitIntegrabilityAssumptions B)
+    (hdens_ae :
+      ∀ i : I,
+        ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+          0 ≤ A.typeDensity i v) :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v)
+        volume 0 (A.typeData.omega i) := by
+  intro i
+  exact
+    A.intervalIntegrable_interimAllocProb_mul_virtualValue_mul_typeDensity_of_profileSplit_integrable
+      i
+      (A.typeDensity_ennreal_ofReal_aemeasurable i)
+      (hdens_ae i)
+      (h.virtual_surplus_integrable i)
+
+/-- Profile-split integrability plus independent priors gives type-measure Fubini. -/
+theorem ProfileSplitIntegrabilityAssumptions.toTypeMeasureInterimFubini
+    [Fintype I] [DecidableEq I] {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.ProfileSplitIntegrabilityAssumptions B)
+    (hdens_ae :
+      ∀ i : I,
+        ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+          0 ≤ A.typeDensity i v)
+    (hind : A.HasIndependentTypePriors)
+    (henv : A.HasSameSellingEnvironment B) :
+    A.TypeMeasureInterimFubiniAnalyticAssumptions B :=
+  A.typeMeasureInterimFubiniAnalyticAssumptions_of_independentTypePriors
+    hdens_ae hind henv h.payment_integrable h.virtual_surplus_integrable
+
+/-- Profile-split integrability plus independent priors gives interim Fubini. -/
+theorem ProfileSplitIntegrabilityAssumptions.toInterimFubini
+    [Fintype I] [DecidableEq I] {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.ProfileSplitIntegrabilityAssumptions B)
+    (hdens_ae :
+      ∀ i : I,
+        ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
+          0 ≤ A.typeDensity i v)
+    (hind : A.HasIndependentTypePriors)
+    (henv : A.HasSameSellingEnvironment B) :
+    A.InterimFubiniAnalyticAssumptions B :=
+  (h.toTypeMeasureInterimFubini hdens_ae hind henv).toInterimFubini
+
+/-- Profile-split virtual-surplus integrability gives ex-ante integrability. -/
+theorem ProfileSplitIntegrabilityAssumptions.integrableVirtualSurplus
+    [Fintype I] [DecidableEq I] {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.ProfileSplitIntegrabilityAssumptions B)
+    (hind : A.HasIndependentTypePriors)
+    (henv : A.HasSameSellingEnvironment B) :
+    A.IntegrableVirtualSurplus B.allocationRule :=
+  A.integrableVirtualSurplus_of_profileSplit_integrable_of_hasIndependentTypePriors
+    hind henv h.virtual_surplus_integrable
+
 /-- Feasible candidates with revenue equal to virtual surplus. -/
 def IsRevenueComparable [Fintype I]
     (A B : BayesianSingleItemAuction I) : Prop :=
@@ -3168,6 +3599,20 @@ theorem IsFeasibleICIRIntegrable.integrableVirtualSurplus
     A.IntegrableVirtualSurplus B.allocationRule :=
   hB.2.2.2.2
 
+/-- Profile-split integrability plus the economic IC/IR conditions forms a
+feasible IC/IR integrable candidate. -/
+theorem ProfileSplitIntegrabilityAssumptions.toIsFeasibleICIRIntegrable
+    [Fintype I] [DecidableEq I] {A B : BayesianSingleItemAuction I}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (h : A.ProfileSplitIntegrabilityAssumptions B)
+    (hind : A.HasIndependentTypePriors)
+    (henv : A.HasSameSellingEnvironment B)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.IsFeasibleICIRIntegrable B :=
+  ⟨henv, hfeas, hIC, hIR, h.integrableVirtualSurplus hind henv⟩
+
 /-! ## Analytic package for MSZ 12.59 -/
 
 /-- Analytic package for the MSZ 12.59 IC/IR revenue comparison.
@@ -3185,32 +3630,91 @@ structure RegularMyersonICIRAnalyticAssumptions
   with interim virtual surplus. -/
   envelope_environment :
     A.EnvelopeVirtualSurplusEnvironmentAssumptions
-  /-- Candidate payments are integrable after splitting each profile into one
-  bidder's type and the opponents' profile. -/
-  candidate_payment_profileSplit_integrable :
+  /-- Candidate payment and virtual-surplus integrability after profile splitting. -/
+  candidate_profileSplit_integrability :
     ∀ B : BayesianSingleItemAuction I,
       B.IsFeasible →
         B.IsIncentiveCompatible →
           B.IsIndividuallyRationalOnSupport →
-            ∀ i : I,
-              Integrable
-                (fun p : ℝ × OpponentTypeProfile I i =>
-                  B.paymentRule (reportProfile i p.1 p.2) i)
-                ((A.typeMeasure i).prod (B.opponentPrior i))
-  /-- Candidate allocation-weighted virtual surplus is integrable after the same
-  one-coordinate/opponent-profile split. -/
-  candidate_virtual_surplus_profileSplit_integrable :
-    ∀ B : BayesianSingleItemAuction I,
-      B.IsFeasible →
-        B.IsIncentiveCompatible →
-          B.IsIndividuallyRationalOnSupport →
-            ∀ i : I,
-              Integrable
-                (fun p : ℝ × OpponentTypeProfile I i =>
-                  B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
-                ((A.typeMeasure i).prod (B.opponentPrior i))
+            A.ProfileSplitIntegrabilityAssumptions B
 
 /-! ### Projections from the analytic package -/
+
+/-- Projection: the auction environment has independent type priors. -/
+theorem RegularMyersonICIRAnalyticAssumptions.hasIndependentTypePriors
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions) :
+    A.HasIndependentTypePriors :=
+  h.independent_type_priors
+
+/-- Projection: the environment-level envelope/virtual-surplus assumptions. -/
+theorem RegularMyersonICIRAnalyticAssumptions.envelopeEnvironment
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions) :
+    A.EnvelopeVirtualSurplusEnvironmentAssumptions :=
+  h.envelope_environment
+
+/-- Projection: CDFs are absolutely continuous on support. -/
+theorem RegularMyersonICIRAnalyticAssumptions.cdf_absolutelyContinuous
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions) (i : I) :
+    AbsolutelyContinuousOnInterval (A.typeData.cdf i).cdf 0 (A.typeData.omega i) :=
+  h.envelopeEnvironment.cdf_absolutelyContinuous i
+
+/-- Projection: densities are positive on support. -/
+theorem RegularMyersonICIRAnalyticAssumptions.positiveDensityOnSupport
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions) :
+    A.HasPositiveDensityOnSupport :=
+  h.envelopeEnvironment.positive_density_on_support
+
+/-- Projection: candidate profile-split integrability package. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_profileSplitIntegrabilityAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.ProfileSplitIntegrabilityAssumptions B :=
+  h.candidate_profileSplit_integrability B hfeas hIC hIR
+
+/-- Projection: candidate payment profile-split integrability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_profileSplit_integrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.paymentRule (reportProfile i p.1 p.2) i)
+        ((A.typeMeasure i).prod (B.opponentPrior i)) :=
+  (h.candidate_profileSplitIntegrabilityAssumptions B hfeas hIC hIR).payment_integrable
+
+/-- Projection: candidate virtual-surplus profile-split integrability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_virtual_surplus_profileSplit_integrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+        ((A.typeMeasure i).prod (B.opponentPrior i)) :=
+  (h.candidate_profileSplitIntegrabilityAssumptions B hfeas hIC hIR).virtual_surplus_integrable
 
 /-- Projection: each one-dimensional type measure is a probability measure. -/
 theorem RegularMyersonICIRAnalyticAssumptions.typeMeasure_isProbabilityMeasure
@@ -3218,7 +3722,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.typeMeasure_isProbabilityMeasure
     {A : BayesianSingleItemAuction I}
     (h : A.RegularMyersonICIRAnalyticAssumptions) (i : I) :
     IsProbabilityMeasure (A.typeMeasure i) :=
-  h.envelope_environment.typeMeasure_isProbabilityMeasure i
+  h.envelopeEnvironment.typeMeasure_isProbabilityMeasure i
 
 /-- Projection: each type density is a.e. nonnegative on its support interval. -/
 theorem RegularMyersonICIRAnalyticAssumptions.typeDensity_nonnegative_ae
@@ -3227,7 +3731,23 @@ theorem RegularMyersonICIRAnalyticAssumptions.typeDensity_nonnegative_ae
     (h : A.RegularMyersonICIRAnalyticAssumptions) (i : I) :
     ∀ᵐ v ∂(volume.restrict (Set.Ioc 0 (A.typeData.omega i))),
       0 ≤ A.typeDensity i v :=
-  h.envelope_environment.typeDensity_nonnegative_ae i
+  h.envelopeEnvironment.typeDensity_nonnegative_ae i
+
+/-- Projection: each virtual-value function is integrable under its type measure. -/
+theorem RegularMyersonICIRAnalyticAssumptions.virtualValue_integrable_on_typeMeasure
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions) (i : I) :
+    Integrable (A.virtualValue i) (A.typeMeasure i) :=
+  h.envelopeEnvironment.virtualValue_integrable_on_typeMeasure i
+
+/-- Projection: all virtual-value functions are integrable under type measures. -/
+theorem RegularMyersonICIRAnalyticAssumptions.virtualValue_integrable_all
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions) :
+    ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i) :=
+  h.envelopeEnvironment.virtualValue_integrable_all
 
 /-- Projection: candidate payment integrability as a one-dimensional density integral. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_density_integrable
@@ -3241,13 +3761,9 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_density_integrab
     ∀ i : I,
       IntervalIntegrable
         (fun v => B.interimExpectedPayment i v * A.typeDensity i v)
-        volume 0 (A.typeData.omega i) := by
-  intro i
-  exact A.intervalIntegrable_interimExpectedPayment_mul_typeDensity_of_profileSplit_integrable
-    i
-    (A.typeDensity_ennreal_ofReal_aemeasurable i)
-    (h.typeDensity_nonnegative_ae i)
-    (h.candidate_payment_profileSplit_integrable B hfeas hIC hIR i)
+        volume 0 (A.typeData.omega i) :=
+  (h.candidate_profileSplitIntegrabilityAssumptions B hfeas hIC hIR).payment_density_integrable
+    h.typeDensity_nonnegative_ae
 
 /-- Projection: candidate virtual-surplus integrability as a density integral. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_interim_virtual_surplus_density_integrable
@@ -3261,14 +3777,9 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_interim_virtual_surplus_
     ∀ i : I,
       IntervalIntegrable
         (fun v => B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v)
-        volume 0 (A.typeData.omega i) := by
-  intro i
-  exact
-    A.intervalIntegrable_interimAllocProb_mul_virtualValue_mul_typeDensity_of_profileSplit_integrable
-      i
-      (A.typeDensity_ennreal_ofReal_aemeasurable i)
-      (h.typeDensity_nonnegative_ae i)
-      (h.candidate_virtual_surplus_profileSplit_integrable B hfeas hIC hIR i)
+        volume 0 (A.typeData.omega i) :=
+  (h.candidate_profileSplitIntegrabilityAssumptions B hfeas hIC hIR).virtual_surplus_density_integrable
+    h.typeDensity_nonnegative_ae
 
 /-- Projection: the envelope survival term is interval-integrable. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_allocation_survival_integrable
@@ -3286,7 +3797,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_allocation_survival_inte
   intro i
   exact (B.hasIntervalIntegrableInterimAllocation_of_isIncentiveCompatible
     hIC i 0 (A.typeData.omega i)).mul_continuousOn
-      (continuousOn_const.sub (h.envelope_environment.cdf_absolutelyContinuous i).continuousOn)
+      (continuousOn_const.sub (h.cdf_absolutelyContinuous i).continuousOn)
 
 /-- Projection: build the envelope/virtual-surplus analytic package for a candidate. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_envelope_analytic
@@ -3297,9 +3808,9 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_envelope_analytic
     (hfeas : B.IsFeasible)
     (hIC : B.IsIncentiveCompatible)
     (hIR : B.IsIndividuallyRationalOnSupport) :
-    A.EnvelopeVirtualSurplusAnalyticAssumptions B :=
+  A.EnvelopeVirtualSurplusAnalyticAssumptions B :=
   envelopeVirtualSurplusAnalyticAssumptions_of_environment
-    h.envelope_environment
+    h.envelopeEnvironment
     (fun i => B.hasIntervalIntegrableInterimAllocation_of_isIncentiveCompatible
       hIC i 0 (A.typeData.omega i))
     (h.candidate_allocation_survival_integrable B hfeas hIC hIR)
@@ -3318,12 +3829,8 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_typeMeasure_interim_fubi
     A.TypeMeasureInterimFubiniAnalyticAssumptions B := by
   haveI : ∀ i : I, IsProbabilityMeasure (A.typeMeasure i) :=
     h.typeMeasure_isProbabilityMeasure
-  exact A.typeMeasureInterimFubiniAnalyticAssumptions_of_independentTypePriors
-    h.typeDensity_nonnegative_ae
-    h.independent_type_priors
-    henv
-    (h.candidate_payment_profileSplit_integrable B hfeas hIC hIR)
-    (h.candidate_virtual_surplus_profileSplit_integrable B hfeas hIC hIR)
+  exact (h.candidate_profileSplitIntegrabilityAssumptions B hfeas hIC hIR).toTypeMeasureInterimFubini
+    h.typeDensity_nonnegative_ae h.hasIndependentTypePriors henv
 
 /-- Projection: convert type-measure Fubini to the prior-level interim package. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_interim_fubini
@@ -3351,11 +3858,138 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_integrableVirtualSurplus
     A.IntegrableVirtualSurplus B.allocationRule := by
   haveI : ∀ i : I, IsProbabilityMeasure (A.typeMeasure i) :=
     h.typeMeasure_isProbabilityMeasure
-  exact
-    A.integrableVirtualSurplus_of_profileSplit_integrable_of_hasIndependentTypePriors
-      h.independent_type_priors
-      henv
-      (h.candidate_virtual_surplus_profileSplit_integrable B hfeas hIC hIR)
+  exact (h.candidate_profileSplitIntegrabilityAssumptions B hfeas hIC hIR).integrableVirtualSurplus
+    h.hasIndependentTypePriors henv
+
+/-- Upgrade a same-environment feasible IC/IR candidate to the packaged
+integrable candidate class used in MSZ 12.59. -/
+theorem RegularMyersonICIRAnalyticAssumptions.toIsFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (B : BayesianSingleItemAuction I)
+    (henv : A.HasSameSellingEnvironment B)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.IsFeasibleICIRIntegrable B :=
+  ⟨henv, hfeas, hIC, hIR,
+    h.candidate_integrableVirtualSurplus B henv hfeas hIC hIR⟩
+
+/-- Projection: packaged feasible IC/IR candidates have profile-split integrability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_profileSplitIntegrabilityAssumptions_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    A.ProfileSplitIntegrabilityAssumptions B :=
+  h.candidate_profileSplitIntegrabilityAssumptions B
+    hB.isFeasible hB.isIncentiveCompatible hB.isIndividuallyRationalOnSupport
+
+/-- Projection: packaged feasible IC/IR candidates have payment profile-split
+integrability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_profileSplit_integrable_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.paymentRule (reportProfile i p.1 p.2) i)
+        ((A.typeMeasure i).prod (B.opponentPrior i)) :=
+  (h.candidate_profileSplitIntegrabilityAssumptions_of_isFeasibleICIRIntegrable hB)
+    |>.payment_integrable
+
+/-- Projection: packaged feasible IC/IR candidates have virtual-surplus
+profile-split integrability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_virtual_surplus_profileSplit_integrable_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          B.allocationRule (reportProfile i p.1 p.2) i * A.virtualValue i p.1)
+        ((A.typeMeasure i).prod (B.opponentPrior i)) :=
+  (h.candidate_profileSplitIntegrabilityAssumptions_of_isFeasibleICIRIntegrable hB)
+    |>.virtual_surplus_integrable
+
+/-- Projection: packaged feasible IC/IR candidates have payment density
+integrability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_density_integrable_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => B.interimExpectedPayment i v * A.typeDensity i v)
+        volume 0 (A.typeData.omega i) :=
+  h.candidate_payment_density_integrable B
+    hB.isFeasible hB.isIncentiveCompatible hB.isIndividuallyRationalOnSupport
+
+/-- Projection: packaged feasible IC/IR candidates have interim virtual-surplus
+density integrability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_interim_virtual_surplus_density_integrable_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => B.interimAllocProb i v * A.virtualValue i v * A.typeDensity i v)
+        volume 0 (A.typeData.omega i) :=
+  h.candidate_interim_virtual_surplus_density_integrable B
+    hB.isFeasible hB.isIncentiveCompatible hB.isIndividuallyRationalOnSupport
+
+/-- Projection: packaged feasible IC/IR candidates have envelope survival-term
+integrability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_allocation_survival_integrable_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    ∀ i : I,
+      IntervalIntegrable
+        (fun v => B.interimAllocProb i v * (1 - (A.typeData.cdf i).cdf v))
+        volume 0 (A.typeData.omega i) :=
+  h.candidate_allocation_survival_integrable B
+    hB.isFeasible hB.isIncentiveCompatible hB.isIndividuallyRationalOnSupport
+
+/-- Projection: packaged feasible IC/IR candidates have envelope analytics. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_envelope_analytic_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    A.EnvelopeVirtualSurplusAnalyticAssumptions B :=
+  envelopeVirtualSurplusAnalyticAssumptions_of_environment
+    h.envelopeEnvironment
+    (fun i => B.hasIntervalIntegrableInterimAllocation_of_isIncentiveCompatible
+      hB.isIncentiveCompatible i 0 (A.typeData.omega i))
+    (h.candidate_allocation_survival_integrable_of_isFeasibleICIRIntegrable hB)
+    (h.candidate_interim_virtual_surplus_density_integrable_of_isFeasibleICIRIntegrable hB)
+
+/-- Projection: packaged feasible IC/IR candidates satisfy type-measure Fubini. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_typeMeasure_interim_fubini_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    A.TypeMeasureInterimFubiniAnalyticAssumptions B :=
+  h.candidate_typeMeasure_interim_fubini B hB.hasSameSellingEnvironment
+    hB.isFeasible hB.isIncentiveCompatible hB.isIndividuallyRationalOnSupport
+
+/-- Projection: packaged feasible IC/IR candidates satisfy interim Fubini. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_interim_fubini_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    A.InterimFubiniAnalyticAssumptions B :=
+  (h.candidate_typeMeasure_interim_fubini_of_isFeasibleICIRIntegrable hB).toInterimFubini
 
 /-- Expected seller-revenue optimality among candidates. -/
 def IsExpectedSellerRevenueOptimalInEnvironmentAmong [Fintype I]
@@ -3366,6 +4000,40 @@ def IsExpectedSellerRevenueOptimalInEnvironmentAmong [Fintype I]
       A.expectedSellerRevenueInEnvironment C ≤
         A.expectedSellerRevenueInEnvironment B
 
+/-- A candidate with the same expected seller revenue as an optimal candidate is
+also expected-revenue optimal. -/
+theorem IsExpectedSellerRevenueOptimalInEnvironmentAmong.of_revenue_eq
+    [Fintype I] {A B D : BayesianSingleItemAuction I}
+    {Candidate : BayesianSingleItemAuction I → Prop}
+    (hopt : A.IsExpectedSellerRevenueOptimalInEnvironmentAmong B Candidate)
+    (hD : Candidate D)
+    (heq :
+      A.expectedSellerRevenueInEnvironment B =
+        A.expectedSellerRevenueInEnvironment D) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong D Candidate := by
+  constructor
+  · exact hD
+  · intro C hC
+    exact (hopt.2 C hC).trans_eq heq
+
+/-- Extract that the chosen auction belongs to the candidate class. -/
+theorem IsExpectedSellerRevenueOptimalInEnvironmentAmong.candidate
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    {Candidate : BayesianSingleItemAuction I → Prop}
+    (hopt : A.IsExpectedSellerRevenueOptimalInEnvironmentAmong B Candidate) :
+    Candidate B :=
+  hopt.1
+
+/-- Extract the expected-revenue comparison against any candidate. -/
+theorem IsExpectedSellerRevenueOptimalInEnvironmentAmong.expectedSellerRevenue_le
+    [Fintype I] {A B C : BayesianSingleItemAuction I}
+    {Candidate : BayesianSingleItemAuction I → Prop}
+    (hopt : A.IsExpectedSellerRevenueOptimalInEnvironmentAmong B Candidate)
+    (hC : Candidate C) :
+    A.expectedSellerRevenueInEnvironment C ≤
+      A.expectedSellerRevenueInEnvironment B :=
+  hopt.2 C hC
+
 /-- Regular Myerson optimality among feasible IC/IR mechanisms. -/
 def IsRegularMyersonOptimalICIRAuction [Fintype I]
     (A B : BayesianSingleItemAuction I) : Prop :=
@@ -3375,6 +4043,19 @@ def IsRegularMyersonOptimalICIRAuction [Fintype I]
         B.IsIndividuallyRationalOnSupport ∧
       A.IsExpectedSellerRevenueOptimalInEnvironmentAmong B
         (fun C => A.IsFeasibleICIRIntegrable C)
+
+/-- Assemble regular-Myerson optimality from allocation optimality, feasible
+IC/IR integrability, and expected-revenue optimality. -/
+theorem IsFeasibleICIRIntegrable.toIsRegularMyersonOptimalICIRAuction
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (hB : A.IsFeasibleICIRIntegrable B)
+    (halloc : A.IsVirtualSurplusOptimalAllocationRule B.allocationRule)
+    (hrevenue :
+      A.IsExpectedSellerRevenueOptimalInEnvironmentAmong B
+        (fun C => A.IsFeasibleICIRIntegrable C)) :
+    A.IsRegularMyersonOptimalICIRAuction B :=
+  ⟨halloc, hB.isFeasible, hB.isIncentiveCompatible,
+    hB.isIndividuallyRationalOnSupport, hrevenue⟩
 
 /-- Extract the virtual-surplus optimal allocation component of regular Myerson optimality. -/
 theorem IsRegularMyersonOptimalICIRAuction.isVirtualSurplusOptimalAllocationRule
@@ -3412,6 +4093,37 @@ theorem IsRegularMyersonOptimalICIRAuction.isExpectedSellerRevenueOptimal
     A.IsExpectedSellerRevenueOptimalInEnvironmentAmong B
       (fun C => A.IsFeasibleICIRIntegrable C) :=
   hB.2.2.2.2
+
+/-- Extract the packaged feasible IC/IR integrable candidate component from
+regular Myerson optimality. -/
+theorem IsRegularMyersonOptimalICIRAuction.isFeasibleICIRIntegrable
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (hB : A.IsRegularMyersonOptimalICIRAuction B) :
+    A.IsFeasibleICIRIntegrable B :=
+  hB.isExpectedSellerRevenueOptimal.candidate
+
+/-- Extract same-environment compatibility from regular Myerson optimality. -/
+theorem IsRegularMyersonOptimalICIRAuction.hasSameSellingEnvironment
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (hB : A.IsRegularMyersonOptimalICIRAuction B) :
+    A.HasSameSellingEnvironment B :=
+  hB.isFeasibleICIRIntegrable.hasSameSellingEnvironment
+
+/-- Extract virtual-surplus integrability from regular Myerson optimality. -/
+theorem IsRegularMyersonOptimalICIRAuction.integrableVirtualSurplus
+    [Fintype I] {A B : BayesianSingleItemAuction I}
+    (hB : A.IsRegularMyersonOptimalICIRAuction B) :
+    A.IntegrableVirtualSurplus B.allocationRule :=
+  hB.isFeasibleICIRIntegrable.integrableVirtualSurplus
+
+/-- Extract the expected-revenue comparison against any feasible IC/IR candidate. -/
+theorem IsRegularMyersonOptimalICIRAuction.expectedSellerRevenue_le
+    [Fintype I] {A B C : BayesianSingleItemAuction I}
+    (hB : A.IsRegularMyersonOptimalICIRAuction B)
+    (hC : A.IsFeasibleICIRIntegrable C) :
+    A.expectedSellerRevenueInEnvironment C ≤
+      A.expectedSellerRevenueInEnvironment B :=
+  hB.isExpectedSellerRevenueOptimal.expectedSellerRevenue_le hC
 
 /-- Virtual-surplus comparison gives revenue comparison under identity. -/
 theorem expectedSellerRevenueInEnvironment_le_of_expectedVirtualSurplus_le
@@ -3659,6 +4371,20 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_envelope_upper
       (h.candidate_envelope_analytic B hfeas hIC hIR).envelope_density_integrable i)
     hIC hIR
 
+/-- Projection: packaged feasible IC/IR candidates satisfy the payment envelope upper bound. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_payment_envelope_upper_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    A.HasInterimPaymentEnvelopeUpperBound B :=
+  A.hasInterimPaymentEnvelopeUpperBound_of_isIncentiveCompatible_of_isIndividuallyRationalOnSupport
+    B h.typeDensity_nonnegative_ae
+    (h.candidate_payment_density_integrable_of_isFeasibleICIRIntegrable hB)
+    (fun i =>
+      (h.candidate_envelope_analytic_of_isFeasibleICIRIntegrable hB).envelope_density_integrable i)
+    hB.isIncentiveCompatible hB.isIndividuallyRationalOnSupport
+
 /-- Projection: ex-ante revenue equals interim payment for same-environment candidates. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_revenue_interim_identity
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
@@ -3672,6 +4398,16 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_revenue_interim_identity
   (h.candidate_interim_fubini B henv hfeas hIC hIR)
     |>.hasExpectedRevenueInterimPaymentIdentity
 
+/-- Projection: packaged feasible IC/IR candidates identify revenue with interim payment. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_revenue_interim_identity_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    A.HasExpectedRevenueInterimPaymentIdentity B :=
+  (h.candidate_interim_fubini_of_isFeasibleICIRIntegrable hB)
+    |>.hasExpectedRevenueInterimPaymentIdentity
+
 /-- Projection: ex-ante virtual surplus equals the interim virtual-surplus expression. -/
 theorem RegularMyersonICIRAnalyticAssumptions.candidate_virtual_surplus_interim_identity
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
@@ -3683,6 +4419,17 @@ theorem RegularMyersonICIRAnalyticAssumptions.candidate_virtual_surplus_interim_
     (hIR : B.IsIndividuallyRationalOnSupport) :
     A.HasExpectedVirtualSurplusInterimIdentity B :=
   (h.candidate_interim_fubini B henv hfeas hIC hIR)
+    |>.hasExpectedVirtualSurplusInterimIdentity
+
+/-- Projection: packaged feasible IC/IR candidates identify virtual surplus with
+the interim expression. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_virtual_surplus_interim_identity_of_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    A.HasExpectedVirtualSurplusInterimIdentity B :=
+  (h.candidate_interim_fubini_of_isFeasibleICIRIntegrable hB)
     |>.hasExpectedVirtualSurplusInterimIdentity
 
 /-- Revenue-comparable candidates are revenue-upper-bounded candidates. -/
@@ -3704,24 +4451,62 @@ theorem isRevenueUpperBounded_of_ic_ir_upper
     (h : A.RegularMyersonICIRAnalyticAssumptions)
     (hB : A.IsFeasibleICIRIntegrable B) :
     A.IsRevenueUpperBounded B := by
-  let hfubini :=
-    h.candidate_interim_fubini B
-      hB.hasSameSellingEnvironment
-      hB.isFeasible
-      hB.isIncentiveCompatible
-      hB.isIndividuallyRationalOnSupport
   exact ⟨hB.hasSameSellingEnvironment, hB.isFeasible, hB.integrableVirtualSurplus,
     A.hasExpectedRevenueVirtualSurplusUpperBound_of_interim_identities B
-      hfubini.hasExpectedRevenueInterimPaymentIdentity
-      hfubini.hasExpectedVirtualSurplusInterimIdentity
+      (h.candidate_revenue_interim_identity_of_isFeasibleICIRIntegrable hB)
+      (h.candidate_virtual_surplus_interim_identity_of_isFeasibleICIRIntegrable hB)
       (A.hasInterimPaymentVirtualSurplusUpperBound_of_envelope_upper B
-        (RegularMyersonICIRAnalyticAssumptions.candidate_payment_envelope_upper
-          h hB.isFeasible hB.isIncentiveCompatible hB.isIndividuallyRationalOnSupport)
+        (h.candidate_payment_envelope_upper_of_isFeasibleICIRIntegrable hB)
       (A.hasEnvelopeVirtualSurplusUpperBound_of_analyticAssumptions B
-          (h.candidate_envelope_analytic B
-            hB.isFeasible
-            hB.isIncentiveCompatible
-            hB.isIndividuallyRationalOnSupport)))⟩
+          (h.candidate_envelope_analytic_of_isFeasibleICIRIntegrable hB)))⟩
+
+/-- Projection: under the regular Myerson analytic assumptions, every packaged
+feasible IC/IR candidate is revenue-upper-bounded by virtual surplus. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_isRevenueUpperBounded
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    A.IsRevenueUpperBounded B :=
+  A.isRevenueUpperBounded_of_ic_ir_upper B h hB
+
+/-- Projection: same-environment feasible IC/IR candidates are
+revenue-upper-bounded once the analytic package supplies integrability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_isRevenueUpperBounded_of_sameEnvironment_of_isFeasibleICIR
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (henv : A.HasSameSellingEnvironment B)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.IsRevenueUpperBounded B :=
+  h.candidate_isRevenueUpperBounded
+    (h.toIsFeasibleICIRIntegrable B henv hfeas hIC hIR)
+
+/-- Projection: every packaged feasible IC/IR candidate has seller revenue
+bounded above by its expected virtual surplus. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_expectedSellerRevenue_le_expectedVirtualSurplus
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    A.expectedSellerRevenueInEnvironment B ≤ A.expectedVirtualSurplus B.allocationRule :=
+  (h.candidate_isRevenueUpperBounded hB).expectedRevenueVirtualSurplusUpperBound
+
+/-- Projection: the raw same-environment feasible IC/IR assumptions already
+imply the seller-revenue/virtual-surplus upper bound. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_expectedSellerRevenue_le_expectedVirtualSurplus_of_sameEnvironment_of_isFeasibleICIR
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (henv : A.HasSameSellingEnvironment B)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.expectedSellerRevenueInEnvironment B <= A.expectedVirtualSurplus B.allocationRule :=
+  (h.candidate_isRevenueUpperBounded_of_sameEnvironment_of_isFeasibleICIR
+    henv hfeas hIC hIR).expectedRevenueVirtualSurplusUpperBound
 
 /-- A DSIC zero-normalized candidate with the Myerson-payment revenue identity
 is revenue-comparable. -/
@@ -3864,6 +4649,26 @@ theorem virtualSurplusMaximizingAuction_isIndividuallyRationalOnSupport_of_isReg
   (A.virtualSurplusMaximizingAuction_isIncentiveCompatible_and_individuallyRationalOnSupport_of_isRegular
     hA).2
 
+/-- Method-style projection: the regular Myerson auction is a feasible IC/IR
+integrable candidate. -/
+theorem RegularMyersonICIRAnalyticAssumptions.virtualSurplusMaximizingAuction_isFeasibleICIRIntegrable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hA : A.IsRegular) :
+    A.IsFeasibleICIRIntegrable A.virtualSurplusMaximizingAuction := by
+  have hICIR :
+      (A.virtualSurplusMaximizingAuction).IsIncentiveCompatible ∧
+        (A.virtualSurplusMaximizingAuction).IsIndividuallyRationalOnSupport :=
+    A.virtualSurplusMaximizingAuction_isIncentiveCompatible_and_individuallyRationalOnSupport_of_isRegular
+      hA
+  exact h.toIsFeasibleICIRIntegrable
+    A.virtualSurplusMaximizingAuction
+    A.virtualSurplusMaximizingAuction_hasSameSellingEnvironment
+    A.virtualSurplusMaximizingAuction_isFeasible
+    hICIR.1
+    hICIR.2
+
 /-- The virtual-surplus-maximizing auction satisfies the revenue/virtual-surplus identity. -/
 theorem RegularMyersonICIRAnalyticAssumptions.opt_identity
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
@@ -3871,41 +4676,22 @@ theorem RegularMyersonICIRAnalyticAssumptions.opt_identity
     (h : A.RegularMyersonICIRAnalyticAssumptions)
     (hA : A.IsRegular) :
     A.HasExpectedRevenueVirtualSurplusIdentity A.virtualSurplusMaximizingAuction := by
-  have hICIR :
-      (A.virtualSurplusMaximizingAuction).IsIncentiveCompatible ∧
-        (A.virtualSurplusMaximizingAuction).IsIndividuallyRationalOnSupport :=
-    A.virtualSurplusMaximizingAuction_isIncentiveCompatible_and_individuallyRationalOnSupport_of_isRegular
-      hA
-  have henv_same :
-      A.HasSameSellingEnvironment A.virtualSurplusMaximizingAuction :=
-    A.virtualSurplusMaximizingAuction_hasSameSellingEnvironment
+  have hcand :
+      A.IsFeasibleICIRIntegrable A.virtualSurplusMaximizingAuction :=
+    h.virtualSurplusMaximizingAuction_isFeasibleICIRIntegrable hA
   have hrev :
       A.HasExpectedRevenueInterimPaymentIdentity A.virtualSurplusMaximizingAuction :=
-    h.candidate_revenue_interim_identity
-      (B := A.virtualSurplusMaximizingAuction)
-      henv_same
-      A.virtualSurplusMaximizingAuction_isFeasible
-      hICIR.1
-      hICIR.2
+    h.candidate_revenue_interim_identity_of_isFeasibleICIRIntegrable hcand
   have hvs :
       A.HasExpectedVirtualSurplusInterimIdentity A.virtualSurplusMaximizingAuction :=
-    h.candidate_virtual_surplus_interim_identity
-      (B := A.virtualSurplusMaximizingAuction)
-      henv_same
-      A.virtualSurplusMaximizingAuction_isFeasible
-      hICIR.1
-      hICIR.2
+    h.candidate_virtual_surplus_interim_identity_of_isFeasibleICIRIntegrable hcand
   have hpay_formula :
     A.virtualSurplusMaximizingAuction.HasInterimPaymentFormula :=
     A.virtualSurplusMaximizingAuction.hasInterimPaymentFormula_of_isIncentiveCompatible
-      hICIR.1
+      hcand.isIncentiveCompatible
   have hanalytic :
       A.EnvelopeVirtualSurplusAnalyticAssumptions A.virtualSurplusMaximizingAuction :=
-    h.candidate_envelope_analytic
-      (B := A.virtualSurplusMaximizingAuction)
-      A.virtualSurplusMaximizingAuction_isFeasible
-      hICIR.1
-      hICIR.2
+    h.candidate_envelope_analytic_of_isFeasibleICIRIntegrable hcand
   exact
     A.hasExpectedRevenueVirtualSurplusIdentity_of_interim_identities
       A.virtualSurplusMaximizingAuction
@@ -3917,28 +4703,57 @@ theorem RegularMyersonICIRAnalyticAssumptions.opt_identity
         hpay_formula
         hanalytic)
 
+/-- Method-style projection: the virtual-surplus-maximizing auction satisfies
+the expected-revenue/expected-virtual-surplus identity. -/
+theorem RegularMyersonICIRAnalyticAssumptions.virtualSurplusMaximizingAuction_expectedRevenueVirtualSurplusIdentity
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hA : A.IsRegular) :
+    A.HasExpectedRevenueVirtualSurplusIdentity A.virtualSurplusMaximizingAuction :=
+  h.opt_identity hA
+
+/-- Method-style projection: the virtual-surplus-maximizing auction has
+integrable virtual surplus under the regular Myerson analytic assumptions. -/
+theorem RegularMyersonICIRAnalyticAssumptions.virtualSurplusMaximizingAuction_integrableVirtualSurplus
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hA : A.IsRegular) :
+    A.IntegrableVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule :=
+  (h.virtualSurplusMaximizingAuction_isFeasibleICIRIntegrable hA).integrableVirtualSurplus
+
+/-- Method-style projection: the virtual-surplus-maximizing auction is
+revenue-comparable under the regular Myerson analytic assumptions. -/
+theorem RegularMyersonICIRAnalyticAssumptions.virtualSurplusMaximizingAuction_isRevenueComparable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hA : A.IsRegular) :
+    A.IsRevenueComparable A.virtualSurplusMaximizingAuction :=
+  A.virtualSurplusMaximizingAuction_isRevenueComparable
+    (h.virtualSurplusMaximizingAuction_integrableVirtualSurplus hA)
+    (h.virtualSurplusMaximizingAuction_expectedRevenueVirtualSurplusIdentity hA)
+
+/-- Method-style projection: the virtual-surplus-maximizing auction is
+revenue-upper-bounded under the regular Myerson analytic assumptions. -/
+theorem RegularMyersonICIRAnalyticAssumptions.virtualSurplusMaximizingAuction_isRevenueUpperBounded
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hA : A.IsRegular) :
+    A.IsRevenueUpperBounded A.virtualSurplusMaximizingAuction :=
+  A.virtualSurplusMaximizingAuction_isRevenueUpperBounded
+    (h.virtualSurplusMaximizingAuction_integrableVirtualSurplus hA)
+    (h.virtualSurplusMaximizingAuction_expectedRevenueVirtualSurplusIdentity hA)
+
 /-- The regular Myerson auction is a feasible IC/IR integrable candidate. -/
 theorem virtualSurplusMaximizingAuction_isFeasibleICIRIntegrable_of_isRegular
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) (hA : A.IsRegular)
     (h : A.RegularMyersonICIRAnalyticAssumptions) :
-    A.IsFeasibleICIRIntegrable A.virtualSurplusMaximizingAuction := by
-  have hICIR :
-      (A.virtualSurplusMaximizingAuction).IsIncentiveCompatible ∧
-        (A.virtualSurplusMaximizingAuction).IsIndividuallyRationalOnSupport :=
-    A.virtualSurplusMaximizingAuction_isIncentiveCompatible_and_individuallyRationalOnSupport_of_isRegular
-      hA
-  exact ⟨
-    A.virtualSurplusMaximizingAuction_hasSameSellingEnvironment,
-    A.virtualSurplusMaximizingAuction_isFeasible,
-    hICIR.1,
-    hICIR.2,
-    h.candidate_integrableVirtualSurplus
-      A.virtualSurplusMaximizingAuction
-      A.virtualSurplusMaximizingAuction_hasSameSellingEnvironment
-      A.virtualSurplusMaximizingAuction_isFeasible
-      hICIR.1
-      hICIR.2⟩
+    A.IsFeasibleICIRIntegrable A.virtualSurplusMaximizingAuction :=
+  h.virtualSurplusMaximizingAuction_isFeasibleICIRIntegrable hA
 
 /-- Revenue optimality among revenue-comparable candidates. -/
 theorem virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongRevenueComparable
@@ -3975,6 +4790,39 @@ theorem virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironm
       A.expectedSellerRevenueInEnvironment_le_virtualSurplusMaximizingAuction_of_revenueUpperBounded
         B hB hopt_int hopt_id
 
+/-- Projection: under regularity, any packaged feasible IC/IR candidate earns at
+most the virtual-surplus-maximizing auction. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_expectedSellerRevenue_le_virtualSurplusMaximizingAuction_of_isRegular
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hA : A.IsRegular)
+    (hB : A.IsFeasibleICIRIntegrable B) :
+    A.expectedSellerRevenueInEnvironment B ≤
+      A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction := by
+  exact
+    A.expectedSellerRevenueInEnvironment_le_virtualSurplusMaximizingAuction_of_revenueUpperBounded
+      B
+      (h.candidate_isRevenueUpperBounded hB)
+      (h.virtualSurplusMaximizingAuction_integrableVirtualSurplus hA)
+      (h.virtualSurplusMaximizingAuction_expectedRevenueVirtualSurplusIdentity hA)
+
+/-- Projection: a raw same-environment feasible IC/IR candidate earns at most
+the virtual-surplus-maximizing auction under regularity. -/
+theorem RegularMyersonICIRAnalyticAssumptions.candidate_expectedSellerRevenue_le_virtualSurplusMaximizingAuction_of_isRegular_of_sameEnvironment_of_isFeasibleICIR
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A B : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hA : A.IsRegular)
+    (henv : A.HasSameSellingEnvironment B)
+    (hfeas : B.IsFeasible)
+    (hIC : B.IsIncentiveCompatible)
+    (hIR : B.IsIndividuallyRationalOnSupport) :
+    A.expectedSellerRevenueInEnvironment B <=
+      A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction :=
+  h.candidate_expectedSellerRevenue_le_virtualSurplusMaximizingAuction_of_isRegular hA
+    (h.toIsFeasibleICIRIntegrable B henv hfeas hIC hIR)
+
 /-- MSZ 12.59: revenue optimality among IC/IR candidates. -/
 theorem virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_of_isRegular
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
@@ -3983,22 +4831,13 @@ theorem virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironm
     A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
       A.virtualSurplusMaximizingAuction
       (fun B => A.IsFeasibleICIRIntegrable B) := by
-  have hopt_id := h.opt_identity hA
   have hcand :
       A.IsFeasibleICIRIntegrable A.virtualSurplusMaximizingAuction :=
-    A.virtualSurplusMaximizingAuction_isFeasibleICIRIntegrable_of_isRegular hA h
-  have hopt_int :
-      A.IntegrableVirtualSurplus (A.virtualSurplusMaximizingAuction).allocationRule :=
-    hcand.integrableVirtualSurplus
+    h.virtualSurplusMaximizingAuction_isFeasibleICIRIntegrable hA
   constructor
   · exact hcand
   · intro B hB
-    exact
-      A.expectedSellerRevenueInEnvironment_le_virtualSurplusMaximizingAuction_of_revenueUpperBounded
-        B
-        (A.isRevenueUpperBounded_of_ic_ir_upper B h hB)
-        hopt_int
-        hopt_id
+    exact h.candidate_expectedSellerRevenue_le_virtualSurplusMaximizingAuction_of_isRegular hA hB
 
 /-- MSZ 12.59 compact theorem. -/
 theorem virtualSurplusMaximizingAuction_regularMyersonOptimalICIR_of_isRegular
@@ -4008,14 +4847,11 @@ theorem virtualSurplusMaximizingAuction_regularMyersonOptimalICIR_of_isRegular
     A.IsRegularMyersonOptimalICIRAuction A.virtualSurplusMaximizingAuction := by
   have hcand :
       A.IsFeasibleICIRIntegrable A.virtualSurplusMaximizingAuction :=
-    A.virtualSurplusMaximizingAuction_isFeasibleICIRIntegrable_of_isRegular hA h
-  exact ⟨
-    A.virtualSurplusMaximizingAuction_allocationRule_isVirtualSurplusOptimal,
-    hcand.isFeasible,
-    hcand.isIncentiveCompatible,
-    hcand.isIndividuallyRationalOnSupport,
-    A.virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_of_isRegular
-      hA h⟩
+    h.virtualSurplusMaximizingAuction_isFeasibleICIRIntegrable hA
+  exact hcand.toIsRegularMyersonOptimalICIRAuction
+    A.virtualSurplusMaximizingAuction_allocationRule_isVirtualSurplusOptimal
+    (A.virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_of_isRegular
+      hA h)
 
 end RevenueOptimalityInterface
 

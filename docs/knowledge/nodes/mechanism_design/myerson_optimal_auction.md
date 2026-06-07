@@ -52,9 +52,25 @@ lean:
     - BayesianSingleItemAuction.CommonCDFVirtualValueReserve.commonCDFVirtualValueCutoffReserve
     - BayesianSingleItemAuction.CommonCDFVirtualValueCutoffReserve
     - BayesianSingleItemAuction.CommonCDFVirtualValueCutoffReserve.of_continuousAt
+    - BayesianSingleItemAuction.ProfileSplitMeasurabilityAssumptions
+    - BayesianSingleItemAuction.ProfileSplitIntegrabilityAssumptions
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.toIsFeasibleICIRIntegrable
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.candidate_isRevenueUpperBounded
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.candidate_isRevenueUpperBounded_of_sameEnvironment_of_isFeasibleICIR
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.candidate_expectedSellerRevenue_le_expectedVirtualSurplus
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.candidate_expectedSellerRevenue_le_expectedVirtualSurplus_of_sameEnvironment_of_isFeasibleICIR
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.virtualSurplusMaximizingAuction_expectedRevenueVirtualSurplusIdentity
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.virtualSurplusMaximizingAuction_integrableVirtualSurplus
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.virtualSurplusMaximizingAuction_isRevenueComparable
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.virtualSurplusMaximizingAuction_isRevenueUpperBounded
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.candidate_expectedSellerRevenue_le_virtualSurplusMaximizingAuction_of_isRegular
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.candidate_expectedSellerRevenue_le_virtualSurplusMaximizingAuction_of_isRegular_of_sameEnvironment_of_isFeasibleICIR
     - BayesianSingleItemAuction.IsFeasibleICIRIntegrable
     - BayesianSingleItemAuction.IsRegularMyersonOptimalICIRAuction
+    - BayesianSingleItemAuction.IsRegularMyersonOptimalICIRAuction.hasSameSellingEnvironment
+    - BayesianSingleItemAuction.IsRegularMyersonOptimalICIRAuction.integrableVirtualSurplus
+    - BayesianSingleItemAuction.IsRegularMyersonOptimalICIRAuction.expectedSellerRevenue_le
     - BayesianSingleItemAuction.virtualSurplusMaximizingAuction_regularMyersonOptimalICIR_of_isRegular
 verification:
   statement: accepted
@@ -85,6 +101,12 @@ optimal-auction theorem.  Each bidder has a virtual value
 and regularity means that every \(\psi_i\) is monotone.  The allocation rule
 selects a bidder with maximum virtual value when that maximum is positive, and
 withholds the item when all virtual values are nonpositive.
+MSZ writes the same object as \(c_i\); in Lean this is `virtualValue`.
+
+This matches [MSZ Theorem 12.59]: when the virtual valuation functions are
+monotone, the mechanism defined by the virtual-surplus-maximizing allocation
+and its payment rule maximizes expected seller revenue among IC and IR direct
+selling mechanisms.  Lean makes the accompanying analytic assumptions explicit.
 
 ## Formalization
 
@@ -132,11 +154,22 @@ The proof follows the standard Myerson route:
 ## Analytic assumptions
 
 The Lean theorem is intentionally explicit about analytic side conditions.  The
-structure `RegularMyersonICIRAnalyticAssumptions` records the density
-nonnegativity, product-prior, integrability, and Fubini hypotheses used to move
-between ex-ante payments, interim payments, and virtual surplus.  This keeps the
-mechanism-design statement reusable without hiding measure-theoretic obligations
-inside the auction data.
+structure `RegularMyersonICIRAnalyticAssumptions` records the independent-prior
+environment, the CDF/density/envelope assumptions, and the profile-split
+integrability package for feasible IC/IR candidates.  Projection theorems then
+derive the Fubini packages, envelope upper bound, and revenue-upper-bound
+interface used in the MSZ 12.59 proof.  The final comparison is also exposed as
+`candidate_expectedSellerRevenue_le_virtualSurplusMaximizingAuction_of_isRegular`,
+with a raw-assumption wrapper
+`candidate_expectedSellerRevenue_le_virtualSurplusMaximizingAuction_of_isRegular_of_sameEnvironment_of_isFeasibleICIR`
+for candidates presented directly by same-environment, feasibility, IC, and IR
+hypotheses,
+so the compact theorem can be read as an assembly of reusable assumptions rather
+than a monolithic proof.  The final `IsRegularMyersonOptimalICIRAuction`
+predicate also exposes projections for same-environment compatibility,
+virtual-surplus integrability, and the expected-revenue comparison against any
+formal feasible IC/IR candidate.  This keeps the mechanism-design statement
+reusable without hiding measure-theoretic obligations inside the auction data.
 
 ## Reserve-price specialization
 

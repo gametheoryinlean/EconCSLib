@@ -18,6 +18,10 @@ Main objects:
 * `reserveSecondPriceAuction`: reserve second-price in a Bayesian environment.
 * `StrictReserveBidProfile`: pointwise no-tie/no-boundary profiles.
 * `TieAlignedReserveBidProfile`: pointwise winner-alignment profiles.
+* `ReserveSecondPriceAEUniqueArgmax`: interim-slice a.e. uniqueness of the
+  highest bid.
+* `ReserveSecondPriceInterimMeasurabilityAssumptions`: interim measurability
+  obligations for reserve second-price.
 
 Main result: common-regular-reserve MSZ 12.61 optimality.
 
@@ -95,9 +99,8 @@ theorem reserveTie_virtualSurplusMaximizingAllocationRule_eq_zero
   have hnonpos : ∀ i, A.virtualValue i (b i) ≤ 0 := by
     intro i
     rcases lt_or_eq_of_le (hbelow i) with hlt | heq
-    · exact A.virtualValue_nonpos_of_lt_isReserveThreshold
-        (hreserve.isReserveThreshold i) hlt
-    · rw [heq, hreserve.common_virtualValue i rho, hreserve.reserve_zero]
+    · exact hreserve.virtualValue_nonpos_of_lt_reserve hlt
+    · rw [heq, hreserve.virtualValue_eq_zero i]
   exact A.virtualSurplusMaximizingAllocationRule_eq_zero_of_forall_virtualValue_nonpos hnonpos
 
 /-- Reserve second-price auction with `A`'s prior, opponent priors, and type data. -/
@@ -226,6 +229,328 @@ theorem reserveSecondPriceAuction_isFeasible
   exact (A.reserveSecondPriceAuction rho).isFeasible_of_optionalWinnerAllocation
     (Auction.ReserveSecondPrice.allocation rho) rfl
 
+private lemma measurable_maxBid_comp
+    [Fintype I] [Nontrivial I] {X : Type*} [MeasurableSpace X]
+    (b : X → I → ℝ)
+    (hb : ∀ j, Measurable fun x => b x j) :
+    Measurable fun x => Auction.maxBid (b x) := by
+  change Measurable fun x => Finset.univ.sup' Finset.univ_nonempty (b x)
+  convert
+    (Finset.measurable_sup'
+      (s := Finset.univ)
+      (hs := Finset.univ_nonempty)
+      (f := fun j x => b x j)
+      (fun j _ => hb j)) using 1
+  ext x
+  simp only [Finset.sup'_apply]
+
+private lemma measurable_maxBidExcluding_comp
+    [Fintype I] [Nontrivial I] [DecidableEq I] {X : Type*} [MeasurableSpace X]
+    (b : X → I → ℝ)
+    (hb : ∀ j, Measurable fun x => b x j) (i : I) :
+    Measurable fun x => Auction.maxBidExcluding (b x) i := by
+  change Measurable fun x => (Finset.univ.erase i).sup'
+    Finset.univ_nontrivial.erase_nonempty (b x)
+  convert
+    (Finset.measurable_sup'
+      (s := Finset.univ.erase i)
+      (hs := Finset.univ_nontrivial.erase_nonempty)
+      (f := fun j x => b x j)
+      (fun j _ => hb j)) using 1
+  ext x
+  simp only [Finset.sup'_apply]
+
+private lemma measurable_reportProfile_profileSplit
+    [DecidableEq I] (i : I) :
+    Measurable fun p : ℝ × OpponentTypeProfile I i => reportProfile i p.1 p.2 := by
+  classical
+  rw [measurable_pi_iff]
+  intro j
+  by_cases hji : j = i
+  · simpa [reportProfile, hji] using
+      (measurable_fst : Measurable fun p : ℝ × OpponentTypeProfile I i => p.1)
+  · simpa [reportProfile, hji] using
+      ((measurable_pi_apply (⟨j, hji⟩ : {j // j ≠ i})).comp
+        (measurable_snd : Measurable fun p : ℝ × OpponentTypeProfile I i => p.2))
+
+/-- The highest bid is measurable after a profile split. -/
+theorem reserveSecondPrice_profileSplitMaxBid_measurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] (i : I) :
+    Measurable fun p : ℝ × OpponentTypeProfile I i =>
+      Auction.maxBid (reportProfile i p.1 p.2) := by
+  have hprofile : Measurable fun p : ℝ × OpponentTypeProfile I i =>
+      reportProfile i p.1 p.2 :=
+    measurable_reportProfile_profileSplit i
+  have hcoords :
+      ∀ j, Measurable fun p : ℝ × OpponentTypeProfile I i =>
+        reportProfile i p.1 p.2 j := by
+    intro j
+    exact (measurable_pi_apply j).comp hprofile
+  exact measurable_maxBid_comp
+    (fun p : ℝ × OpponentTypeProfile I i => reportProfile i p.1 p.2) hcoords
+
+/-- The highest bid is measurable for a fixed reported type. -/
+theorem reserveSecondPrice_interimMaxBid_measurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] (i : I) (z_i : ℝ) :
+    Measurable fun t : OpponentTypeProfile I i =>
+      Auction.maxBid (reportProfile i z_i t) := by
+  have hpair : Measurable fun t : OpponentTypeProfile I i => (z_i, t) :=
+    measurable_const.prodMk measurable_id
+  simpa using
+    (reserveSecondPrice_profileSplitMaxBid_measurable (I := I) i).comp hpair
+
+/-- The reserve second-price winning-payment threshold is measurable after a
+profile split. -/
+theorem reserveSecondPrice_profileSplitWinningPayment_measurable
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (rho : ℝ) (i : I) :
+    Measurable fun p : ℝ × OpponentTypeProfile I i =>
+      max rho (Auction.maxBidExcluding (reportProfile i p.1 p.2) i) := by
+  have hprofile : Measurable fun p : ℝ × OpponentTypeProfile I i =>
+      reportProfile i p.1 p.2 :=
+    measurable_reportProfile_profileSplit i
+  have hcoords :
+      ∀ j, Measurable fun p : ℝ × OpponentTypeProfile I i =>
+        reportProfile i p.1 p.2 j := by
+    intro j
+    exact (measurable_pi_apply j).comp hprofile
+  exact measurable_const.max
+    (measurable_maxBidExcluding_comp
+      (fun p : ℝ × OpponentTypeProfile I i => reportProfile i p.1 p.2) hcoords i)
+
+/-- The reserve second-price winning-payment threshold is measurable for a
+fixed reported type. -/
+theorem reserveSecondPrice_interimWinningPayment_measurable
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (rho : ℝ) (i : I) (z_i : ℝ) :
+    Measurable fun t : OpponentTypeProfile I i =>
+      max rho (Auction.maxBidExcluding (reportProfile i z_i t) i) := by
+  have hpair : Measurable fun t : OpponentTypeProfile I i => (z_i, t) :=
+    measurable_const.prodMk measurable_id
+  simpa using
+    (reserveSecondPrice_profileSplitWinningPayment_measurable (I := I) rho i).comp hpair
+
+/-- Interim event where bidder `i` strictly beats all opponents and meets the reserve. -/
+def reserveSecondPriceInterimWinningSet [DecidableEq I]
+    (rho : ℝ) (i : I) (z_i : ℝ) : Set (OpponentTypeProfile I i) :=
+  {t | rho ≤ reportProfile i z_i t i ∧
+    ∀ j, j ≠ i → reportProfile i z_i t j < reportProfile i z_i t i}
+
+/-- The strict interim winning event is measurable. -/
+theorem reserveSecondPriceInterimWinningSet_measurable
+    [Fintype I] [DecidableEq I] (rho : ℝ) (i : I) (z_i : ℝ) :
+    MeasurableSet (reserveSecondPriceInterimWinningSet (I := I) rho i z_i) := by
+  have hprofile : Measurable fun t : OpponentTypeProfile I i => reportProfile i z_i t := by
+    have hpair : Measurable fun t : OpponentTypeProfile I i => (z_i, t) :=
+      measurable_const.prodMk measurable_id
+    exact (measurable_reportProfile_profileSplit i).comp hpair
+  have hcoords :
+      ∀ j, Measurable fun t : OpponentTypeProfile I i => reportProfile i z_i t j := by
+    intro j
+    exact (measurable_pi_apply j).comp hprofile
+  have hreserve : MeasurableSet
+      {t : OpponentTypeProfile I i | rho ≤ reportProfile i z_i t i} :=
+    measurableSet_le measurable_const (hcoords i)
+  have hstrict : MeasurableSet
+      {t : OpponentTypeProfile I i |
+        ∀ j, j ≠ i → reportProfile i z_i t j < reportProfile i z_i t i} := by
+    classical
+    haveI : Countable I := inferInstance
+    have hsets :
+        ∀ j : I, MeasurableSet
+          {t : OpponentTypeProfile I i |
+            j ≠ i → reportProfile i z_i t j < reportProfile i z_i t i} := by
+      intro j
+      by_cases hji : j = i
+      · have hset :
+            {t : OpponentTypeProfile I i |
+              j ≠ i → reportProfile i z_i t j < reportProfile i z_i t i} = Set.univ := by
+          ext t
+          simp [hji]
+        rw [hset]
+        exact MeasurableSet.univ
+      · have hset :
+            {t : OpponentTypeProfile I i |
+              j ≠ i → reportProfile i z_i t j < reportProfile i z_i t i} =
+              {t : OpponentTypeProfile I i |
+                reportProfile i z_i t j < reportProfile i z_i t i} := by
+          ext t
+          simp [hji]
+        rw [hset]
+        exact measurableSet_lt (hcoords j) (hcoords i)
+    have hInter :
+        MeasurableSet
+          (⋂ j : I,
+            {t : OpponentTypeProfile I i |
+              j ≠ i → reportProfile i z_i t j < reportProfile i z_i t i}) :=
+      MeasurableSet.iInter hsets
+    have hset :
+        {t : OpponentTypeProfile I i |
+          ∀ j, j ≠ i → reportProfile i z_i t j < reportProfile i z_i t i} =
+          ⋂ j : I,
+            {t : OpponentTypeProfile I i |
+              j ≠ i → reportProfile i z_i t j < reportProfile i z_i t i} := by
+      ext t
+      simp
+    rwa [hset]
+  exact hreserve.inter hstrict
+
+/-- Highest bids are a.e. unique on every reserve second-price interim slice. -/
+def ReserveSecondPriceAEUniqueArgmax
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ) : Prop :=
+  ∀ i z_i,
+    ∀ᵐ t ∂(A.reserveSecondPriceAuction rho).opponentPrior i,
+      ∀ j, j ≠ Auction.argmaxBid (reportProfile i z_i t) →
+        reportProfile i z_i t j <
+          reportProfile i z_i t (Auction.argmaxBid (reportProfile i z_i t))
+
+/-- Projection: a.e. uniqueness on one reserve second-price interim slice. -/
+theorem ReserveSecondPriceAEUniqueArgmax.on_interimSlice
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.ReserveSecondPriceAEUniqueArgmax rho) (i : I) (z_i : ℝ) :
+    ∀ᵐ t ∂(A.reserveSecondPriceAuction rho).opponentPrior i,
+      ∀ j, j ≠ Auction.argmaxBid (reportProfile i z_i t) →
+        reportProfile i z_i t j <
+          reportProfile i z_i t (Auction.argmaxBid (reportProfile i z_i t)) :=
+  h i z_i
+
+/-- On profiles with a unique highest bid, reserve allocation to `i` is exactly
+the strict interim winning event. -/
+theorem reserveSecondPrice_allocation_eq_some_iff_mem_interimWinningSet_of_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {rho : ℝ} {i : I} {z_i : ℝ} {t : OpponentTypeProfile I i}
+    (huniq :
+      ∀ j, j ≠ Auction.argmaxBid (reportProfile i z_i t) →
+        reportProfile i z_i t j <
+          reportProfile i z_i t (Auction.argmaxBid (reportProfile i z_i t))) :
+    Auction.ReserveSecondPrice.allocation rho (reportProfile i z_i t) = some i ↔
+      t ∈ reserveSecondPriceInterimWinningSet (I := I) rho i z_i := by
+  let b : I → ℝ := reportProfile i z_i t
+  constructor
+  · intro halloc
+    have hwinner : Auction.SecondPrice.winner b = i :=
+      Auction.ReserveSecondPrice.winner_eq_of_allocation_eq_some halloc
+    have harg : Auction.argmaxBid b = i := by
+      simpa [Auction.SecondPrice.winner] using hwinner
+    have hreserve : rho ≤ b i := by
+      have hreserve_winner :
+          rho ≤ b (Auction.SecondPrice.winner b) :=
+        Auction.ReserveSecondPrice.reserve_le_bid_winner_of_allocation_eq_some halloc
+      simpa [hwinner] using hreserve_winner
+    have hstrict : ∀ j, j ≠ i → b j < b i := by
+      intro j hji
+      have hjarg : j ≠ Auction.argmaxBid b := by
+        rw [harg]
+        exact hji
+      simpa [b, harg] using huniq j hjarg
+    exact ⟨hreserve, hstrict⟩
+  · intro hwin
+    have hreserve : rho ≤ b i := hwin.1
+    have hstrict : ∀ j, j ≠ i → b j < b i := hwin.2
+    have hi_arg : i = Auction.argmaxBid b :=
+      Auction.eq_argmaxBid_of_strict_max b i hstrict
+    have hreserve_arg : rho ≤ b (Auction.argmaxBid b) := by
+      simpa [hi_arg] using hreserve
+    have halloc_arg :
+        Auction.ReserveSecondPrice.allocation rho b = some (Auction.argmaxBid b) :=
+      reserveSecondPrice_allocation_eq_some_argmaxBid_of_reserve_le_argmaxBid hreserve_arg
+    simpa [b, hi_arg] using halloc_arg
+
+/-- If the highest bid is a.e. unique, the reserve second-price allocation
+integrand is a.e. strongly measurable. -/
+theorem reserveSecondPriceAuction_interimAllocationIntegrand_aestronglyMeasurable_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ) (i : I) (z_i : ℝ)
+    (hae_unique :
+      ∀ᵐ t ∂(A.reserveSecondPriceAuction rho).opponentPrior i,
+        ∀ j, j ≠ Auction.argmaxBid (reportProfile i z_i t) →
+          reportProfile i z_i t j <
+            reportProfile i z_i t (Auction.argmaxBid (reportProfile i z_i t))) :
+    AEStronglyMeasurable
+      (fun t => (A.reserveSecondPriceAuction rho).interimAllocationIntegrand i z_i t)
+      ((A.reserveSecondPriceAuction rho).opponentPrior i) := by
+  classical
+  let winSet := reserveSecondPriceInterimWinningSet (I := I) rho i z_i
+  let g : OpponentTypeProfile I i → ℝ := fun t => if t ∈ winSet then 1 else 0
+  have hwin_meas : MeasurableSet winSet := by
+    simpa [winSet] using
+      reserveSecondPriceInterimWinningSet_measurable (I := I) rho i z_i
+  have hg_meas : Measurable g :=
+    Measurable.ite hwin_meas measurable_const measurable_const
+  refine hg_meas.aestronglyMeasurable.congr ?_
+  filter_upwards [hae_unique] with t huniq
+  let b : I → ℝ := reportProfile i z_i t
+  have hiff :=
+    reserveSecondPrice_allocation_eq_some_iff_mem_interimWinningSet_of_unique_argmax
+      (rho := rho) (i := i) (z_i := z_i) (t := t) huniq
+  by_cases hwin : t ∈ winSet
+  · have halloc : Auction.ReserveSecondPrice.allocation rho b = some i :=
+      hiff.2 (by simpa [winSet, b] using hwin)
+    simp [g, hwin, interimAllocationIntegrand, reserveSecondPriceAuction, b, halloc]
+  · have hnotalloc : Auction.ReserveSecondPrice.allocation rho b ≠ some i := by
+      intro halloc
+      exact hwin (by simpa [winSet, b] using hiff.1 halloc)
+    simp [g, hwin, interimAllocationIntegrand, reserveSecondPriceAuction, b, hnotalloc]
+
+/-- If the highest bid is a.e. unique, the reserve second-price payment
+integrand is a.e. strongly measurable. -/
+theorem reserveSecondPriceAuction_interimPaymentIntegrand_aestronglyMeasurable_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ) (i : I) (z_i : ℝ)
+    (hae_unique :
+      ∀ᵐ t ∂(A.reserveSecondPriceAuction rho).opponentPrior i,
+        ∀ j, j ≠ Auction.argmaxBid (reportProfile i z_i t) →
+          reportProfile i z_i t j <
+            reportProfile i z_i t (Auction.argmaxBid (reportProfile i z_i t))) :
+    AEStronglyMeasurable
+      (fun t => (A.reserveSecondPriceAuction rho).interimPaymentIntegrand i z_i t)
+      ((A.reserveSecondPriceAuction rho).opponentPrior i) := by
+  classical
+  let winSet := reserveSecondPriceInterimWinningSet (I := I) rho i z_i
+  let g : OpponentTypeProfile I i → ℝ := fun t =>
+    if t ∈ winSet then max rho (Auction.maxBidExcluding (reportProfile i z_i t) i) else 0
+  have hwin_meas : MeasurableSet winSet := by
+    simpa [winSet] using
+      reserveSecondPriceInterimWinningSet_measurable (I := I) rho i z_i
+  have hthreshold_meas :
+      Measurable fun t : OpponentTypeProfile I i =>
+        max rho (Auction.maxBidExcluding (reportProfile i z_i t) i) :=
+    reserveSecondPrice_interimWinningPayment_measurable rho i z_i
+  have hg_meas : Measurable g :=
+    Measurable.ite hwin_meas hthreshold_meas measurable_const
+  refine hg_meas.aestronglyMeasurable.congr ?_
+  filter_upwards [hae_unique] with t huniq
+  let b : I → ℝ := reportProfile i z_i t
+  have hiff :=
+    reserveSecondPrice_allocation_eq_some_iff_mem_interimWinningSet_of_unique_argmax
+      (rho := rho) (i := i) (z_i := z_i) (t := t) huniq
+  by_cases hwin : t ∈ winSet
+  · have halloc : Auction.ReserveSecondPrice.allocation rho b = some i :=
+      hiff.2 (by simpa [winSet, b] using hwin)
+    have hpayment :
+        (A.reserveSecondPriceAuction rho).interimPaymentIntegrand i z_i t =
+          max rho (Auction.maxBidExcluding b i) := by
+      rw [interimPaymentIntegrand]
+      change (A.reserveSecondPriceAuction rho).paymentRule b i =
+        max rho (Auction.maxBidExcluding b i)
+      rw [reserveSecondPriceAuction_paymentRule]
+      rw [Auction.ReserveSecondPrice.mechanism_payment_of_allocation_eq_some halloc]
+      exact Auction.ReserveSecondPrice.clearingPrice_eq_max_reserve_excluding_of_allocation_eq_some
+        halloc
+    simp [g, hwin, b, hpayment]
+  · have hnotalloc : Auction.ReserveSecondPrice.allocation rho b ≠ some i := by
+      intro halloc
+      exact hwin (by simpa [winSet, b] using hiff.1 halloc)
+    have hpayment :
+        (A.reserveSecondPriceAuction rho).interimPaymentIntegrand i z_i t = 0 := by
+      rw [interimPaymentIntegrand]
+      change (A.reserveSecondPriceAuction rho).paymentRule b i = 0
+      rw [reserveSecondPriceAuction_paymentRule]
+      exact Auction.ReserveSecondPrice.mechanism_payment_of_allocation_ne_some hnotalloc
+    simp [g, hwin, hpayment]
+
 /-- Reserve second-price allocation integrands are pointwise bounded by one. -/
 theorem reserveSecondPriceAuction_interimAllocationIntegrand_norm_le_one
     [Fintype I] [Nontrivial I] [DecidableEq I]
@@ -247,6 +572,266 @@ theorem reserveSecondPriceAuction_interimPaymentIntegrand_norm_le_max_reserve_re
   simpa [interimPaymentIntegrand, reserveSecondPriceAuction, b, Real.norm_eq_abs] using
     Auction.ReserveSecondPrice.mechanism_payment_abs_le_max_reserve_bid
       (reserve := rho) (b := b) (i := i)
+
+/-- Reserve second-price split payments are bounded on the type support. -/
+theorem reserveSecondPriceAuction_profileSplitPayment_norm_le_max_reserve_omega
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ) (i : I)
+    (p : ℝ × OpponentTypeProfile I i)
+    (hp : p.1 ∈ Set.Ioc 0 (A.typeData.omega i)) :
+    ‖(A.reserveSecondPriceAuction rho).paymentRule (reportProfile i p.1 p.2) i‖ ≤
+      max |rho| |A.typeData.omega i| := by
+  have hpay :=
+    A.reserveSecondPriceAuction_interimPaymentIntegrand_norm_le_max_reserve_report
+      rho i p.1 p.2
+  have hp_nonneg : 0 ≤ p.1 := le_of_lt hp.1
+  have homega_nonneg : 0 ≤ A.typeData.omega i :=
+    (A.typeData.cdf i).omega_nonneg
+  have habs : |p.1| ≤ |A.typeData.omega i| := by
+    rw [abs_of_nonneg hp_nonneg, abs_of_nonneg homega_nonneg]
+    exact hp.2
+  exact hpay.trans (max_le_max le_rfl habs)
+
+/-- Reserve second-price split payments are a.e. bounded on the type support. -/
+theorem reserveSecondPriceAuction_profileSplitPayment_bound
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)] :
+    ∀ i : I,
+      ∃ C : ℝ,
+        ∀ᵐ p : ℝ × OpponentTypeProfile I i
+            ∂((A.typeMeasure i).prod ((A.reserveSecondPriceAuction rho).opponentPrior i)),
+          ‖(A.reserveSecondPriceAuction rho).paymentRule (reportProfile i p.1 p.2) i‖ ≤ C := by
+  intro i
+  refine ⟨max |rho| |A.typeData.omega i|, ?_⟩
+  have hsupport :
+      ∀ᵐ p : ℝ × OpponentTypeProfile I i
+          ∂((A.typeMeasure i).prod ((A.reserveSecondPriceAuction rho).opponentPrior i)),
+        p.1 ∈ Set.Ioc 0 (A.typeData.omega i) := by
+    exact measurePreserving_fst.quasiMeasurePreserving.ae (A.ae_typeMeasure_mem_Ioc i)
+  filter_upwards [hsupport] with p hp
+  exact A.reserveSecondPriceAuction_profileSplitPayment_norm_le_max_reserve_omega rho i p hp
+
+/-- Profile-split payment integrability for reserve second-price follows from
+profile-split payment measurability. -/
+theorem reserveSecondPriceAuction_profileSplit_payment_integrable_of_aestronglyMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (hpay_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            (A.reserveSecondPriceAuction rho).paymentRule (reportProfile i p.1 p.2) i)
+          ((A.typeMeasure i).prod ((A.reserveSecondPriceAuction rho).opponentPrior i))) :
+    ∀ i : I,
+      Integrable
+        (fun p : ℝ × OpponentTypeProfile I i =>
+          (A.reserveSecondPriceAuction rho).paymentRule (reportProfile i p.1 p.2) i)
+        ((A.typeMeasure i).prod ((A.reserveSecondPriceAuction rho).opponentPrior i)) :=
+  profileSplit_payment_integrable_of_aestronglyMeasurable_of_bound
+    hpay_meas
+    (A.reserveSecondPriceAuction_profileSplitPayment_bound rho)
+
+/-- Package reserve second-price profile-split measurability obligations. -/
+theorem reserveSecondPriceAuction_profileSplitMeasurabilityAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ)
+    (hpay_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            (A.reserveSecondPriceAuction rho).paymentRule (reportProfile i p.1 p.2) i)
+          ((A.typeMeasure i).prod ((A.reserveSecondPriceAuction rho).opponentPrior i)))
+    (hvs_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            (A.reserveSecondPriceAuction rho).allocationRule (reportProfile i p.1 p.2) i *
+              A.virtualValue i p.1)
+          ((A.typeMeasure i).prod ((A.reserveSecondPriceAuction rho).opponentPrior i))) :
+    A.ProfileSplitMeasurabilityAssumptions (A.reserveSecondPriceAuction rho) where
+  payment_aestronglyMeasurable := hpay_meas
+  virtual_surplus_aestronglyMeasurable := hvs_meas
+
+/-- Package measurable reserve second-price profile-split integrands. -/
+theorem reserveSecondPriceAuction_profileSplitMeasurabilityAssumptions_of_measurable
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ)
+    (hpay_meas :
+      ∀ i : I,
+        Measurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            (A.reserveSecondPriceAuction rho).paymentRule (reportProfile i p.1 p.2) i))
+    (hvs_meas :
+      ∀ i : I,
+        Measurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            (A.reserveSecondPriceAuction rho).allocationRule (reportProfile i p.1 p.2) i *
+              A.virtualValue i p.1)) :
+    A.ProfileSplitMeasurabilityAssumptions (A.reserveSecondPriceAuction rho) :=
+  ProfileSplitMeasurabilityAssumptions.of_measurable hpay_meas hvs_meas
+
+/-- Reserve second-price profile-split integrability from profile-split
+measurability and one-dimensional virtual-value integrability. -/
+theorem reserveSecondPriceAuction_profileSplitIntegrabilityAssumptions_of_profileSplitMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (hmeas : A.ProfileSplitMeasurabilityAssumptions (A.reserveSecondPriceAuction rho))
+    (hvirtualValue_integrable :
+      ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i)) :
+    A.ProfileSplitIntegrabilityAssumptions (A.reserveSecondPriceAuction rho) :=
+  hmeas.toProfileSplitIntegrabilityAssumptions_of_paymentBound_of_virtualValue_integrable
+    (A.reserveSecondPriceAuction_isFeasible rho)
+    (A.reserveSecondPriceAuction_profileSplitPayment_bound rho)
+    hvirtualValue_integrable
+
+/-- Raw a.e.-strong-measurability wrapper for reserve second-price profile-split integrability. -/
+theorem reserveSecondPriceAuction_profileSplitIntegrabilityAssumptions_of_aestronglyMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ)
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (hpay_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            (A.reserveSecondPriceAuction rho).paymentRule (reportProfile i p.1 p.2) i)
+          ((A.typeMeasure i).prod ((A.reserveSecondPriceAuction rho).opponentPrior i)))
+    (hvirtualValue_integrable :
+      ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i))
+    (hvs_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            (A.reserveSecondPriceAuction rho).allocationRule (reportProfile i p.1 p.2) i *
+              A.virtualValue i p.1)
+          ((A.typeMeasure i).prod ((A.reserveSecondPriceAuction rho).opponentPrior i))) :
+    A.ProfileSplitIntegrabilityAssumptions (A.reserveSecondPriceAuction rho) :=
+  A.reserveSecondPriceAuction_profileSplitIntegrabilityAssumptions_of_profileSplitMeasurable
+    rho
+    (A.reserveSecondPriceAuction_profileSplitMeasurabilityAssumptions rho hpay_meas hvs_meas)
+    hvirtualValue_integrable
+
+/-- Analytic-assumption entry point for reserve second-price profile-split
+integrability, with profile-split measurability packaged. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_profileSplitIntegrabilityAssumptions_of_profileSplitMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (rho : ℝ)
+    (hmeas : A.ProfileSplitMeasurabilityAssumptions (A.reserveSecondPriceAuction rho)) :
+    A.ProfileSplitIntegrabilityAssumptions (A.reserveSecondPriceAuction rho) := by
+  haveI : ∀ i : I, IsProbabilityMeasure (A.typeMeasure i) :=
+    h.typeMeasure_isProbabilityMeasure
+  exact A.reserveSecondPriceAuction_profileSplitIntegrabilityAssumptions_of_profileSplitMeasurable
+    rho hmeas h.virtualValue_integrable_all
+
+/-- Analytic-assumption entry point for reserve second-price profile-split
+integrability, with raw a.e. strong measurability explicit. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_profileSplitIntegrabilityAssumptions_of_aestronglyMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (rho : ℝ)
+    (hpay_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            (A.reserveSecondPriceAuction rho).paymentRule (reportProfile i p.1 p.2) i)
+          ((A.typeMeasure i).prod ((A.reserveSecondPriceAuction rho).opponentPrior i)))
+    (hvs_meas :
+      ∀ i : I,
+        AEStronglyMeasurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            (A.reserveSecondPriceAuction rho).allocationRule (reportProfile i p.1 p.2) i *
+              A.virtualValue i p.1)
+          ((A.typeMeasure i).prod ((A.reserveSecondPriceAuction rho).opponentPrior i))) :
+    A.ProfileSplitIntegrabilityAssumptions (A.reserveSecondPriceAuction rho) := by
+  exact h.reserveSecondPriceAuction_profileSplitIntegrabilityAssumptions_of_profileSplitMeasurable
+    rho
+    (A.reserveSecondPriceAuction_profileSplitMeasurabilityAssumptions rho hpay_meas hvs_meas)
+
+/-- Analytic-assumption entry point for reserve second-price profile-split
+integrability, with raw measurable functions explicit. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_profileSplitIntegrabilityAssumptions_of_measurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (rho : ℝ)
+    (hpay_meas :
+      ∀ i : I,
+        Measurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            (A.reserveSecondPriceAuction rho).paymentRule (reportProfile i p.1 p.2) i))
+    (hvs_meas :
+      ∀ i : I,
+        Measurable
+          (fun p : ℝ × OpponentTypeProfile I i =>
+            (A.reserveSecondPriceAuction rho).allocationRule (reportProfile i p.1 p.2) i *
+              A.virtualValue i p.1)) :
+    A.ProfileSplitIntegrabilityAssumptions (A.reserveSecondPriceAuction rho) := by
+  exact h.reserveSecondPriceAuction_profileSplitIntegrabilityAssumptions_of_profileSplitMeasurable
+    rho
+    (A.reserveSecondPriceAuction_profileSplitMeasurabilityAssumptions_of_measurable
+      rho hpay_meas hvs_meas)
+
+/-- Interim measurability obligations for reserve second-price. -/
+structure ReserveSecondPriceInterimMeasurabilityAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ) : Prop where
+  /-- Allocation interim integrands are a.e. strongly measurable. -/
+  allocation_aestronglyMeasurable :
+    ∀ i z_i,
+      AEStronglyMeasurable
+        (fun t => (A.reserveSecondPriceAuction rho).interimAllocationIntegrand i z_i t)
+        ((A.reserveSecondPriceAuction rho).opponentPrior i)
+  /-- Payment interim integrands are a.e. strongly measurable. -/
+  payment_aestronglyMeasurable :
+    ∀ i z_i,
+      AEStronglyMeasurable
+        (fun t => (A.reserveSecondPriceAuction rho).interimPaymentIntegrand i z_i t)
+        ((A.reserveSecondPriceAuction rho).opponentPrior i)
+
+/-- Measurable reserve second-price interim integrands give the interim
+measurability package. -/
+theorem ReserveSecondPriceInterimMeasurabilityAssumptions.of_measurable
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ)
+    (halloc_meas :
+      ∀ i z_i,
+        Measurable
+          (fun t => (A.reserveSecondPriceAuction rho).interimAllocationIntegrand i z_i t))
+    (hpay_meas :
+      ∀ i z_i,
+        Measurable
+          (fun t => (A.reserveSecondPriceAuction rho).interimPaymentIntegrand i z_i t)) :
+    A.ReserveSecondPriceInterimMeasurabilityAssumptions rho where
+  allocation_aestronglyMeasurable := fun i z_i =>
+    (halloc_meas i z_i).aestronglyMeasurable
+  payment_aestronglyMeasurable := fun i z_i =>
+    (hpay_meas i z_i).aestronglyMeasurable
+
+/-- A.e. unique highest bids give the reserve second-price interim measurability package. -/
+theorem ReserveSecondPriceInterimMeasurabilityAssumptions.of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.ReserveSecondPriceInterimMeasurabilityAssumptions rho where
+  allocation_aestronglyMeasurable := fun i z_i =>
+    A.reserveSecondPriceAuction_interimAllocationIntegrand_aestronglyMeasurable_of_ae_unique_argmax
+      rho i z_i (hae_unique.on_interimSlice i z_i)
+  payment_aestronglyMeasurable := fun i z_i =>
+    A.reserveSecondPriceAuction_interimPaymentIntegrand_aestronglyMeasurable_of_ae_unique_argmax
+      rho i z_i (hae_unique.on_interimSlice i z_i)
+
+/-- Convert a.e. uniqueness into the reserve second-price interim measurability package. -/
+theorem ReserveSecondPriceAEUniqueArgmax.toInterimMeasurabilityAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.ReserveSecondPriceInterimMeasurabilityAssumptions rho :=
+  ReserveSecondPriceInterimMeasurabilityAssumptions.of_ae_unique_argmax A rho h
 
 /-- Measurable reserve second-price integrands are interim-integrable by bounds. -/
 theorem reserveSecondPriceAuction_hasIntegrableInterimObjects_of_aestronglyMeasurable
@@ -273,6 +858,31 @@ theorem reserveSecondPriceAuction_hasIntegrableInterimObjects_of_aestronglyMeasu
     exact ⟨max |rho| |z_i|, Filter.Eventually.of_forall fun t =>
       A.reserveSecondPriceAuction_interimPaymentIntegrand_norm_le_max_reserve_report
         rho i z_i t⟩
+
+/-- Packaged interim measurability gives reserve second-price interim integrability. -/
+theorem ReserveSecondPriceInterimMeasurabilityAssumptions.hasIntegrableInterimObjects
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.ReserveSecondPriceInterimMeasurabilityAssumptions rho) :
+    (A.reserveSecondPriceAuction rho).HasIntegrableInterimObjects :=
+  A.reserveSecondPriceAuction_hasIntegrableInterimObjects_of_aestronglyMeasurable
+    rho h.allocation_aestronglyMeasurable h.payment_aestronglyMeasurable
+
+/-- A.e. uniqueness gives reserve second-price interim integrability. -/
+theorem ReserveSecondPriceAEUniqueArgmax.hasIntegrableInterimObjects
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    (A.reserveSecondPriceAuction rho).HasIntegrableInterimObjects :=
+  h.toInterimMeasurabilityAssumptions.hasIntegrableInterimObjects
+
+/-- A.e. unique highest bids give reserve second-price interim integrability. -/
+theorem reserveSecondPriceAuction_hasIntegrableInterimObjects_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    (A.reserveSecondPriceAuction rho).HasIntegrableInterimObjects :=
+  hae_unique.hasIntegrableInterimObjects
 
 /-- Utility in the Bayesian wrapper equals the underlying reserve second-price utility. -/
 theorem reserveSecondPriceAuction_quasiLinearUtility_eq
@@ -360,6 +970,24 @@ theorem reserveSecondPriceAuction_isFeasibleICIRIntegrable
     A.reserveSecondPriceAuction_isIndividuallyRationalOnSupport hrho hint,
     hvirt⟩
 
+/-- Profile-split integrability entry point for reserve second-price as an
+IC/IR candidate. -/
+theorem reserveSecondPriceAuction_isFeasibleICIRIntegrable_of_profileSplitIntegrability
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) {rho : ℝ}
+    [∀ i : I, IsProbabilityMeasure (A.typeMeasure i)]
+    (hind : A.HasIndependentTypePriors)
+    (hrho : 0 ≤ rho)
+    (hint : (A.reserveSecondPriceAuction rho).HasIntegrableInterimObjects)
+    (hprofile :
+      A.ProfileSplitIntegrabilityAssumptions (A.reserveSecondPriceAuction rho)) :
+    A.IsFeasibleICIRIntegrable (A.reserveSecondPriceAuction rho) := by
+  exact hprofile.toIsFeasibleICIRIntegrable hind
+    (A.reserveSecondPriceAuction_hasSameSellingEnvironment rho)
+    (A.reserveSecondPriceAuction_isFeasible rho)
+    (A.reserveSecondPriceAuction_isIncentiveCompatible rho hint)
+    (A.reserveSecondPriceAuction_isIndividuallyRationalOnSupport hrho hint)
+
 /-- Analytic-assumption entry point for reserve second-price as a feasible IC/IR candidate. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
@@ -377,9 +1005,34 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasib
     A.reserveSecondPriceAuction_isIncentiveCompatible rho hint
   have hIR : (A.reserveSecondPriceAuction rho).IsIndividuallyRationalOnSupport :=
     A.reserveSecondPriceAuction_isIndividuallyRationalOnSupport hrho hint
-  exact ⟨henv, hfeas, hIC, hIR,
-    h.candidate_integrableVirtualSurplus
-      (A.reserveSecondPriceAuction rho) henv hfeas hIC hIR⟩
+  exact h.toIsFeasibleICIRIntegrable
+    (A.reserveSecondPriceAuction rho) henv hfeas hIC hIR
+
+/-- Analytic-assumption entry point for reserve second-price as a feasible IC/IR
+candidate from interim measurability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable_of_interimMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    {rho : ℝ}
+    (hrho : 0 ≤ rho)
+    (hmeas : A.ReserveSecondPriceInterimMeasurabilityAssumptions rho) :
+    A.IsFeasibleICIRIntegrable (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isFeasibleICIRIntegrable
+    hrho hmeas.hasIntegrableInterimObjects
+
+/-- Analytic-assumption entry point for reserve second-price as a feasible IC/IR
+candidate from a.e. unique highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isFeasibleICIRIntegrable_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    {rho : ℝ}
+    (hrho : 0 ≤ rho)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.IsFeasibleICIRIntegrable (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isFeasibleICIRIntegrable
+    hrho hae_unique.hasIntegrableInterimObjects
 
 end ReserveSecondPriceAuction
 
@@ -775,16 +1428,8 @@ theorem virtualSurplusMaximizingAllocationRule_eq_reserveSecondPriceIndicator_of
     (hb : rho < b (Auction.argmaxBid b)) :
     A.virtualSurplusMaximizingAllocationRule b =
       fun i => if Auction.ReserveSecondPrice.allocation rho b = some i then (1 : ℝ) else 0 := by
-  have hargmax_pos : 0 < A.virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b)) := by
-    have hzero : A.virtualValue (Auction.argmaxBid b) rho = 0 := by
-      rw [hreserve.common_virtualValue (Auction.argmaxBid b) rho, hreserve.reserve_zero]
-    have hlt :
-        A.virtualValue (Auction.argmaxBid b) rho <
-          A.virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b)) := by
-      rw [hreserve.common_virtualValue (Auction.argmaxBid b) rho,
-        hreserve.common_virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b))]
-      exact hreserve.strictMono_phi hb
-    rwa [hzero] at hlt
+  have hargmax_pos : 0 < A.virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b)) :=
+    hreserve.virtualValue_pos_of_reserve_lt hb
   have hpos : 0 < A.winningVirtualValue b := by
     simpa [winningVirtualValue, hwinner] using hargmax_pos
   have hmyerson :
@@ -1141,23 +1786,145 @@ theorem virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_on_strictRe
 
 /-! ## Expected revenue and optimality -/
 
+/-- Highest bids are a.e. unique under the full prior. -/
+def AEUniqueArgmaxPrior [Fintype I] [Nontrivial I] (A : BayesianSingleItemAuction I) : Prop :=
+  ∀ᵐ b ∂A.prior,
+    ∀ j, j ≠ Auction.argmaxBid b → b j < b (Auction.argmaxBid b)
+
+/-- Projection: a.e. uniqueness of the highest bid under the full prior. -/
+theorem AEUniqueArgmaxPrior.ae_unique_argmax
+    [Fintype I] [Nontrivial I] {A : BayesianSingleItemAuction I}
+    (h : A.AEUniqueArgmaxPrior) :
+    ∀ᵐ b ∂A.prior,
+      ∀ j, j ≠ Auction.argmaxBid b → b j < b (Auction.argmaxBid b) :=
+  h
+
+/-- Package a.e. uniqueness of the highest bid under the full prior. -/
+theorem AEUniqueArgmaxPrior.of_ae
+    [Fintype I] [Nontrivial I] {A : BayesianSingleItemAuction I}
+    (h :
+      ∀ᵐ b ∂A.prior,
+        ∀ j, j ≠ Auction.argmaxBid b → b j < b (Auction.argmaxBid b)) :
+    A.AEUniqueArgmaxPrior :=
+  h
+
+/-- Projection: analytic assumptions give full-prior a.e. unique highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.aeUniqueArgmaxPrior
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions) :
+    A.AEUniqueArgmaxPrior := by
+  haveI : ∀ i : I, MeasureTheory.IsProbabilityMeasure (A.typeMeasure i) :=
+    h.typeMeasure_isProbabilityMeasure
+  exact AEUniqueArgmaxPrior.of_ae
+    (A.ae_unique_argmaxBid_prior_of_hasIndependentTypePriors h.hasIndependentTypePriors)
+
+/-- All bids are a.e. nonnegative under the full prior. -/
+def AENonnegativeBidsPrior [Fintype I] (A : BayesianSingleItemAuction I) : Prop :=
+  ∀ᵐ b ∂A.prior, ∀ i, 0 ≤ b i
+
+/-- Projection: all bids are a.e. nonnegative under the full prior. -/
+theorem AENonnegativeBidsPrior.ae_bid_nonnegative
+    [Fintype I] {A : BayesianSingleItemAuction I}
+    (h : A.AENonnegativeBidsPrior) :
+    ∀ᵐ b ∂A.prior, ∀ i, 0 ≤ b i :=
+  h
+
+/-- Package a.e. nonnegative bids under the full prior. -/
+theorem AENonnegativeBidsPrior.of_ae
+    [Fintype I] {A : BayesianSingleItemAuction I}
+    (h : ∀ᵐ b ∂A.prior, ∀ i, 0 ≤ b i) :
+    A.AENonnegativeBidsPrior :=
+  h
+
+/-- Projection: analytic assumptions give full-prior a.e. nonnegative bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.aeNonnegativeBidsPrior
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions) :
+    A.AENonnegativeBidsPrior := by
+  haveI : ∀ i : I, MeasureTheory.IsProbabilityMeasure (A.typeMeasure i) :=
+    h.typeMeasure_isProbabilityMeasure
+  exact AENonnegativeBidsPrior.of_ae
+    (A.ae_forall_eval_nonneg_prior_of_hasIndependentTypePriors h.hasIndependentTypePriors)
+
+/-- The winning bid is a.e. not exactly the reserve under the full prior. -/
+def AENoReserveTiePrior
+    [Fintype I] [Nontrivial I] (A : BayesianSingleItemAuction I) (rho : ℝ) : Prop :=
+  ∀ᵐ b ∂A.prior, rho ≠ b (Auction.argmaxBid b)
+
+/-- Projection: the winning bid is a.e. not exactly the reserve. -/
+theorem AENoReserveTiePrior.ae_noReserveTie
+    [Fintype I] [Nontrivial I] {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.AENoReserveTiePrior rho) :
+    ∀ᵐ b ∂A.prior, rho ≠ b (Auction.argmaxBid b) :=
+  h
+
+/-- Package a.e. no-reserve-tie profiles under the full prior. -/
+theorem AENoReserveTiePrior.of_ae
+    [Fintype I] [Nontrivial I] {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : ∀ᵐ b ∂A.prior, rho ≠ b (Auction.argmaxBid b)) :
+    A.AENoReserveTiePrior rho :=
+  h
+
+/-- Projection: analytic assumptions give full-prior a.e. no reserve tie. -/
+theorem RegularMyersonICIRAnalyticAssumptions.aeNoReserveTiePrior
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (h : A.RegularMyersonICIRAnalyticAssumptions) (rho : ℝ) :
+    A.AENoReserveTiePrior rho := by
+  haveI : ∀ i : I, MeasureTheory.IsProbabilityMeasure (A.typeMeasure i) :=
+    h.typeMeasure_isProbabilityMeasure
+  exact AENoReserveTiePrior.of_ae
+    (A.ae_argmaxBid_ne_const_prior_of_hasIndependentTypePriors
+      h.hasIndependentTypePriors rho)
+
+/-- Strict reserve profiles hold a.e. under the full prior. -/
+def AEStrictReserveBidProfile
+    [Fintype I] [Nontrivial I] (A : BayesianSingleItemAuction I) (rho : ℝ) : Prop :=
+  ∀ᵐ b ∂A.prior, StrictReserveBidProfile rho b
+
+/-- Projection: strict reserve profiles hold a.e. under the full prior. -/
+theorem AEStrictReserveBidProfile.ae_strictReserveBidProfile
+    [Fintype I] [Nontrivial I] {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.AEStrictReserveBidProfile rho) :
+    ∀ᵐ b ∂A.prior, StrictReserveBidProfile rho b :=
+  h
+
+/-- Package a.e. strict reserve profiles under the full prior. -/
+theorem AEStrictReserveBidProfile.of_ae
+    [Fintype I] [Nontrivial I] {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : ∀ᵐ b ∂A.prior, StrictReserveBidProfile rho b) :
+    A.AEStrictReserveBidProfile rho :=
+  h
+
+/-- Build a.e. strict reserve profiles from the prior-level components. -/
+theorem AEStrictReserveBidProfile.of_components
+    [Fintype I] [Nontrivial I] {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (hrho0 : 0 ≤ rho)
+    (hnonneg : A.AENonnegativeBidsPrior)
+    (hunique : A.AEUniqueArgmaxPrior)
+    (hnotie : A.AENoReserveTiePrior rho) :
+    A.AEStrictReserveBidProfile rho := by
+  refine AEStrictReserveBidProfile.of_ae ?_
+  filter_upwards
+    [hnonneg.ae_bid_nonnegative, hnotie.ae_noReserveTie, hunique.ae_unique_argmax]
+      with b hb_nonneg hb_reserve_ne hb_unique
+  exact ⟨hrho0, hb_nonneg, hb_unique, hb_reserve_ne⟩
+
 /-- A.e. unique highest bids give a.e. strict reserve profiles. -/
 theorem RegularMyersonICIRAnalyticAssumptions.ae_strictReserveBidProfile_of_ae_unique_argmax
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     {A : BayesianSingleItemAuction I} {rho : ℝ}
     (h : A.RegularMyersonICIRAnalyticAssumptions)
     (hrho0 : 0 ≤ rho)
-    (hae_unique :
-      ∀ᵐ b ∂A.prior,
-        ∀ j, j ≠ Auction.argmaxBid b → b j < b (Auction.argmaxBid b)) :
-    ∀ᵐ b ∂A.prior, StrictReserveBidProfile rho b := by
+    (hae_unique : A.AEUniqueArgmaxPrior) :
+    A.AEStrictReserveBidProfile rho := by
   haveI : ∀ i : I, MeasureTheory.IsProbabilityMeasure (A.typeMeasure i) :=
     h.typeMeasure_isProbabilityMeasure
-  filter_upwards
-    [A.ae_forall_eval_nonneg_prior_of_hasIndependentTypePriors h.independent_type_priors,
-      A.ae_argmaxBid_ne_const_prior_of_hasIndependentTypePriors h.independent_type_priors rho,
-      hae_unique] with b hb_nonneg hb_reserve_ne hb_unique
-  exact ⟨hrho0, hb_nonneg, hb_unique, hb_reserve_ne⟩
+  exact
+    AEStrictReserveBidProfile.of_components hrho0
+      h.aeNonnegativeBidsPrior hae_unique (h.aeNoReserveTiePrior rho)
 
 /-- Nonnegative reserves give a.e. strict reserve profiles. -/
 theorem RegularMyersonICIRAnalyticAssumptions.ae_strictReserveBidProfile
@@ -1165,26 +1932,26 @@ theorem RegularMyersonICIRAnalyticAssumptions.ae_strictReserveBidProfile
     {A : BayesianSingleItemAuction I} {rho : ℝ}
     (h : A.RegularMyersonICIRAnalyticAssumptions)
     (hrho0 : 0 ≤ rho) :
-    ∀ᵐ b ∂A.prior, StrictReserveBidProfile rho b := by
+    A.AEStrictReserveBidProfile rho := by
   haveI : ∀ i : I, MeasureTheory.IsProbabilityMeasure (A.typeMeasure i) :=
     h.typeMeasure_isProbabilityMeasure
   exact
     RegularMyersonICIRAnalyticAssumptions.ae_strictReserveBidProfile_of_ae_unique_argmax h hrho0
-      (A.ae_unique_argmaxBid_prior_of_hasIndependentTypePriors h.independent_type_priors)
+      h.aeUniqueArgmaxPrior
 
 /-- A.e. strict-profile equality gives expected seller-revenue equality. -/
 theorem expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_strictReserveBidProfile_commonRegularReserve
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ}
     (hreserve : A.CommonRegularReserve rho)
-    (hae : ∀ᵐ b ∂A.prior, StrictReserveBidProfile rho b) :
+    (hae : A.AEStrictReserveBidProfile rho) :
     A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction =
       A.expectedSellerRevenueInEnvironment (A.reserveSecondPriceAuction rho) := by
   refine
     A.expectedSellerRevenueInEnvironment_congr_paymentRule_ae
       A.virtualSurplusMaximizingAuction
       (A.reserveSecondPriceAuction rho) ?_
-  filter_upwards [hae] with b hb
+  filter_upwards [hae.ae_strictReserveBidProfile] with b hb
   exact
     (A.virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_commonRegularReserve
       hreserve hb).2
@@ -1194,7 +1961,7 @@ theorem expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_re
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) {rho : ℝ}
     (hreserve : A.CommonCDFRegularReserve rho)
-    (hae : ∀ᵐ b ∂A.prior, StrictReserveBidProfile rho b) :
+    (hae : A.AEStrictReserveBidProfile rho) :
     A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction =
       A.expectedSellerRevenueInEnvironment (A.reserveSecondPriceAuction rho) := by
   exact
@@ -1210,9 +1977,7 @@ theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment
     (h : A.RegularMyersonICIRAnalyticAssumptions)
     (hreserve : A.CommonRegularReserve rho)
     (hrho0 : 0 ≤ rho)
-    (hae_unique :
-      ∀ᵐ b ∂A.prior,
-        ∀ j, j ≠ Auction.argmaxBid b → b j < b (Auction.argmaxBid b)) :
+    (hae_unique : A.AEUniqueArgmaxPrior) :
     A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction =
       A.expectedSellerRevenueInEnvironment (A.reserveSecondPriceAuction rho) := by
   exact
@@ -1228,9 +1993,35 @@ theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment
     (h : A.RegularMyersonICIRAnalyticAssumptions)
     (hreserve : A.CommonCDFRegularReserve rho)
     (hrho0 : 0 ≤ rho)
-    (hae_unique :
-      ∀ᵐ b ∂A.prior,
-        ∀ j, j ≠ Auction.argmaxBid b → b j < b (Auction.argmaxBid b)) :
+    (hae_unique : A.AEUniqueArgmaxPrior) :
+    A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction =
+      A.expectedSellerRevenueInEnvironment (A.reserveSecondPriceAuction rho) := by
+  exact
+    h.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_unique_argmax_commonRegularReserve
+      hreserve.commonRegularReserve hrho0 hae_unique
+
+/-- Positive-virtual-value reserve presentation with explicit a.e. unique highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_unique_argmax_commonVirtualValueReserve
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonVirtualValueReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hae_unique : A.AEUniqueArgmaxPrior) :
+    A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction =
+      A.expectedSellerRevenueInEnvironment (A.reserveSecondPriceAuction rho) := by
+  exact
+    h.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_unique_argmax_commonRegularReserve
+      hreserve.commonRegularReserve hrho0 hae_unique
+
+/-- Common-CDF positive-virtual-value presentation with explicit a.e. unique highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_of_ae_unique_argmax_commonCDFVirtualValueReserve
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFVirtualValueReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hae_unique : A.AEUniqueArgmaxPrior) :
     A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction =
       A.expectedSellerRevenueInEnvironment (A.reserveSecondPriceAuction rho) := by
   exact
@@ -1325,12 +2116,8 @@ theorem virtualSurplus_reserveSecondPriceAuction_allocationRule_eq_max_argmaxBid
         Auction.ReserveSecondPrice.allocation rho b = some (Auction.argmaxBid b) := by
       exact reserveSecondPrice_allocation_eq_some_argmaxBid_of_reserve_le_argmaxBid
         (rho := rho) (b := b) hsell
-    have hnonneg : 0 ≤ A.virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b)) := by
-      have hphi_nonneg :
-          0 ≤ hreserve.phi (b (Auction.argmaxBid b)) := by
-        rw [← hreserve.reserve_zero]
-        exact hreserve.strictMono_phi.monotone hsell
-      rwa [hreserve.common_virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b))]
+    have hnonneg : 0 ≤ A.virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b)) :=
+      hreserve.virtualValue_nonneg_of_reserve_le hsell
     rw [virtualSurplus, reserveSecondPriceAuction_allocationRule, halloc,
       max_eq_left hnonneg]
     simp [Finset.mem_univ]
@@ -1338,12 +2125,8 @@ theorem virtualSurplus_reserveSecondPriceAuction_allocationRule_eq_max_argmaxBid
     have halloc :
         Auction.ReserveSecondPrice.allocation rho b = none :=
       reserveSecondPrice_allocation_eq_none_of_argmaxBid_lt_reserve hlt
-    have hnonpos : A.virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b)) ≤ 0 := by
-      have hphi_nonpos :
-          hreserve.phi (b (Auction.argmaxBid b)) ≤ 0 := by
-        rw [← hreserve.reserve_zero]
-        exact hreserve.strictMono_phi.monotone hlt.le
-      rwa [hreserve.common_virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b))]
+    have hnonpos : A.virtualValue (Auction.argmaxBid b) (b (Auction.argmaxBid b)) ≤ 0 :=
+      hreserve.virtualValue_nonpos_of_lt_reserve hlt
     rw [virtualSurplus, reserveSecondPriceAuction_allocationRule, halloc,
       max_eq_right hnonpos]
     simp
@@ -1424,25 +2207,12 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpect
     A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
       (A.reserveSecondPriceAuction rho)
       (fun C => A.IsFeasibleICIRIntegrable C) := by
-  constructor
-  · exact h.reserveSecondPriceAuction_isFeasibleICIRIntegrable hrho0 hint
-  · intro C hC
-    have hopt :
-        A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
-          A.virtualSurplusMaximizingAuction
-          (fun C => A.IsFeasibleICIRIntegrable C) :=
-      A.virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_of_isRegular
-        hreserve.isRegular h
-    have hle :
-        A.expectedSellerRevenueInEnvironment C ≤
-          A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction :=
-      hopt.2 C hC
-    have heq :
-        A.expectedSellerRevenueInEnvironment A.virtualSurplusMaximizingAuction =
-          A.expectedSellerRevenueInEnvironment (A.reserveSecondPriceAuction rho) :=
-      h.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_commonRegularReserve
-        hreserve hrho0
-    simpa [heq] using hle
+  exact
+    (A.virtualSurplusMaximizingAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_of_isRegular
+      hreserve.isRegular h).of_revenue_eq
+        (h.reserveSecondPriceAuction_isFeasibleICIRIntegrable hrho0 hint)
+        (h.expectedSellerRevenueInEnvironment_virtualSurplusMaximizingAuction_eq_reserveSecondPriceAuction_commonRegularReserve
+          hreserve hrho0)
 
 /-- Common-CDF presentation of reserve second-price expected-revenue optimality. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFRegularReserve
@@ -1486,6 +2256,128 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpect
   h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
     hreserve.commonRegularReserve hrho0 hint
 
+/-! ### Expected-revenue optimality from interim measurability -/
+
+/-- Reserve second-price is expected-revenue optimal from interim measurability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_interimMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonRegularReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hmeas : A.ReserveSecondPriceInterimMeasurabilityAssumptions rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
+    hreserve hrho0 hmeas.hasIntegrableInterimObjects
+
+/-- Common-CDF presentation of expected-revenue optimality from interim
+measurability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFRegularReserve_of_interimMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFRegularReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hmeas : A.ReserveSecondPriceInterimMeasurabilityAssumptions rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_interimMeasurable
+    hreserve.commonRegularReserve hrho0 hmeas
+
+/-- Positive-virtual-value presentation of expected-revenue optimality from
+interim measurability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonVirtualValueReserve_of_interimMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonVirtualValueReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hmeas : A.ReserveSecondPriceInterimMeasurabilityAssumptions rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_interimMeasurable
+    hreserve.commonRegularReserve hrho0 hmeas
+
+/-- Common-CDF positive-virtual-value presentation of expected-revenue
+optimality from interim measurability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFVirtualValueReserve_of_interimMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFVirtualValueReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hmeas : A.ReserveSecondPriceInterimMeasurabilityAssumptions rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_interimMeasurable
+    hreserve.commonRegularReserve hrho0 hmeas
+
+/-! ### Expected-revenue optimality from a.e. unique highest bids -/
+
+/-- Reserve second-price is expected-revenue optimal from a.e. unique highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonRegularReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
+    hreserve hrho0 hae_unique.hasIntegrableInterimObjects
+
+/-- Common-CDF presentation of expected-revenue optimality from a.e. unique
+highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFRegularReserve_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFRegularReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_ae_unique_argmax
+    hreserve.commonRegularReserve hrho0 hae_unique
+
+/-- Positive-virtual-value presentation of expected-revenue optimality from
+a.e. unique highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonVirtualValueReserve_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonVirtualValueReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_ae_unique_argmax
+    hreserve.commonRegularReserve hrho0 hae_unique
+
+/-- Common-CDF positive-virtual-value presentation of expected-revenue
+optimality from a.e. unique highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonCDFVirtualValueReserve_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFVirtualValueReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.IsExpectedSellerRevenueOptimalInEnvironmentAmong
+      (A.reserveSecondPriceAuction rho)
+      (fun C => A.IsFeasibleICIRIntegrable C) :=
+  h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve_of_ae_unique_argmax
+    hreserve.commonRegularReserve hrho0 hae_unique
+
 /-! ### MSZ 12.61 endpoint wrappers -/
 
 /-- MSZ 12.61: reserve second-price is regular-Myerson optimal. -/
@@ -1499,14 +2391,11 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegula
     A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) := by
   have hcand : A.IsFeasibleICIRIntegrable (A.reserveSecondPriceAuction rho) :=
     h.reserveSecondPriceAuction_isFeasibleICIRIntegrable hrho0 hint
-  exact ⟨
-    A.reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonRegularReserve
-      hreserve,
-    hcand.isFeasible,
-    hcand.isIncentiveCompatible,
-    hcand.isIndividuallyRationalOnSupport,
-    h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
-      hreserve hrho0 hint⟩
+  exact hcand.toIsRegularMyersonOptimalICIRAuction
+    (A.reserveSecondPriceAuction_allocationRule_isVirtualSurplusOptimal_of_commonRegularReserve
+      hreserve)
+    (h.reserveSecondPriceAuction_isExpectedSellerRevenueOptimalInEnvironmentAmongFeasibleICIRIntegrable_commonRegularReserve
+      hreserve hrho0 hint)
 
 /-- Common-CDF presentation of the MSZ 12.61 endpoint. -/
 theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve
@@ -1543,6 +2432,107 @@ theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegula
     A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
   h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve
     hreserve.commonRegularReserve hrho0 hint
+
+/-! ### MSZ 12.61 endpoint wrappers from interim measurability -/
+
+/-- MSZ 12.61 from reserve second-price interim measurability. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_interimMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonRegularReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hmeas : A.ReserveSecondPriceInterimMeasurabilityAssumptions rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve
+    hreserve hrho0 hmeas.hasIntegrableInterimObjects
+
+/-- Common-CDF presentation of the interim-measurable MSZ 12.61 endpoint. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve_of_interimMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFRegularReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hmeas : A.ReserveSecondPriceInterimMeasurabilityAssumptions rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_interimMeasurable
+    hreserve.commonRegularReserve hrho0 hmeas
+
+/-- Positive-virtual-value presentation of the interim-measurable MSZ 12.61 endpoint. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve_of_interimMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonVirtualValueReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hmeas : A.ReserveSecondPriceInterimMeasurabilityAssumptions rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_interimMeasurable
+    hreserve.commonRegularReserve hrho0 hmeas
+
+/-- Common-CDF positive-virtual-value presentation of the interim-measurable MSZ 12.61 endpoint. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFVirtualValueReserve_of_interimMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFVirtualValueReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hmeas : A.ReserveSecondPriceInterimMeasurabilityAssumptions rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_interimMeasurable
+    hreserve.commonRegularReserve hrho0 hmeas
+
+/-! ### MSZ 12.61 endpoint from a.e. unique highest bids -/
+
+/-- MSZ 12.61 from a common regular reserve and a.e. unique highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonRegularReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve
+    hreserve hrho0 hae_unique.hasIntegrableInterimObjects
+
+/-- Common-CDF presentation of MSZ 12.61 from a.e. unique highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFRegularReserve_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFRegularReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_ae_unique_argmax
+    hreserve.commonRegularReserve hrho0 hae_unique
+
+/-- Positive-virtual-value presentation of MSZ 12.61 from a.e. unique highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonVirtualValueReserve_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonVirtualValueReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_ae_unique_argmax
+    hreserve.commonRegularReserve hrho0 hae_unique
+
+/-- Common-CDF positive-virtual-value presentation of MSZ 12.61 from a.e. unique
+highest bids. -/
+theorem RegularMyersonICIRAnalyticAssumptions.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonCDFVirtualValueReserve_of_ae_unique_argmax
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.RegularMyersonICIRAnalyticAssumptions)
+    (hreserve : A.CommonCDFVirtualValueReserve rho)
+    (hrho0 : 0 ≤ rho)
+    (hae_unique : A.ReserveSecondPriceAEUniqueArgmax rho) :
+    A.IsRegularMyersonOptimalICIRAuction (A.reserveSecondPriceAuction rho) :=
+  h.reserveSecondPriceAuction_isRegularMyersonOptimalICIR_commonRegularReserve_of_ae_unique_argmax
+    hreserve.commonRegularReserve hrho0 hae_unique
 
 end MechanismBridge
 
