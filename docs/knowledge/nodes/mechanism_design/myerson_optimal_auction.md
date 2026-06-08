@@ -33,6 +33,7 @@ lean:
     - BayesianSingleItemAuction.IsRegular
     - BayesianSingleItemAuction.HasPositiveDensityOnSupport
     - BayesianSingleItemAuction.EnvelopeVirtualSurplusEnvironmentAssumptions
+    - BayesianSingleItemAuction.EnvelopeVirtualSurplusEnvironmentAssumptions.of_primitives
     - BayesianSingleItemAuction.EnvelopeVirtualSurplusEnvironmentAssumptions.typeMeasure_isProbabilityMeasure
     - BayesianSingleItemAuction.EnvelopeVirtualSurplusEnvironmentAssumptions.virtualValue_integrable_all
     - BayesianSingleItemAuction.cdfVirtualValue
@@ -72,6 +73,8 @@ lean:
     - BayesianSingleItemAuction.ProfileSplitIntegrabilityAssumptions
     - BayesianSingleItemAuction.ProfileSplitIntegrabilityAssumptions.toProfileSplitMeasurabilityAssumptions
     - BayesianSingleItemAuction.RegularMyersonICIREnvironmentAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIREnvironmentAssumptions.of_primitives
+    - BayesianSingleItemAuction.RegularMyersonICIREnvironmentAssumptions.of_envelopeEnvironment
     - BayesianSingleItemAuction.RegularMyersonICIREnvironmentAssumptions.typeMeasure_isProbabilityMeasure
     - BayesianSingleItemAuction.RegularMyersonICIREnvironmentAssumptions.virtualValue_integrable_all
     - BayesianSingleItemAuction.RegularMyersonICIRCandidateProfileSplitAssumptions
@@ -79,6 +82,7 @@ lean:
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.of_candidateProfileSplitAssumptions
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.of_environment_candidateProfileSplitAssumptions
+    - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.of_primitives_candidateProfileSplitAssumptions
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.toIsFeasibleICIRIntegrable
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.candidate_isRevenueUpperBounded
     - BayesianSingleItemAuction.RegularMyersonICIRAnalyticAssumptions.candidate_isRevenueUpperBounded_of_sameEnvironment_of_isFeasibleICIR
@@ -204,12 +208,18 @@ environment, the CDF/density/envelope assumptions, and the profile-split
 integrability package for feasible IC/IR candidates.  The environment-side
 package `RegularMyersonICIREnvironmentAssumptions` separates the product-prior
 and envelope/virtual-value integrability hypotheses from candidate-mechanism
-obligations.  The candidate-side package
+obligations.  The constructors
+`EnvelopeVirtualSurplusEnvironmentAssumptions.of_primitives`,
+`RegularMyersonICIREnvironmentAssumptions.of_primitives`, and
+`RegularMyersonICIREnvironmentAssumptions.of_envelopeEnvironment` expose the
+useful primitive-facing entry points without claiming to derive all Fubini and
+profile-split obligations automatically.  The candidate-side package
 `RegularMyersonICIRCandidateProfileSplitAssumptions` gives a finer entry point:
 profile-split measurability plus profile-split payment bounds, together with
 environment-level virtual-value integrability, reconstruct the candidate
 integrability package.  The wrapper
-`of_environment_candidateProfileSplitAssumptions` assembles these two abstract
+`of_environment_candidateProfileSplitAssumptions`, and the primitive-facing
+`of_primitives_candidateProfileSplitAssumptions`, assemble these abstract
 packages back into the compact analytic package.  Projection theorems then derive the Fubini packages,
 envelope upper bound, and revenue-upper-bound interface used in the MSZ 12.59
 proof.  The final comparison is also exposed as

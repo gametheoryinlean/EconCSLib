@@ -27,8 +27,12 @@ lean:
     - BayesianSingleItemAuction.ReserveSecondPriceInterimMeasurabilityAssumptions
     - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions
     - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions.of_interimMeasurable
+    - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions.of_aestronglyMeasurable
+    - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions.of_measurable
     - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions.of_ae_unique_argmax
     - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions.hasIntegrableInterimObjects
+    - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions.isIncentiveCompatible
+    - BayesianSingleItemAuction.ReserveSecondPriceCandidateAssumptions.isIndividuallyRationalOnSupport
     - BayesianSingleItemAuction.AEUniqueArgmaxPrior
     - BayesianSingleItemAuction.AENonnegativeBidsPrior
     - BayesianSingleItemAuction.AENoReserveTiePrior
@@ -145,9 +149,10 @@ This is the Lean formalisation of the reserve-price endpoint of Myerson's
 regular optimal-auction theorem ([[mechanism_design.myerson.optimal_auction]]),
 corresponding to the MSZ reserve-price corollary cited below.
 
-[MSZ Corollary 12.61] specializes Theorem 12.59 to IID private values: under
+[MSZ Corollary 12.61] specializes the regular optimal-auction theorem
+[[mechanism_design.myerson.optimal_auction]] to IID private values: under
 regularity, the optimal IC direct selling mechanism is a sealed-bid second-price
-auction with a reserve price.  Lean represents the IID/common-value content
+auction with a reserve price. Lean represents the IID/common-value content
 through common regular-reserve and common-CDF reserve interfaces, with analytic
 null-set and integrability assumptions exposed separately.
 
@@ -187,7 +192,10 @@ adds the reserve-price layer on top of those interfaces:
   `ReserveSecondPriceAEUniqueArgmax`, and the prior-level a.e. packages
   isolate the measurability, nonnegative-reserve, uniqueness, nonnegative-bid,
   and no-reserve-tie obligations used to make reserve second-price an IC/IR
-  integrable candidate.
+  integrable candidate.  The candidate package has entry points from packaged
+  interim measurability, raw a.e.-strong measurability, ordinary measurability,
+  and a.e. unique argmax assumptions; it also projects the resulting interim IC
+  and IR facts.
 - The expected-revenue equality bridge has both explicit `AEUniqueArgmaxPrior`
   entry points and analytic-assumption entry points, including the common
   virtual-value cutoff presentations.
@@ -206,6 +214,12 @@ adds the reserve-price layer on top of those interfaces:
 
 The corresponding `commonCDFRegularReserve` theorems package the same result
 for the common-CDF presentation used in symmetric IPV specializations.
+
+This is still a conditional analytic formalization: the reserve theorem exposes
+its no-tie, measurability, integrability, and nonnegative-reserve assumptions
+instead of deriving them from every possible primitive distribution model.
+That boundary is intentional and keeps the 12.61 endpoint reusable without
+turning it into a general measure-theory discharge theorem.
 
 ## Virtual-value cutoffs
 

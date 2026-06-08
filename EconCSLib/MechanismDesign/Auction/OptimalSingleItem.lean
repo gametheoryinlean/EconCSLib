@@ -2508,6 +2508,19 @@ structure EnvelopeVirtualSurplusEnvironmentAssumptions
   virtualValue_integrable :
     ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i)
 
+/-- Build the environment-level envelope package from primitive distribution
+assumptions and one-dimensional virtual-value integrability. -/
+theorem EnvelopeVirtualSurplusEnvironmentAssumptions.of_primitives
+    {A : BayesianSingleItemAuction I}
+    (hAC :
+      ∀ i : I, AbsolutelyContinuousOnInterval (A.typeData.cdf i).cdf 0 (A.typeData.omega i))
+    (hdens : A.HasPositiveDensityOnSupport)
+    (hvirt : ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i)) :
+    A.EnvelopeVirtualSurplusEnvironmentAssumptions where
+  cdf_absolutelyContinuous := hAC
+  positive_density_on_support := hdens
+  virtualValue_integrable := hvirt
+
 theorem EnvelopeVirtualSurplusEnvironmentAssumptions.typeDensity_nonnegative_ae
     {A : BayesianSingleItemAuction I}
     (h : A.EnvelopeVirtualSurplusEnvironmentAssumptions) (i : I) :
@@ -3804,6 +3817,33 @@ structure RegularMyersonICIREnvironmentAssumptions
   envelope_environment :
     A.EnvelopeVirtualSurplusEnvironmentAssumptions
 
+/-- Build the regular-Myerson environment package from primitive environment
+data: independent priors, CDF absolute continuity, positive density on support,
+and one-dimensional virtual-value integrability. -/
+theorem RegularMyersonICIREnvironmentAssumptions.of_primitives
+    [Fintype I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I}
+    (hind : A.HasIndependentTypePriors)
+    (hAC :
+      ∀ i : I, AbsolutelyContinuousOnInterval (A.typeData.cdf i).cdf 0 (A.typeData.omega i))
+    (hdens : A.HasPositiveDensityOnSupport)
+    (hvirt : ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i)) :
+    A.RegularMyersonICIREnvironmentAssumptions where
+  independent_type_priors := hind
+  envelope_environment :=
+    EnvelopeVirtualSurplusEnvironmentAssumptions.of_primitives hAC hdens hvirt
+
+/-- Build the regular-Myerson environment package from independent priors and
+an already packaged envelope/virtual-surplus environment. -/
+theorem RegularMyersonICIREnvironmentAssumptions.of_envelopeEnvironment
+    [Fintype I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I}
+    (hind : A.HasIndependentTypePriors)
+    (henv : A.EnvelopeVirtualSurplusEnvironmentAssumptions) :
+    A.RegularMyersonICIREnvironmentAssumptions where
+  independent_type_priors := hind
+  envelope_environment := henv
+
 /-- Projection: the auction environment has independent type priors. -/
 theorem RegularMyersonICIREnvironmentAssumptions.hasIndependentTypePriors
     [Fintype I] [DecidableEq I]
@@ -3968,6 +4008,22 @@ theorem RegularMyersonICIRAnalyticAssumptions.of_environment_candidateProfileSpl
     A.RegularMyersonICIRAnalyticAssumptions :=
   RegularMyersonICIRAnalyticAssumptions.of_candidateProfileSplitAssumptions
     henv.hasIndependentTypePriors henv.envelopeEnvironment hcand
+
+/-- Build the regular Myerson analytic package directly from primitive
+environment assumptions and the candidate profile-split package. -/
+theorem RegularMyersonICIRAnalyticAssumptions.of_primitives_candidateProfileSplitAssumptions
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    {A : BayesianSingleItemAuction I}
+    (hind : A.HasIndependentTypePriors)
+    (hAC :
+      ∀ i : I, AbsolutelyContinuousOnInterval (A.typeData.cdf i).cdf 0 (A.typeData.omega i))
+    (hdens : A.HasPositiveDensityOnSupport)
+    (hvirt : ∀ i : I, Integrable (A.virtualValue i) (A.typeMeasure i))
+    (hcand : A.RegularMyersonICIRCandidateProfileSplitAssumptions) :
+    A.RegularMyersonICIRAnalyticAssumptions :=
+  RegularMyersonICIRAnalyticAssumptions.of_environment_candidateProfileSplitAssumptions
+    (RegularMyersonICIREnvironmentAssumptions.of_primitives hind hAC hdens hvirt)
+    hcand
 
 /-! ### Projections from the analytic package -/
 

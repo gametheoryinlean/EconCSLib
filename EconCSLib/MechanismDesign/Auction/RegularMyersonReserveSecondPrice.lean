@@ -885,6 +885,43 @@ theorem ReserveSecondPriceCandidateAssumptions.of_interimMeasurable
   reserve_nonnegative := hrho0
   interim_measurability := hmeas
 
+/-- Package raw a.e.-strong measurability as reserve second-price candidate assumptions. -/
+theorem ReserveSecondPriceCandidateAssumptions.of_aestronglyMeasurable
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (hrho0 : 0 ≤ rho)
+    (halloc_meas :
+      ∀ i z_i,
+        AEStronglyMeasurable
+          (fun t => (A.reserveSecondPriceAuction rho).interimAllocationIntegrand i z_i t)
+          ((A.reserveSecondPriceAuction rho).opponentPrior i))
+    (hpay_meas :
+      ∀ i z_i,
+        AEStronglyMeasurable
+          (fun t => (A.reserveSecondPriceAuction rho).interimPaymentIntegrand i z_i t)
+          ((A.reserveSecondPriceAuction rho).opponentPrior i)) :
+    A.ReserveSecondPriceCandidateAssumptions rho :=
+  ReserveSecondPriceCandidateAssumptions.of_interimMeasurable hrho0
+    ⟨halloc_meas, hpay_meas⟩
+
+/-- Package measurable reserve second-price interim integrands as candidate assumptions. -/
+theorem ReserveSecondPriceCandidateAssumptions.of_measurable
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (hrho0 : 0 ≤ rho)
+    (halloc_meas :
+      ∀ i z_i,
+        Measurable
+          (fun t => (A.reserveSecondPriceAuction rho).interimAllocationIntegrand i z_i t))
+    (hpay_meas :
+      ∀ i z_i,
+        Measurable
+          (fun t => (A.reserveSecondPriceAuction rho).interimPaymentIntegrand i z_i t)) :
+    A.ReserveSecondPriceCandidateAssumptions rho :=
+  ReserveSecondPriceCandidateAssumptions.of_interimMeasurable hrho0
+    (ReserveSecondPriceInterimMeasurabilityAssumptions.of_measurable A rho
+      halloc_meas hpay_meas)
+
 /-- Package nonnegative reserve and a.e. unique highest bids as reserve
 second-price candidate assumptions. -/
 theorem ReserveSecondPriceCandidateAssumptions.of_ae_unique_argmax
@@ -1025,6 +1062,23 @@ theorem reserveSecondPriceAuction_isIndividuallyRationalOnSupport
     (A.reserveSecondPriceAuction rho)
       |>.isIndividuallyRationalOnSupport_of_isZeroNormalized_of_hasInterimEnvelopeFormula
         (A.reserveSecondPriceAuction_isZeroNormalized hrho) henv hnonneg
+
+/-- Candidate-side assumptions imply Bayesian interim IC for reserve second-price. -/
+theorem ReserveSecondPriceCandidateAssumptions.isIncentiveCompatible
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.ReserveSecondPriceCandidateAssumptions rho) :
+    (A.reserveSecondPriceAuction rho).IsIncentiveCompatible :=
+  A.reserveSecondPriceAuction_isIncentiveCompatible rho h.hasIntegrableInterimObjects
+
+/-- Candidate-side assumptions imply supportwise interim IR for reserve second-price. -/
+theorem ReserveSecondPriceCandidateAssumptions.isIndividuallyRationalOnSupport
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    {A : BayesianSingleItemAuction I} {rho : ℝ}
+    (h : A.ReserveSecondPriceCandidateAssumptions rho) :
+    (A.reserveSecondPriceAuction rho).IsIndividuallyRationalOnSupport :=
+  A.reserveSecondPriceAuction_isIndividuallyRationalOnSupport
+    h.reserveNonnegative h.hasIntegrableInterimObjects
 
 /-- Reserve second-price as a feasible IC/IR integrable candidate. -/
 theorem reserveSecondPriceAuction_isFeasibleICIRIntegrable
