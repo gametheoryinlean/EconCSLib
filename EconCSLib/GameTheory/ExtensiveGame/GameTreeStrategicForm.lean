@@ -99,13 +99,14 @@ theorem profileStrategy_surjective :
 /-- The normal-form profile induced by the canonical backward-induction
     strategy. Each player is assigned the same complete contingent plan
     `optStrategy`; at a node, `profileStrategy` then reads the mover's plan. -/
-noncomputable def optStrategyProfile [TotalPreorder U] : ι → PlayerStrategy ι U :=
+noncomputable def optStrategyProfile [TotalPreorder U] [DecidableLE U] :
+    ι → PlayerStrategy ι U :=
   fun _ => (optStrategy : PlayerStrategy ι U)
 
 /-- Evaluating the backward-induction normal-form profile recovers the
     canonical backward-induction tree strategy. -/
 @[simp]
-theorem profileStrategy_optStrategyProfile [TotalPreorder U] :
+theorem profileStrategy_optStrategyProfile [TotalPreorder U] [DecidableLE U] :
     profileStrategy (optStrategyProfile : ι → PlayerStrategy ι U) =
       (optStrategy : Strategy ι U) :=
   rfl
@@ -221,7 +222,7 @@ theorem IsSubgamePerfectOn.exists_toStrategicGame_nash_of_properSubgame
 
 /-- The extracted strategic-form game of a terminal leaf has a pure Nash
     equilibrium. -/
-theorem exists_toStrategicGame_nash_Leaf (p : ι → U) :
+theorem exists_toStrategicGame_nash_Leaf [DecidableLE U] (p : ι → U) :
     ∃ σ : (toStrategicGame (Leaf p : GameTree ι U)).Profile,
       _root_.IsNashEquilibrium (toStrategicGame (Leaf p : GameTree ι U)) σ :=
   (isNashAt_Leaf (optStrategy : Strategy ι U) p).exists_toStrategicGame_nash
@@ -790,6 +791,8 @@ theorem exists_toStrategicGame_nash_and_children_isSubgamePerfectOn_iff_exists_i
         simpa using hspe.toNashAt)
     · intro c hc
       simpa using hspe.child hc
+
+variable [DecidableLE U]
 
 /-- The backward-induction normal-form profile is a pure Nash equilibrium of
     the extracted strategic-form game. -/

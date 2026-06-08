@@ -14,8 +14,9 @@ subgame-perfect equilibrium, obtainable via backward induction.
 
 ## Minimal assumptions
 
-Only `[TotalPreorder U]` — preorder + totality, no antisymmetry,
-no decidability. See `ExtensiveGame/BackwardInduction.lean`.
+Only `[TotalPreorder U] [DecidableLE U]` — preorder + totality plus
+decidable comparison for the computable argmax used by backward induction.
+See `ExtensiveGame/BackwardInduction.lean`.
 
 ## Main definitions
 
@@ -43,7 +44,7 @@ no decidability. See `ExtensiveGame/BackwardInduction.lean`.
 
 namespace GameTree
 
-variable {ι U : Type*} [TotalPreorder U]
+variable {ι U : Type*} [TotalPreorder U] [DecidableLE U]
 
 /-! ### Strategies -/
 

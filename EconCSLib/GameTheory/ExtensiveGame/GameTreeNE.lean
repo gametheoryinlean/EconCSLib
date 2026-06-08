@@ -162,12 +162,12 @@ theorem isSubgamePerfectOn_Leaf_iff {σ : Strategy ι U} {p : ι → U} :
     exact isSubgamePerfectOn_Leaf σ p
 
 /-- Every terminal leaf has a root-scoped Nash equilibrium. -/
-theorem exists_isNashAt_Leaf (p : ι → U) :
+theorem exists_isNashAt_Leaf [DecidableLE U] (p : ι → U) :
     ∃ σ : Strategy ι U, IsNashAt σ (Leaf p) := by
   exact ⟨optStrategy, isNashAt_Leaf optStrategy p⟩
 
 /-- Every terminal leaf has a root-scoped subgame-perfect equilibrium. -/
-theorem exists_isSubgamePerfectOn_Leaf (p : ι → U) :
+theorem exists_isSubgamePerfectOn_Leaf [DecidableLE U] (p : ι → U) :
     ∃ σ : Strategy ι U, IsSubgamePerfectOn σ (Leaf p) := by
   exact ⟨optStrategy, isSubgamePerfectOn_Leaf optStrategy p⟩
 
@@ -728,6 +728,8 @@ theorem exists_isSubgamePerfectOn_iff_exists_isNashAt_of_no_properSubgame
       ∃ σ : Strategy ι U, IsNashAt σ g :=
   exists_isSubgamePerfectOn_iff_exists_isNashAt_of_hasOnlyRootSubgames g
     ((hasOnlyRootSubgames_iff_no_properSubgame g).mpr hnoProper)
+
+variable [DecidableLE U]
 
 /-- The canonical backward-induction strategy is root-scoped subgame-perfect
     at every finite perfect-information root. -/
