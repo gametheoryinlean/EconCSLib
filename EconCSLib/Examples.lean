@@ -12,6 +12,7 @@ import EconCSLib.Examples.RockPaperScissors
 import EconCSLib.Examples.SimpleAuction
 import EconCSLib.Examples.SimpleGameTree
 import EconCSLib.Examples.TicTacToe
+import EconCSLib.Examples.UltimatumGame
 
 /-!
 # EconCSLib.Examples
