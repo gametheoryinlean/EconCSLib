@@ -36,8 +36,6 @@ Main result: common-regular-reserve MSZ 12.61 optimality.
 At `rho = max b`, reserve second-price sells while the present Myerson allocation
 withholds. The proof compares virtual surplus and expected revenue.
 
-This file was generated with AI assistance and reviewed by Ma Yuxuan.
-
 References:
 * Maschler, Solan, Zamir, *Game Theory*, Corollary 12.61.
 -/
