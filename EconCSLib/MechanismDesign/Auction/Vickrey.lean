@@ -35,7 +35,8 @@ Satisfied by `ℤ`, `ℚ`, `ℝ`, and any `LinearOrderedField`.
 
 ## Main definitions
 
-* `Auction.SecondPrice.winner` - the highest bidder (uses `Auction.argmaxBid` from `Basic`)
+* `Auction.SecondPrice.bidProfile` - the named bid-profile wrapper
+* `Auction.SecondPrice.winner` - the highest bidder (uses `Auction.BidProfile.argmaxBid`)
 * `Auction.SecondPrice.secondPrice` - highest bid excluding the winner
 * `Auction.SecondPrice.bid_winner_eq_maxBid`
 * `Auction.SecondPrice.bid_le_bid_winner`
@@ -71,15 +72,20 @@ namespace SecondPrice
 
 /-! ### Winner and second price
 
-In the second-price auction, the winner is the highest bidder (`Auction.argmaxBid`).
+In the second-price auction, the winner is the highest bidder
+(`Auction.BidProfile.argmaxBid`).
 The price paid by the winner is the second-highest bid (highest bid excluding the winner). -/
 
+/-- The named bid-profile wrapper for second-price reports. -/
+def bidProfile (b : I → U) : Auction.BidProfile I U :=
+  Auction.BidProfile.ofFunction b
+
 /-- The winner of the second-price auction: the bidder with the highest bid.
-  Uses `Auction.argmaxBid` from `MechanismDesign.Auction.AuctionBasic`. -/
-noncomputable def winner (b : I → U) : I := Auction.argmaxBid b
+  Uses `Auction.BidProfile.argmaxBid` from `MechanismDesign.Auction.AuctionBasic`. -/
+noncomputable def winner (b : I → U) : I := (bidProfile b).argmaxBid
 
 /-- The second price: the highest bid among all bidders other than the winner. -/
-noncomputable def secondPrice (b : I → U) : U := Auction.maxBidExcluding b (winner b)
+noncomputable def secondPrice (b : I → U) : U := (bidProfile b).maxBidExcluding (winner b)
 
 /-! #### Bridge lemmas
 
@@ -156,7 +162,11 @@ theorem valuation_is_dominant (v : I → U) (i : I) (b : I → U) :
     · -- Case 1a: i also wins with truthful bid — same maxBidExcluding, same payoff
       rw [utility_winner h2, sub_le_sub_iff_left]
       show secondPrice (Function.update b i (v i)) ≤ secondPrice b
-      simp only [secondPrice, ← h1, ← h2, key, le_refl]
+      have key' :
+          (bidProfile (Function.update b i (v i))).maxBidExcluding i =
+            (bidProfile b).maxBidExcluding i := by
+        simpa [bidProfile] using key
+      simpa [secondPrice, ← h1, ← h2] using le_of_eq key'
     · -- Case 1b: i loses with truthful bid — utility becomes 0
       rw [utility_loser h2, sub_nonpos]
       -- Goal: v i ≤ secondPrice b = maxBidExcluding b (winner b) = maxBidExcluding b i

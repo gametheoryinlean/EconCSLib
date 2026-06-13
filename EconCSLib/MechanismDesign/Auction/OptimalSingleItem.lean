@@ -789,7 +789,7 @@ noncomputable def virtualScore [LinearOrder I]
 noncomputable def virtualSurplusMaximizingWinner
     [Fintype I] [Nontrivial I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) (b : I → ℝ) : I :=
-  Auction.argmaxBid (A.virtualScore b)
+  (Auction.BidProfile.ofFunction (A.virtualScore b)).argmaxBid
 
 /-- The selected winner is exactly the bidder whose lexicographic virtual score
 dominates every other bidder's score. -/
@@ -846,7 +846,7 @@ noncomputable def virtualSurplusMaximizingPaymentRule
 /-- The virtual-surplus allocation rule paired with its Myerson payment. -/
 noncomputable def virtualSurplusMaximizingMechanism
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
-    (A : BayesianSingleItemAuction I) : SingleParameterMechanism I ℝ where
+    (A : BayesianSingleItemAuction I) : SingleParameterAuction I ℝ where
   allocationRule := A.virtualSurplusMaximizingAllocationRule
   paymentRule := A.virtualSurplusMaximizingPaymentRule
 
@@ -915,13 +915,22 @@ noncomputable def virtualSurplusMaximizingAuction
     (A.virtualSurplusMaximizingAuction).typeData = A.typeData := by
   rfl
 
-/-- Forgetting the lifted auction to a single-parameter mechanism recovers the
-virtual-surplus-maximizing mechanism. -/
+/-- Forgetting the lifted auction to a single-parameter auction recovers the
+virtual-surplus-maximizing auction-layer mechanism. -/
+@[simp] theorem virtualSurplusMaximizingAuction_toSingleParameterAuction
+    [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
+    (A : BayesianSingleItemAuction I) :
+    (A.virtualSurplusMaximizingAuction).toSingleParameterAuction =
+      A.virtualSurplusMaximizingMechanism := by
+  rfl
+
+/-- Forgetting the lifted auction further to a single-parameter mechanism
+recovers the underlying virtual-surplus-maximizing mechanism. -/
 @[simp] theorem virtualSurplusMaximizingAuction_toSingleParameterMechanism
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) :
     (A.virtualSurplusMaximizingAuction).toSingleParameterMechanism =
-      A.virtualSurplusMaximizingMechanism := by
+      (A.virtualSurplusMaximizingMechanism).toSingleParameterMechanism := by
   rfl
 
 /-- Forgetting the lifted auction to a direct Bayesian mechanism preserves the
@@ -1922,7 +1931,7 @@ theorem virtualSurplusMaximizingAuction_isDSIC_of_isRegular
 @[simp] theorem virtualSurplusMaximizingMechanism_eq_withMyersonPayment
     [Fintype I] [Nontrivial I] [DecidableEq I] [LinearOrder I]
     (A : BayesianSingleItemAuction I) :
-    A.virtualSurplusMaximizingMechanism =
+    (A.virtualSurplusMaximizingMechanism).toSingleParameterMechanism =
       SingleParameterMechanism.withMyersonPayment A.virtualSurplusMaximizingAllocationRule := by
   rfl
 

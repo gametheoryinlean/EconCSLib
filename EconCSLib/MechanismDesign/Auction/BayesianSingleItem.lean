@@ -90,8 +90,9 @@ abbrev OpponentTypeProfile (I : Type*) (i : I) := OpponentProfile I ℝ i
 probabilistic allocation.
 
 The allocation rule returns a function `Q : I → ℝ`, where `Q i` is agent `i`'s
-probability of receiving the item under the reported type profile. This matches
-the allocation/payment shape of `SingleParameterMechanism I ℝ`.
+probability of receiving the item under the reported type profile. This uses
+the auction-facing `SingleParameterAuction I ℝ` layer, whose underlying
+transfer mechanism is `SingleParameterMechanism I ℝ`.
 
 The mechanism is direct: the message space equals the type space, which is taken
 to be `ℝ` for each agent, and payments are real-valued. Continuous-type data
@@ -99,7 +100,7 @@ are stored separately in `typeData`, while the Bayesian prior is recorded by
 extra fields. -/
 
 structure BayesianSingleItemAuction (I : Type*)
-    extends SingleParameterMechanism I ℝ where
+    extends SingleParameterAuction I ℝ where
   /-- Common prior probability measure over true type profiles. -/
   prior : MeasureTheory.Measure (∀ _ : I, ℝ)
   /-- The prior is a probability measure. -/
@@ -160,6 +161,22 @@ def toDirectBayesianMechanismWithTransfers (A : BayesianSingleItemAuction I) :
 instance : Coe (BayesianSingleItemAuction I)
     (DirectBayesianMechanismWithTransfers I (fun _ => ℝ) (I → ℝ) ℝ) where
   coe := toDirectBayesianMechanismWithTransfers
+
+/-! ### Report profiles as bid profiles -/
+
+/-- View a report profile of a Bayesian single-item auction as a named bid profile. -/
+def reportBidProfile (A : BayesianSingleItemAuction I) (b : I → ℝ) :
+    Auction.BidProfile I ℝ :=
+  A.bidProfile b
+
+/-- View a report profile with bidder `i` excluded.
+
+This is the Bayesian single-item specialization of the base
+`Auction.BidProfileWithout` abstraction. -/
+def reportBidProfileWithout [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (b : I → ℝ) (i : I) :
+    Auction.BidProfileWithout I ℝ :=
+  A.bidProfileWithout b i
 
 /-- The allocation rule respects the single-item probability budget. -/
 def RespectsSingleItemCapacity [Fintype I] (A : BayesianSingleItemAuction I) : Prop :=

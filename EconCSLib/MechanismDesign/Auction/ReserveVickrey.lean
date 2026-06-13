@@ -181,7 +181,7 @@ lemma clearingPrice_eq_max_reserve_excluding_of_allocation_eq_some
     (halloc : allocation reserve b = some i) :
     clearingPrice reserve b = max reserve (Auction.maxBidExcluding b i) := by
   have hwinner : SecondPrice.winner b = i := winner_eq_of_allocation_eq_some halloc
-  simp [clearingPrice, SecondPrice.secondPrice, hwinner]
+  simp [clearingPrice, SecondPrice.secondPrice, SecondPrice.bidProfile, hwinner]
 
 omit [AddCommGroup U] [IsOrderedAddMonoid U] in
 private lemma bid_le_clearing_threshold_of_not_allocation_update_self

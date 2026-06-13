@@ -121,6 +121,14 @@ noncomputable def reserveSecondPriceAuction [Fintype I] [Nontrivial I] [Decidabl
   prob_opponentPrior := A.prob_opponentPrior
   typeData := A.typeData
 
+@[simp] theorem reserveSecondPriceAuction_toSingleParameterAuction
+    [Fintype I] [Nontrivial I] [DecidableEq I]
+    (A : BayesianSingleItemAuction I) (rho : ℝ) :
+    (A.reserveSecondPriceAuction rho).toSingleParameterAuction =
+      { allocationRule := (A.reserveSecondPriceAuction rho).allocationRule
+        paymentRule := (A.reserveSecondPriceAuction rho).paymentRule } := by
+  rfl
+
 @[simp] theorem reserveSecondPriceAuction_allocationRule
     [Fintype I] [Nontrivial I] [DecidableEq I]
     (A : BayesianSingleItemAuction I) (rho : ℝ) (b : I → ℝ) :
