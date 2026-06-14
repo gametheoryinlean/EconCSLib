@@ -424,7 +424,7 @@ lemma welfare_eq_max_of_favorable
     (hv_nn : ∀ i, 0 ≤ v i)
     (hv_le : ∀ i, v i ≤ M)
     {σ : Equiv.Perm (Fin n)} (hσ : Favorable v σ) :
-    (auction n M).welfare v (v ∘ σ) = maxV (by omega) v := by
+    (auction n M).welfare (v ∘ σ) (v ∘ σ) = maxV (by omega) v := by
   sorry
 
 /-- The set of permutations satisfying the favourable event. -/
@@ -467,7 +467,7 @@ theorem competitive
     (hv_le : ∀ i, v i ≤ M) :
     (1 / 4 : F) * maxV (by omega) v ≤
       (∑ σ : Equiv.Perm (Fin n),
-        (auction n M).welfare v (v ∘ σ)) /
+        (auction n M).welfare (v ∘ σ) (v ∘ σ)) /
           (n.factorial : F) := by
   -- Set up: MAX = maxV, and its non-negativity from nonneg valuations.
   set MAX := maxV (show 1 ≤ n by omega) v with hMAX_def
@@ -475,11 +475,12 @@ theorem competitive
     le_trans (hv_nn ⟨0, by omega⟩) (le_maxV _ v _)
   -- Welfare is nonneg pointwise.
   have hwelfare_nn :
-      ∀ σ : Equiv.Perm (Fin n), 0 ≤ (auction n M).welfare v (v ∘ σ) :=
-    fun σ => SingleItemAuction.welfare_nonneg (auction n M) v (v ∘ σ) hv_nn
+      ∀ σ : Equiv.Perm (Fin n), 0 ≤ (auction n M).welfare (v ∘ σ) (v ∘ σ) :=
+    fun σ => SingleItemAuction.welfare_nonneg (auction n M) (v ∘ σ) (v ∘ σ)
+                (fun i => hv_nn _)
   -- Welfare equals MAX on the favourable set.
   have hwelfare_FS :
-      ∀ σ ∈ favorableSet v, (auction n M).welfare v (v ∘ σ) = MAX := by
+      ∀ σ ∈ favorableSet v, (auction n M).welfare (v ∘ σ) (v ∘ σ) = MAX := by
     classical
     intro σ hσ
     obtain ⟨F⟩ : Nonempty (Favorable v σ) := (Finset.mem_filter.mp hσ).2
@@ -488,13 +489,13 @@ theorem competitive
   -- Step 1: Σ welfare ≥ |FS| * MAX.
   have step1 :
       ((favorableSet v).card : F) * MAX ≤
-      ∑ σ : Equiv.Perm (Fin n), (auction n M).welfare v (v ∘ σ) := by
+      ∑ σ : Equiv.Perm (Fin n), (auction n M).welfare (v ∘ σ) (v ∘ σ) := by
     calc ((favorableSet v).card : F) * MAX
         = ∑ _σ ∈ favorableSet v, MAX := by
             rw [Finset.sum_const, nsmul_eq_mul]
-      _ = ∑ σ ∈ favorableSet v, (auction n M).welfare v (v ∘ σ) :=
+      _ = ∑ σ ∈ favorableSet v, (auction n M).welfare (v ∘ σ) (v ∘ σ) :=
             Finset.sum_congr rfl (fun σ hσ => (hwelfare_FS σ hσ).symm)
-      _ ≤ ∑ σ : Equiv.Perm (Fin n), (auction n M).welfare v (v ∘ σ) := by
+      _ ≤ ∑ σ : Equiv.Perm (Fin n), (auction n M).welfare (v ∘ σ) (v ∘ σ) := by
             apply Finset.sum_le_sum_of_subset_of_nonneg
             · exact Finset.subset_univ _
             · intros σ _ _; exact hwelfare_nn σ
@@ -513,7 +514,7 @@ theorem competitive
             by linarith
           linarith
     _ = ((favorableSet v).card : F) * MAX := by ring
-    _ ≤ ∑ σ : Equiv.Perm (Fin n), (auction n M).welfare v (v ∘ σ) := step1
+    _ ≤ ∑ σ : Equiv.Perm (Fin n), (auction n M).welfare (v ∘ σ) (v ∘ σ) := step1
 
 end Secretary
 
