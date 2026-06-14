@@ -399,25 +399,143 @@ lemma welfare_nonneg {n : ℕ} (M : F) (v b : Fin n → F)
     0 ≤ (auction n M).welfare v b :=
   SingleItemAuction.welfare_nonneg (auction n M) v b hv
 
-/-- **Key combinatorial lemma (deferred).** Under the favourable event the
+/-- The price posted in the *observe* phase: `M + 1`, by construction.
+This is what guarantees rejection of every first-phase bidder under the
+bound `v i ≤ M`. -/
+private lemma auction_price_phase1
+    {n : ℕ} (M : F) (h : List F) (hh : h.length < n / 2) :
+    (auction n M).price h = M + 1 := by
+  show (if h.length < n / 2 then M + 1 else h.foldr max 0) = M + 1
+  simp [hh]
+
+/-- The price posted in the *threshold* phase: maximum bid seen. -/
+private lemma auction_price_phase2
+    {n : ℕ} (M : F) (h : List F) (hh : ¬ h.length < n / 2) :
+    (auction n M).price h = h.foldr max 0 := by
+  show (if h.length < n / 2 then M + 1 else h.foldr max 0) = h.foldr max 0
+  simp [hh]
+
+/-- **Phase 1: all bidders rejected.** Processing a list of bids whose
+combined length keeps the history strictly below `⌊n/2⌋`, with every bid
+bounded by `M`, simply accumulates them into the history without selling.
+The continuation `rest` is processed from the extended history. -/
+private lemma welfareFrom_phase1
+    {n : ℕ} (M : F) (h : List F) (bs : List F) (rest : List (F × F))
+    (hbs_le : ∀ b ∈ bs, b ≤ M)
+    (hlen : h.length + bs.length ≤ n / 2) :
+    (auction n M).welfareFrom h (bs.map (fun b => (b, b)) ++ rest) =
+      (auction n M).welfareFrom (h ++ bs) rest := by
+  induction bs generalizing h with
+  | nil => simp
+  | cons b bs ih =>
+      have hh_lt : h.length < n / 2 := by
+        simp only [List.length_cons] at hlen
+        omega
+      have hprice : (auction n M).price h = M + 1 :=
+        auction_price_phase1 M h hh_lt
+      have hb_le_M : b ≤ M := hbs_le b List.mem_cons_self
+      have hrej : ¬ (auction n M).price h ≤ b := by
+        rw [hprice]; linarith
+      simp only [List.map_cons, List.cons_append]
+      rw [(auction n M).welfareFrom_cons_reject _ _ _ _ hrej]
+      have hbs_le' : ∀ b' ∈ bs, b' ≤ M :=
+        fun b' hb' => hbs_le b' (List.mem_cons_of_mem _ hb')
+      have hlen' : (h ++ [b]).length + bs.length ≤ n / 2 := by
+        simp only [List.length_append, List.length_cons, List.length_nil,
+          List.length_cons] at *
+        omega
+      rw [ih _ hbs_le' hlen']
+      congr 1
+      simp
+
+/-- Helper: `foldr max 0` is bounded by `T` when starting from `0 ≤ T`
+and every element is `≤ T`. -/
+private lemma foldr_max_le_of_all_le
+    (l : List F) (T : F) (hT : 0 ≤ T) (hl : ∀ x ∈ l, x ≤ T) :
+    l.foldr max 0 ≤ T := by
+  induction l with
+  | nil => simpa using hT
+  | cons a rest ih =>
+      have ha : a ≤ T := hl a List.mem_cons_self
+      have hrest : ∀ x ∈ rest, x ≤ T :=
+        fun x hx => hl x (List.mem_cons_of_mem _ hx)
+      simpa using max_le ha (ih hrest)
+
+/-- Folding `max` from `0` is always nonneg (the seed `0` is a lower
+bound and `max` can only go up). -/
+private lemma zero_le_foldr_max (l : List F) : (0 : F) ≤ l.foldr max 0 := by
+  induction l with
+  | nil => simp
+  | cons a rest ih => simpa using le_max_of_le_right ih
+
+/-- Algebraic identity: `foldr max 0` distributes over list concatenation. -/
+private lemma foldr_max_append
+    (l₁ l₂ : List F) :
+    (l₁ ++ l₂).foldr max 0 = max (l₁.foldr max 0) (l₂.foldr max 0) := by
+  induction l₁ with
+  | nil =>
+      simp only [List.nil_append, List.foldr_nil]
+      exact (max_eq_right (zero_le_foldr_max l₂)).symm
+  | cons a rest ih =>
+      simp only [List.cons_append, List.foldr_cons, ih, max_assoc]
+
+/-- Appending values bounded by an already-attained max keeps the max. -/
+private lemma foldr_max_append_le
+    (h bs : List F) (T : F) (hT : 0 ≤ T)
+    (hh_eq : h.foldr max 0 = T) (hbs_le : ∀ b ∈ bs, b ≤ T) :
+    (h ++ bs).foldr max 0 = T := by
+  rw [foldr_max_append, hh_eq]
+  exact max_eq_left (foldr_max_le_of_all_le _ _ hT hbs_le)
+
+/-- **Phase 2 reject prefix.** Once the history has reached size at
+least `⌊n/2⌋`, any further bid strictly below the current threshold is
+rejected and does not raise the threshold, so welfare is unchanged. -/
+private lemma welfareFrom_phase2_reject
+    {n : ℕ} (M : F) (h : List F) (T : F) (rest : List (F × F))
+    (hh_len : ¬ h.length < n / 2)
+    (hh_max : h.foldr max 0 = T) (hT_nn : 0 ≤ T)
+    (bs : List F) (hbs_lt_T : ∀ b ∈ bs, b < T) :
+    (auction n M).welfareFrom h (bs.map (fun b => (b, b)) ++ rest) =
+      (auction n M).welfareFrom (h ++ bs) rest := by
+  induction bs generalizing h with
+  | nil => simp
+  | cons b bs ih =>
+      have hprice : (auction n M).price h = T := by
+        rw [auction_price_phase2 _ _ hh_len, hh_max]
+      have hb_lt_T : b < T := hbs_lt_T b List.mem_cons_self
+      have hrej : ¬ (auction n M).price h ≤ b := by
+        rw [hprice]; linarith
+      simp only [List.map_cons, List.cons_append]
+      rw [(auction n M).welfareFrom_cons_reject _ _ _ _ hrej]
+      have hh'_len : ¬ (h ++ [b]).length < n / 2 := by
+        simp only [List.length_append, List.length_cons, List.length_nil]
+        omega
+      have hh'_max : (h ++ [b]).foldr max 0 = T := by
+        have hb_le_T : b ≤ T := le_of_lt hb_lt_T
+        apply foldr_max_append_le _ _ _ hT_nn hh_max
+        intro x hx
+        rcases List.mem_singleton.mp hx with rfl
+        exact hb_le_T
+      have hbs'_lt : ∀ b' ∈ bs, b' < T :=
+        fun b' hb' => hbs_lt_T b' (List.mem_cons_of_mem _ hb')
+      rw [ih _ hh'_len hh'_max hbs'_lt]
+      congr 1
+      simp
+
+/-- **Key combinatorial lemma.** Under the favourable event the
 secretary auction allocates the item to the argmax bidder, yielding
 welfare equal to the maximum valuation.
 
-Proof sketch:
-1. In the first phase (positions `< n/2`) the posted price is `M + 1`,
-   strictly above every bid `vᵢ ≤ M`, so every first-phase bidder is
-   rejected and their bid joins the history.
-2. After the first phase the history contains the first-half bids; by
-   the favourable event the maximum first-half bid equals
-   `v (σ second_pos)` (the second-largest valuation overall) because the
-   argmax is in the second half.
-3. In the second phase the posted price stays equal to that maximum: any
-   rejected bid is `< v (σ second_pos)` so does not raise the max.
-4. The first second-phase bidder whose bid clears the threshold is the
-   argmax bidder, by injectivity of `v` and the strict gap
-   `v (σ second_pos) < v (σ max_pos)`. The auction sells to them at
-   price `v (σ second_pos)`, but welfare is the *valuation* of the
-   winner, so the welfare equals `v (σ max_pos) = max v`. -/
+Proof outline:
+1. First phase (positions `< n/2`): every bidder is rejected by
+   `welfareFrom_phase1` (price `M + 1` strictly above every bid).
+2. After the first phase the history contains the first `n/2` bids of
+   `v ∘ σ`. Because the favourable event places `σ max_pos` in the
+   second half, the maximum first-phase bid equals `v (σ second_pos)`.
+3. Second phase: the threshold stays equal to `v (σ second_pos)` since
+   any further rejected bid is strictly smaller.
+4. The first second-phase bidder clearing the threshold is `σ max_pos`,
+   so welfare is `v (σ max_pos)`, which equals `maxV v`. -/
 lemma welfare_eq_max_of_favorable
     {n : ℕ} (hn : 2 ≤ n) (M : F) (v : Fin n → F)
     (hv_inj : Function.Injective v)
