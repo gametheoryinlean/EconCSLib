@@ -468,6 +468,17 @@ private lemma zero_le_foldr_max (l : List F) : (0 : F) ≤ l.foldr max 0 := by
   | nil => simp
   | cons a rest ih => simpa using le_max_of_le_right ih
 
+/-- Every element of a list is `≤` its `foldr max 0`. -/
+private lemma le_foldr_max_of_mem
+    (l : List F) (x : F) (hx : x ∈ l) :
+    x ≤ l.foldr max 0 := by
+  induction l with
+  | nil => exact absurd hx (List.not_mem_nil)
+  | cons a rest ih =>
+      rcases List.mem_cons.mp hx with rfl | hx'
+      · simpa using le_max_left _ _
+      · exact (ih hx').trans (by simpa using le_max_right _ _)
+
 /-- Algebraic identity: `foldr max 0` distributes over list concatenation. -/
 private lemma foldr_max_append
     (l₁ l₂ : List F) :
@@ -543,6 +554,24 @@ lemma welfare_eq_max_of_favorable
     (hv_le : ∀ i, v i ≤ M)
     {σ : Equiv.Perm (Fin n)} (hσ : Favorable v σ) :
     (auction n M).welfare (v ∘ σ) (v ∘ σ) = maxV (by omega) v := by
+  -- First reduce `maxV v` to the argmax bidder's valuation.
+  have hmaxV_eq : maxV (show 1 ≤ n by omega) v = v (σ hσ.max_pos) := by
+    apply le_antisymm
+    · apply Finset.sup'_le
+      intro j _
+      exact hσ.v_is_max j
+    · exact le_maxV _ v (σ hσ.max_pos)
+  rw [hmaxV_eq]
+  -- It remains to show `welfare = v (σ max_pos)`.
+  -- This is the substantive content, requiring tracking the auction's
+  -- state through the first ⌊n/2⌋ rejecting steps, then through the
+  -- second-phase reject prefix, then the accept at position `max_pos`.
+  -- The infrastructure for each piece is in place above
+  -- (`welfareFrom_phase1`, `welfareFrom_phase2_reject`,
+  -- `foldr_max_le_of_all_le`, `le_foldr_max_of_mem`), but combining them
+  -- into a full proof requires careful manipulation of `List.take`/
+  -- `List.drop` on `List.ofFn` and a downward induction on
+  -- `max_pos.val − k`. Deferred.
   sorry
 
 /-- The set of permutations satisfying the favourable event. -/
