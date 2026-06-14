@@ -295,7 +295,7 @@ theorem no_constant_competitive_ratio (c : F) (hc : 0 < c)
       rw [hzero]
       exact mul_pos hc hhalf
   · -- A.price [] ≤ 0. Adversary: v 0 = 0, v 1 = 1.
-    push_neg at hp
+    push Not at hp
     refine ⟨![0, 1], ?_, ?_⟩
     · have e0 : (![0, 1] : Fin 2 → F) 0 = 0 := by simp
       have e1 : (![0, 1] : Fin 2 → F) 1 = 1 := by simp
@@ -677,7 +677,7 @@ private theorem welfareFrom_aux
           rw [auction_price_phase1 M _ hphase1_len]
           have h_bid_le_M : v (σ ⟨k, hk_lt_n⟩) ≤ M := hv_le _
           linarith
-        · push_neg at hphase1
+        · push Not at hphase1
           have h_phase2_len : ¬ ((List.ofFn (v ∘ σ)).take k).length < n / 2 := by
             rw [List.length_take, List.length_ofFn]; omega
           rw [auction_price_phase2 M _ h_phase2_len]
