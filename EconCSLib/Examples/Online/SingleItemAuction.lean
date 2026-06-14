@@ -533,6 +533,188 @@ private lemma welfareFrom_phase2_reject
       congr 1
       simp
 
+/-- Helper: the max bid seen in the first `k` positions is at most `T`
+when `T` is an upper bound on every valuation other than the argmax,
+and `k ≤ max_pos.val`. -/
+private lemma foldr_max_take_le_T
+    {n : ℕ} (v : Fin n → F) (σ : Equiv.Perm (Fin n))
+    (hv_inj : Function.Injective v)
+    (hv_nn : ∀ i, 0 ≤ v i)
+    (hσ : Favorable v σ)
+    (k : ℕ) (hk : k ≤ hσ.max_pos.val) :
+    ((List.ofFn (v ∘ σ)).take k).foldr max 0 ≤ v (σ hσ.second_pos) := by
+  apply foldr_max_le_of_all_le _ _ (hv_nn _)
+  intro x hx
+  rcases List.mem_take_iff_getElem.mp hx with ⟨i, hi_lt, hi_eq⟩
+  -- hi_lt : i < min k (List.ofFn _).length
+  -- hi_eq : (List.ofFn _)[i] = x
+  -- So x = v (σ ⟨i, _⟩)
+  rw [List.length_ofFn] at hi_lt
+  have hi_lt_n : i < n := by
+    have := min_le_right k n
+    omega
+  rw [← hi_eq, List.getElem_ofFn]
+  -- Goal: v (σ ⟨i, hi_lt_n⟩) ≤ v (σ second_pos)
+  -- Use: ⟨i, hi_lt_n⟩ ≠ max_pos (since i < k ≤ max_pos.val).
+  apply hσ.v_is_second
+  intro hcontra
+  -- hcontra : σ ⟨i, hi_lt_n⟩ = σ max_pos
+  have hi_eq_max : (⟨i, hi_lt_n⟩ : Fin n) = hσ.max_pos := σ.injective hcontra
+  have hi_eq_val : i = hσ.max_pos.val := congrArg Fin.val hi_eq_max
+  have hi_lt_max : i < hσ.max_pos.val := by
+    have := min_le_left k n
+    omega
+  omega
+
+/-- Helper: when `k > second_pos.val`, the second-largest bid `T` is in
+`bids.take k`, so `T ≤ max`. -/
+private lemma T_le_foldr_max_take
+    {n : ℕ} (v : Fin n → F) (σ : Equiv.Perm (Fin n))
+    (hσ : Favorable v σ)
+    (k : ℕ) (hk_gt : hσ.second_pos.val < k) (hk_le : k ≤ n) :
+    v (σ hσ.second_pos) ≤ ((List.ofFn (v ∘ σ)).take k).foldr max 0 := by
+  apply le_foldr_max_of_mem
+  rw [List.mem_take_iff_getElem]
+  refine ⟨hσ.second_pos.val, ?_, ?_⟩
+  · rw [List.length_ofFn]
+    exact lt_min hk_gt hσ.second_pos.isLt
+  · rw [List.getElem_ofFn]
+    rfl
+
+/-- Helper: the bid at position `k` in the truthful arrival sequence
+under permutation `σ`. -/
+private lemma bid_at {n : ℕ} (v : Fin n → F) (σ : Equiv.Perm (Fin n))
+    (k : ℕ) (hk : k < n) :
+    (List.ofFn (v ∘ σ))[k]'(by rw [List.length_ofFn]; exact hk) = v (σ ⟨k, hk⟩) := by
+  rw [List.getElem_ofFn]
+  rfl
+
+/-- The recursive core of `welfare_eq_max_of_favorable`. For every
+position `k ≤ max_pos.val`, processing the auction from a history
+equal to the first `k` bids yields welfare = `v (σ max_pos)`. Proved by
+induction on `d = max_pos.val − k`. -/
+private theorem welfareFrom_aux
+    {n : ℕ} (M : F) (v : Fin n → F) (σ : Equiv.Perm (Fin n))
+    (hv_inj : Function.Injective v)
+    (hv_nn : ∀ i, 0 ≤ v i)
+    (hv_le : ∀ i, v i ≤ M)
+    (hσ : Favorable v σ) (hn : 2 ≤ n) :
+    ∀ (d k : ℕ), k + d = hσ.max_pos.val →
+    (auction n M).welfareFrom
+      ((List.ofFn (v ∘ σ)).take k)
+      (((List.ofFn (v ∘ σ)).drop k).map (fun b => (b, b)))
+    = v (σ hσ.max_pos) := by
+  intro d
+  induction d with
+  | zero =>
+      intro k hk
+      have hk_eq : k = hσ.max_pos.val := by omega
+      -- We have k = max_pos.val and need to process the accepting bid.
+      have hk_lt_n : k < n := by rw [hk_eq]; exact hσ.max_pos.isLt
+      -- Split bids.drop k = bids[k] :: bids.drop (k+1)
+      have hdrop_cons :
+          (List.ofFn (v ∘ σ)).drop k = v (σ ⟨k, hk_lt_n⟩) ::
+            (List.ofFn (v ∘ σ)).drop (k + 1) := by
+        have hlen : k < (List.ofFn (v ∘ σ)).length := by
+          rw [List.length_ofFn]; exact hk_lt_n
+        rw [List.drop_eq_getElem_cons hlen]
+        congr 1
+        exact bid_at v σ k hk_lt_n
+      rw [hdrop_cons]
+      simp only [List.map_cons]
+      -- Now apply welfareFrom_cons_accept with bid = v(σ ⟨k,_⟩)
+      have h_phase2 : ¬ ((List.ofFn (v ∘ σ)).take k).length < n / 2 := by
+        rw [List.length_take, List.length_ofFn]
+        have := hσ.max_in_second_half
+        omega
+      have h_price :
+          (auction n M).price ((List.ofFn (v ∘ σ)).take k) =
+          ((List.ofFn (v ∘ σ)).take k).foldr max 0 :=
+        auction_price_phase2 M _ h_phase2
+      have h_max_le_T :
+          ((List.ofFn (v ∘ σ)).take k).foldr max 0 ≤ v (σ hσ.second_pos) :=
+        foldr_max_take_le_T v σ hv_inj hv_nn hσ k (hk_eq.le)
+      have hfin_eq : (⟨k, hk_lt_n⟩ : Fin n) = hσ.max_pos := Fin.ext hk_eq
+      have h_bid_eq : v (σ ⟨k, hk_lt_n⟩) = v (σ hσ.max_pos) := by
+        rw [hfin_eq]
+      have h_accept :
+          (auction n M).price ((List.ofFn (v ∘ σ)).take k) ≤ v (σ ⟨k, hk_lt_n⟩) := by
+        rw [h_price, h_bid_eq]
+        linarith [hσ.v_second_lt_max]
+      rw [SingleItemAuction.welfareFrom_cons_accept _ _ _ _ _ h_accept]
+      exact h_bid_eq
+  | succ d ih =>
+      intro k hk
+      have hk_lt_max : k < hσ.max_pos.val := by omega
+      have hk_lt_n : k < n := lt_of_lt_of_le hk_lt_max hσ.max_pos.isLt.le
+      have hk_succ_le : (k + 1) + d = hσ.max_pos.val := by omega
+      -- Split bids.drop k = bids[k] :: bids.drop (k+1)
+      have hdrop_cons :
+          (List.ofFn (v ∘ σ)).drop k = v (σ ⟨k, hk_lt_n⟩) ::
+            (List.ofFn (v ∘ σ)).drop (k + 1) := by
+        have hlen : k < (List.ofFn (v ∘ σ)).length := by
+          rw [List.length_ofFn]; exact hk_lt_n
+        rw [List.drop_eq_getElem_cons hlen]
+        congr 1
+        exact bid_at v σ k hk_lt_n
+      rw [hdrop_cons]
+      simp only [List.map_cons]
+      -- Show the current bid is rejected.
+      have hk_ne_max : (⟨k, hk_lt_n⟩ : Fin n) ≠ hσ.max_pos := by
+        intro h
+        have : k = hσ.max_pos.val := congrArg Fin.val h
+        omega
+      have h_bid_le_T :
+          v (σ ⟨k, hk_lt_n⟩) ≤ v (σ hσ.second_pos) := by
+        apply hσ.v_is_second
+        intro h
+        exact hk_ne_max (σ.injective h)
+      have h_reject : ¬ (auction n M).price ((List.ofFn (v ∘ σ)).take k) ≤
+                      v (σ ⟨k, hk_lt_n⟩) := by
+        by_cases hphase1 : k < n / 2
+        · have hphase1_len : ((List.ofFn (v ∘ σ)).take k).length < n / 2 := by
+            rw [List.length_take, List.length_ofFn]; omega
+          rw [auction_price_phase1 M _ hphase1_len]
+          have h_bid_le_M : v (σ ⟨k, hk_lt_n⟩) ≤ M := hv_le _
+          linarith
+        · push_neg at hphase1
+          have h_phase2_len : ¬ ((List.ofFn (v ∘ σ)).take k).length < n / 2 := by
+            rw [List.length_take, List.length_ofFn]; omega
+          rw [auction_price_phase2 M _ h_phase2_len]
+          -- price = (take k).foldr max 0. We need to show this > bid.
+          -- Since k ≥ n/2 > second_pos.val, we have second_pos.val < k,
+          -- so T = v(σ second_pos) is in (take k), so T ≤ max.
+          have h_sec_lt_k : hσ.second_pos.val < k := by
+            have := hσ.second_in_first_half
+            omega
+          have hT_le_max :
+              v (σ hσ.second_pos) ≤ ((List.ofFn (v ∘ σ)).take k).foldr max 0 :=
+            T_le_foldr_max_take v σ hσ k h_sec_lt_k (le_of_lt hk_lt_n)
+          -- And bid < T strictly (since k ≠ max_pos and k ≠ second_pos)
+          have hk_ne_sec : (⟨k, hk_lt_n⟩ : Fin n) ≠ hσ.second_pos := by
+            intro h
+            have : k = hσ.second_pos.val := congrArg Fin.val h
+            omega
+          have h_bid_lt_T : v (σ ⟨k, hk_lt_n⟩) < v (σ hσ.second_pos) := by
+            apply lt_of_le_of_ne h_bid_le_T
+            intro h
+            have hσ_eq : σ ⟨k, hk_lt_n⟩ = σ hσ.second_pos := hv_inj h
+            have : (⟨k, hk_lt_n⟩ : Fin n) = hσ.second_pos := σ.injective hσ_eq
+            exact hk_ne_sec this
+          linarith
+      rw [SingleItemAuction.welfareFrom_cons_reject _ _ _ _ _ h_reject]
+      -- Now history = take k ++ [bid] = take (k+1). Apply IH.
+      have htake_succ :
+          (List.ofFn (v ∘ σ)).take k ++ [v (σ ⟨k, hk_lt_n⟩)] =
+          (List.ofFn (v ∘ σ)).take (k + 1) := by
+        have hlen : k < (List.ofFn (v ∘ σ)).length := by
+          rw [List.length_ofFn]; exact hk_lt_n
+        rw [List.take_add_one, List.getElem?_eq_getElem hlen,
+            bid_at v σ k hk_lt_n]
+        rfl
+      rw [htake_succ]
+      exact ih (k + 1) hk_succ_le
+
 /-- **Key combinatorial lemma.** Under the favourable event the
 secretary auction allocates the item to the argmax bidder, yielding
 welfare equal to the maximum valuation.
@@ -562,17 +744,20 @@ lemma welfare_eq_max_of_favorable
       exact hσ.v_is_max j
     · exact le_maxV _ v (σ hσ.max_pos)
   rw [hmaxV_eq]
-  -- It remains to show `welfare = v (σ max_pos)`.
-  -- This is the substantive content, requiring tracking the auction's
-  -- state through the first ⌊n/2⌋ rejecting steps, then through the
-  -- second-phase reject prefix, then the accept at position `max_pos`.
-  -- The infrastructure for each piece is in place above
-  -- (`welfareFrom_phase1`, `welfareFrom_phase2_reject`,
-  -- `foldr_max_le_of_all_le`, `le_foldr_max_of_mem`), but combining them
-  -- into a full proof requires careful manipulation of `List.take`/
-  -- `List.drop` on `List.ofFn` and a downward induction on
-  -- `max_pos.val − k`. Deferred.
-  sorry
+  -- Apply the recursive core at `k = 0`, `d = max_pos.val`.
+  unfold SingleItemAuction.welfare
+  have hmap : List.ofFn (fun i : Fin n => ((v ∘ σ) i, (v ∘ σ) i))
+            = (List.ofFn (v ∘ σ)).map (fun b => (b, b)) := by
+    rw [List.map_ofFn]; rfl
+  rw [hmap]
+  -- welfareFrom [] = welfareFrom (take 0) ((drop 0).map …)
+  have htake0 : (List.ofFn (v ∘ σ)).take 0 = [] := List.take_zero
+  have hdrop0 : (List.ofFn (v ∘ σ)).drop 0 = List.ofFn (v ∘ σ) := List.drop_zero
+  rw [show ([] : List F) = (List.ofFn (v ∘ σ)).take 0 from htake0.symm]
+  rw [show (List.ofFn (v ∘ σ)).map (fun b => (b, b))
+        = ((List.ofFn (v ∘ σ)).drop 0).map (fun b => (b, b)) from by rw [hdrop0]]
+  exact welfareFrom_aux M v σ hv_inj hv_nn hv_le hσ hn hσ.max_pos.val 0
+    (by omega)
 
 /-- The set of permutations satisfying the favourable event. -/
 noncomputable def favorableSet
