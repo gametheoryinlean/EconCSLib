@@ -358,6 +358,16 @@ def auction (n : ℕ) (M : F) : SingleItemAuction F where
     if h.length < n / 2 then M + 1
     else h.foldr max 0
 
+/-- Maximum of the valuations: a small wrapper around `Finset.sup'`
+that absorbs the nonempty proof so callers do not have to provide it.
+Requires `n ≥ 1` to guarantee a witness. -/
+noncomputable def maxV {n : ℕ} (hn : 1 ≤ n) (v : Fin n → F) : F :=
+  (Finset.univ : Finset (Fin n)).sup' ⟨⟨0, hn⟩, Finset.mem_univ _⟩ v
+
+lemma le_maxV {n : ℕ} (hn : 1 ≤ n) (v : Fin n → F) (i : Fin n) :
+    v i ≤ maxV hn v :=
+  Finset.le_sup' v (Finset.mem_univ i)
+
 /-- The favourable event: under permutation `σ`, the argmax bidder
 arrives in the second half (position ≥ `n/2`) while the second-largest
 bidder arrives in the first half (position `< n/2`).
@@ -414,8 +424,7 @@ lemma welfare_eq_max_of_favorable
     (hv_nn : ∀ i, 0 ≤ v i)
     (hv_le : ∀ i, v i ≤ M)
     {σ : Equiv.Perm (Fin n)} (hσ : Favorable v σ) :
-    (auction n M).welfare v (v ∘ σ) =
-      v (σ hσ.max_pos) := by
+    (auction n M).welfare v (v ∘ σ) = maxV (by omega) v := by
   sorry
 
 /-- The set of permutations satisfying the favourable event. -/
@@ -456,12 +465,55 @@ theorem competitive
     (hv_inj : Function.Injective v)
     (hv_nn : ∀ i, 0 ≤ v i)
     (hv_le : ∀ i, v i ≤ M) :
-    haveI : NeZero n := ⟨by omega⟩
-    (1 / 4 : F) * Finset.univ.sup' Finset.univ_nonempty v ≤
+    (1 / 4 : F) * maxV (by omega) v ≤
       (∑ σ : Equiv.Perm (Fin n),
         (auction n M).welfare v (v ∘ σ)) /
           (n.factorial : F) := by
-  sorry
+  -- Set up: MAX = maxV, and its non-negativity from nonneg valuations.
+  set MAX := maxV (show 1 ≤ n by omega) v with hMAX_def
+  have hMAX_nn : 0 ≤ MAX :=
+    le_trans (hv_nn ⟨0, by omega⟩) (le_maxV _ v _)
+  -- Welfare is nonneg pointwise.
+  have hwelfare_nn :
+      ∀ σ : Equiv.Perm (Fin n), 0 ≤ (auction n M).welfare v (v ∘ σ) :=
+    fun σ => SingleItemAuction.welfare_nonneg (auction n M) v (v ∘ σ) hv_nn
+  -- Welfare equals MAX on the favourable set.
+  have hwelfare_FS :
+      ∀ σ ∈ favorableSet v, (auction n M).welfare v (v ∘ σ) = MAX := by
+    classical
+    intro σ hσ
+    obtain ⟨F⟩ : Nonempty (Favorable v σ) := (Finset.mem_filter.mp hσ).2
+    simpa [hMAX_def]
+      using welfare_eq_max_of_favorable hn M v hv_inj hv_nn hv_le F
+  -- Step 1: Σ welfare ≥ |FS| * MAX.
+  have step1 :
+      ((favorableSet v).card : F) * MAX ≤
+      ∑ σ : Equiv.Perm (Fin n), (auction n M).welfare v (v ∘ σ) := by
+    calc ((favorableSet v).card : F) * MAX
+        = ∑ _σ ∈ favorableSet v, MAX := by
+            rw [Finset.sum_const, nsmul_eq_mul]
+      _ = ∑ σ ∈ favorableSet v, (auction n M).welfare v (v ∘ σ) :=
+            Finset.sum_congr rfl (fun σ hσ => (hwelfare_FS σ hσ).symm)
+      _ ≤ ∑ σ : Equiv.Perm (Fin n), (auction n M).welfare v (v ∘ σ) := by
+            apply Finset.sum_le_sum_of_subset_of_nonneg
+            · exact Finset.subset_univ _
+            · intros σ _ _; exact hwelfare_nn σ
+  -- Step 2: n! ≤ 4 * |FS| (from `favorableSet_card_ge`).
+  have step2 : (n.factorial : F) ≤ 4 * ((favorableSet v).card : F) :=
+    favorableSet_card_ge hn v hv_inj
+  -- Combine: (1/4) * MAX * n! ≤ |FS| * MAX ≤ Σ. Then divide.
+  have hfact_pos : (0 : F) < (n.factorial : F) := by
+    exact_mod_cast Nat.factorial_pos n
+  rw [le_div_iff₀ hfact_pos]
+  calc (1 / 4 : F) * MAX * (n.factorial : F)
+      = MAX * ((1 / 4 : F) * (n.factorial : F)) := by ring
+    _ ≤ MAX * ((favorableSet v).card : F) := by
+          apply mul_le_mul_of_nonneg_left _ hMAX_nn
+          have : (1 / 4 : F) * (n.factorial : F) ≤ (favorableSet v).card :=
+            by linarith
+          linarith
+    _ = ((favorableSet v).card : F) * MAX := by ring
+    _ ≤ ∑ σ : Equiv.Perm (Fin n), (auction n M).welfare v (v ∘ σ) := step1
 
 end Secretary
 
