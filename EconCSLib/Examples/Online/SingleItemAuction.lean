@@ -765,16 +765,65 @@ noncomputable def favorableSet
   letI : DecidablePred (fun σ => Nonempty (Favorable v σ)) := Classical.decPred _
   Finset.univ.filter (fun σ => Nonempty (Favorable v σ))
 
+/-- The elementary natural-number inequality at the heart of
+`favorableSet_card_ge`: for every `n ≥ 2`,
+`n! ≤ 4 · (n − ⌊n/2⌋) · ⌊n/2⌋ · (n − 2)!`. Proved by `omega` after
+expanding the factorial. -/
+private lemma factorial_le_four_split (n : ℕ) (hn : 2 ≤ n) :
+    n.factorial ≤ 4 * (n - n / 2) * (n / 2) * (n - 2).factorial := by
+  have hfac : n.factorial = n * (n - 1) * (n - 2).factorial := by
+    rcases n with _ | _ | n
+    · omega
+    · omega
+    · simp [Nat.factorial_succ, Nat.succ_sub_one]
+      ring
+  rw [hfac]
+  -- Goal: n * (n - 1) * (n - 2)! ≤ 4 * (n - n/2) * (n/2) * (n - 2)!
+  have hk : 4 * (n - n / 2) * (n / 2) ≥ n * (n - 1) := by
+    rcases Nat.even_or_odd n with ⟨m, hm⟩ | ⟨m, hm⟩
+    · -- n = m + m, m ≥ 1
+      have hm_ge : 1 ≤ m := by omega
+      have hn2 : n / 2 = m := by omega
+      have hsub : n - n / 2 = m := by omega
+      have hn_eq : n = 2 * m := by omega
+      rw [hsub, hn2, hn_eq]
+      -- Goal: 4 * m * m ≥ 2 * m * (2 * m - 1)
+      have hsub' : 2 * m - 1 + 1 = 2 * m := by omega
+      nlinarith [hm_ge, hsub']
+    · -- n = 2m + 1
+      have hn2 : n / 2 = m := by omega
+      have hsub : n - n / 2 = m + 1 := by omega
+      have hn_eq : n = 2 * m + 1 := hm
+      rw [hsub, hn2, hn_eq]
+      -- Goal: 4 * (m + 1) * m ≥ (2 * m + 1) * (2 * m + 1 - 1)
+      have hsub' : 2 * m + 1 - 1 = 2 * m := by omega
+      rw [hsub']
+      nlinarith
+  exact Nat.mul_le_mul_right _ hk
+
 /-- **Key combinatorial lemma (deferred).** The favourable event has
 probability at least `1/4`: equivalently, four times its cardinality is
 at least `n!`.
 
-Proof sketch: count `|Favorable|` by fixing
-`(σ max_pos, σ second_pos)` to range over `(secondHalf × firstHalf)`
-and permuting the remaining `n − 2` positions freely. This yields
-`|Favorable| = (n − n/2) · (n/2) · (n − 2)!`, and the inequality
-`4 · (n − n/2) · (n/2) · (n − 2)! ≥ n!` holds for every `n ≥ 2` by an
-elementary case split on the parity of `n`. -/
+Proof sketch (deferred):
+* Each `σ` in the favourable set is uniquely determined by:
+  - its image of the `argmax` bidder (some `r ∈ secondHalf`),
+  - its image of the `secondargmax` bidder (some `s ∈ firstHalf`),
+  - and the way it permutes the remaining `n − 2` positions.
+* So `|Favorable| = (n − ⌊n/2⌋) · ⌊n/2⌋ · (n − 2)!`. The above
+  `factorial_le_four_split` then gives `4 · |Favorable| ≥ n!`.
+
+The counting step is standard combinatorics but its Lean formalisation
+requires either:
+* constructing the explicit equivalence
+  `favorableSet ≃ secondHalf × firstHalf × Perm (Fin (n − 2))`, or
+* invoking a Mathlib lemma on the cardinality of permutations with
+  prescribed images (e.g. via `Equiv.Perm.viaFintypeEmbedding` /
+  `Finset.card_filter_eq_sum`).
+
+Either route is a self-contained 80–120-line proof; the `welfare`
+side of (c) is fully proved above, so this combinatorial counting is
+the only remaining piece. -/
 lemma favorableSet_card_ge {n : ℕ} (hn : 2 ≤ n)
     (v : Fin n → F) (hv_inj : Function.Injective v) :
     (n.factorial : F) ≤ 4 * ((favorableSet v).card : F) := by
