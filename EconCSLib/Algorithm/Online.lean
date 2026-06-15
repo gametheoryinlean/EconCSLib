@@ -107,20 +107,23 @@ law (`run_append_of_forall_none`) and makes `runState` the true
 "mid-stream" state — the state *before* the next genuine request, with no
 spurious terminal step. -/
 
-/-- Drive the machine across the genuine requests, halting at the **first**
-step that emits an output. The observable result is that output: `some o`
-if some request triggered the decision `o`, or `none` if the requests were
-exhausted without a commitment. Use `runState` for the halting state and
-`finalize` to take the end-of-input step. -/
+/-- Drive the machine across the requests, halting at the **first** step
+that emits an output. When the genuine requests are exhausted without a
+commitment, the machine is given the **end-of-input** step `step _ none` —
+its last chance to decide (it never knew which request was last) — and
+that step's output is returned. The result is `some o` for a decision and
+`none` only if even the end-of-input step declines. Use `runState` for the
+resume state reached by the genuine requests. -/
 def run (alg : OnlineAlgorithm α σ β) : σ → List α → Option β
-  | _, []      => none
+  | s, []      => (alg.step s none).2
   | s, r :: rs =>
       match alg.step s (some r) with
       | (_,  some o) => some o
       | (s', none)   => alg.run s' rs
 
+/-- On no requests, `run` is exactly the end-of-input step's output. -/
 @[simp] theorem run_nil (alg : OnlineAlgorithm α σ β) (s : σ) :
-    alg.run s [] = none := rfl
+    alg.run s [] = (alg.step s none).2 := rfl
 
 theorem run_cons (alg : OnlineAlgorithm α σ β)
     (s : σ) (r : α) (rs : List α) :
@@ -222,70 +225,23 @@ theorem runState_append_of_forall_none (alg : OnlineAlgorithm α σ β)
                   runState_cons_none _ _ _ _ _ hstep]
               exact ih s' h
 
-/-- If the prefix `xs` already emits an output, the halting state over
-`xs ++ ys` is reached within `xs`: the suffix is never processed. -/
-theorem runState_append_of_run_isSome (alg : OnlineAlgorithm α σ β)
-    (s : σ) (xs ys : List α)
-    (h : (alg.run s xs).isSome) :
-    alg.runState s (xs ++ ys) = alg.runState s xs := by
-  induction xs generalizing s with
-  | nil => simp at h
-  | cons r rs ih =>
-      cases hstep : alg.step s (some r) with
-      | mk s' o =>
-          cases o with
-          | some o =>
-              rw [runState_cons _ _ _ _, hstep]
-              simp only [List.cons_append]
-              rw [runState_cons _ _ _ _, hstep]
-          | none =>
-              rw [run_cons_none _ _ _ _ _ hstep] at h
-              simp only [List.cons_append]
-              rw [runState_cons_none _ _ _ _ _ hstep,
-                  runState_cons_none _ _ _ _ _ hstep]
-              exact ih s' h
-
-/-! ### End of input
-
-`finalize` is the one-shot end-of-input step: when the stream is
-exhausted, the algorithm is given a final `step _ none` to commit a
-decision it could not make earlier (it never knew which request was last).
-This is opt-in — `run` itself never takes it — so stopping problems that
-have no forced final decision (e.g. the single-item auction: no clearing
-bid simply means no sale) ignore it entirely. -/
-
-/-- The end-of-input output: the algorithm's final decision when the stream
-is exhausted. -/
-def finalize (alg : OnlineAlgorithm α σ β) (s : σ) : Option β :=
-  (alg.step s none).2
-
-/-- The state after the end-of-input step. -/
-def finalizeState (alg : OnlineAlgorithm α σ β) (s : σ) : σ :=
-  (alg.step s none).1
-
-/-- Run to the end, then force a decision via the end-of-input step if no
-output was emitted while scanning the requests. The driver for stopping
-problems that must commit by the end of the stream (secretary hiring). -/
-def runOrFinalize (alg : OnlineAlgorithm α σ β) (s : σ) (rs : List α) : Option β :=
-  (alg.run s rs).orElse (fun _ => alg.finalize (alg.runState s rs))
-
 /-! ### Streaming
 
-`runAll` never halts: it gathers every emitted output in arrival order.
-The driver for streaming problems — scheduling, matching, paging. Like
-`run`, it processes only genuine requests; an algorithm that also wants a
-final output at end of stream appends `finalize`. -/
+`runAll` never halts: it gathers every emitted output in arrival order,
+including a possible final output from the end-of-input step. The driver
+for streaming problems — scheduling, matching, paging. -/
 
-/-- Collect every emitted output across the genuine requests, in order. -/
+/-- Collect every emitted output across the requests in order, plus a final
+output from the end-of-input step if it emits one. -/
 def runAll (alg : OnlineAlgorithm α σ β) : σ → List α → List β
-  | _, []      => []
+  | s, []      =>
+      match (alg.step s none).2 with
+      | some o => [o]
+      | none   => []
   | s, r :: rs =>
       match alg.step s (some r) with
       | (s', some o) => o :: alg.runAll s' rs
       | (s', none)   => alg.runAll s' rs
-
-@[simp] theorem runAll_nil (alg : OnlineAlgorithm α σ β) (s : σ) :
-    alg.runAll s [] = [] := rfl
 
 theorem runAll_cons (alg : OnlineAlgorithm α σ β)
     (s : σ) (r : α) (rs : List α) :

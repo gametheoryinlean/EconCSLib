@@ -268,7 +268,7 @@ private lemma auction_dichotomy :
          h₀.length ≤ w ∧ w < h₀.length + L.length) := by
   intro L
   induction L with
-  | nil => intro h₀; left; simp
+  | nil => intro h₀; exact Or.inl ⟨rfl, by simp⟩
   | cons x xs ih =>
       intro h₀
       by_cases hc : A.price h₀ ≤ x
@@ -318,6 +318,47 @@ private lemma take_ofFn_eq_pre {n : ℕ} (b : Fin n → F) (i : Fin n) :
 `unsold _`. This is the global allocation read by the mechanism wrapper. -/
 def finalOutcome {n : ℕ} (b : Fin n → F) : AuctionState F :=
   A.toOnlineAlgorithm.runState (.unsold []) (List.ofFn b)
+
+/-- A `sold` state is absorbing: once the item is sold, every later bid
+leaves the state unchanged. -/
+private lemma runState_from_sold (w : ℕ) (p : F) :
+    ∀ (L : List F), A.toOnlineAlgorithm.runState (.sold w p) L = .sold w p := by
+  intro L
+  induction L with
+  | nil => rfl
+  | cons x xs ih =>
+      have hstep : A.toOnlineAlgorithm.step (.sold w p) (some x) = (.sold w p, none) := rfl
+      rw [OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep]; exact ih
+
+/-- If the run on `xs` already halts in `sold w p`, appending more bids
+keeps the halting state at `sold w p` (`sold` absorbs). This replaces the
+generic "halt freezes state" lemma, which no longer holds once `run` takes
+an end-of-input step. -/
+private lemma runState_append_eq_self_of_sold (w : ℕ) (p : F) :
+    ∀ (s : AuctionState F) (xs ys : List F),
+      A.toOnlineAlgorithm.runState s xs = .sold w p →
+      A.toOnlineAlgorithm.runState s (xs ++ ys) = .sold w p := by
+  intro s xs
+  induction xs generalizing s with
+  | nil =>
+      intro ys h
+      simp only [List.nil_append]
+      rw [OnlineAlgorithm.runState_nil] at h
+      rw [h]; exact A.runState_from_sold w p ys
+  | cons r rs ih =>
+      intro ys h
+      cases hstep : A.toOnlineAlgorithm.step s (some r) with
+      | mk s' o =>
+          cases o with
+          | some o' =>
+              rw [OnlineAlgorithm.runState_cons_some _ _ _ _ _ _ hstep] at h
+              simp only [List.cons_append]
+              rw [OnlineAlgorithm.runState_cons_some _ _ _ _ _ _ hstep]; exact h
+          | none =>
+              rw [OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep] at h
+              simp only [List.cons_append]
+              rw [OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep]
+              exact ih s' ys h
 
 /-- **Bridge lemma.** The auction's global outcome, read at bidder `i`,
 yields exactly bidder `i`'s `utility`. Concretely: the winner-and-price
@@ -373,15 +414,14 @@ lemma mech_utility_bridge {n : ℕ} (b v : Fin n → F) (i : Fin n) :
           simp only [List.length_append, List.length_cons, List.length_nil, hpre_len] at hlb
           omega
         simp only [hs, hsb, hc, if_false, if_neg (show ¬ w = i.val by omega)]
-  · -- Some bidder before `i` clears: the run halts in the prefix.
-    have hsome : (A.toOnlineAlgorithm.run (.unsold []) pre).isSome := by rw [hrun]; rfl
+  · -- Some bidder before `i` clears: `sold` absorbs, so later bids don't move it.
     have hsb : A.stateBeforeStep b i = .sold w p := by rw [hstate, hsold]
     have hwi : w < i.val := by
       simp only [List.length_nil, Nat.zero_add, hpre_len] at hub
       omega
-    rw [hsplit, A.toOnlineAlgorithm.runState_append_of_run_isSome _ _ _ hsome]
+    rw [hsplit, A.runState_append_eq_self_of_sold w p (.unsold []) pre _ hsold]
     unfold SingleItemAuction.utility
-    simp only [hsold, hsb, if_neg (show ¬ w = i.val by omega)]
+    simp only [hsb, if_neg (show ¬ w = i.val by omega)]
 
 /-! ### (b) No constant-factor competitive ratio against an adversary -/
 
