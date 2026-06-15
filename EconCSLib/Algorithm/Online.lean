@@ -95,87 +95,96 @@ namespace OnlineAlgorithm
 
 variable {α σ β : Type*}
 
-/-! ### Core: `scan` over the genuine requests
+/-! ### Driving the machine over the genuine requests
 
-`scan` processes only the real inputs (each fed as `some r`), halting at
-the first emitted output. It performs **no** end-of-input step, which is
-exactly what gives it a clean concatenation algebra. `run` / `runState`
-below add the terminal `step _ none`. -/
+`run` processes only the genuine requests (each fed as `some r`), halting
+at the **first** emitted output. It performs **no** end-of-input step:
+`step _ none` is exposed separately as `finalize`, to be invoked
+explicitly by algorithms that must commit a decision once the stream is
+exhausted (secretary hiring, prophet inequalities). Keeping the
+end-of-input action out of `run` is what gives `run` a clean concatenation
+law (`run_append_of_forall_none`) and makes `runState` the true
+"mid-stream" state — the state *before* the next genuine request, with no
+spurious terminal step. -/
 
-/-- Scan the genuine requests, halting at the **first** emitted output.
-No end-of-input step is taken. -/
-def scan (alg : OnlineAlgorithm α σ β) : σ → List α → Option β
+/-- Drive the machine across the genuine requests, halting at the **first**
+step that emits an output. The observable result is that output: `some o`
+if some request triggered the decision `o`, or `none` if the requests were
+exhausted without a commitment. Use `runState` for the halting state and
+`finalize` to take the end-of-input step. -/
+def run (alg : OnlineAlgorithm α σ β) : σ → List α → Option β
   | _, []      => none
   | s, r :: rs =>
       match alg.step s (some r) with
       | (_,  some o) => some o
-      | (s', none)   => alg.scan s' rs
+      | (s', none)   => alg.run s' rs
 
-@[simp] theorem scan_nil (alg : OnlineAlgorithm α σ β) (s : σ) :
-    alg.scan s [] = none := rfl
+@[simp] theorem run_nil (alg : OnlineAlgorithm α σ β) (s : σ) :
+    alg.run s [] = none := rfl
 
-theorem scan_cons (alg : OnlineAlgorithm α σ β)
+theorem run_cons (alg : OnlineAlgorithm α σ β)
     (s : σ) (r : α) (rs : List α) :
-    alg.scan s (r :: rs) =
+    alg.run s (r :: rs) =
       match alg.step s (some r) with
       | (_,  some o) => some o
-      | (s', none)   => alg.scan s' rs := rfl
+      | (s', none)   => alg.run s' rs := rfl
 
-/-- If the step on `r` halts with output `o`, the scan yields `o`. -/
-@[simp] theorem scan_cons_some (alg : OnlineAlgorithm α σ β)
+/-- If the step on `r` halts with output `o`, the run yields `o`. -/
+@[simp] theorem run_cons_some (alg : OnlineAlgorithm α σ β)
     (s s' : σ) (o : β) (r : α) (rs : List α)
     (h : alg.step s (some r) = (s', some o)) :
-    alg.scan s (r :: rs) = some o := by
-  rw [scan_cons, h]
+    alg.run s (r :: rs) = some o := by
+  rw [run_cons, h]
 
-/-- If the step on `r` defers (`none`), the scan continues on `rs`. -/
-@[simp] theorem scan_cons_none (alg : OnlineAlgorithm α σ β)
+/-- If the step on `r` defers (`none`), the run continues on `rs`. -/
+@[simp] theorem run_cons_none (alg : OnlineAlgorithm α σ β)
     (s s' : σ) (r : α) (rs : List α)
     (h : alg.step s (some r) = (s', none)) :
-    alg.scan s (r :: rs) = alg.scan s' rs := by
-  rw [scan_cons, h]
+    alg.run s (r :: rs) = alg.run s' rs := by
+  rw [run_cons, h]
 
-/-- The state reached when the scan halts: the post-step state at the
-first emitting request, or the state after the last request if none
-emitted. The bookkeeping companion to `scan`. -/
-def scanState (alg : OnlineAlgorithm α σ β) : σ → List α → σ
+/-- The state reached when `run` halts: the post-step state at the first
+emitting request, or the state after the last request if none emitted. The
+bookkeeping companion to `run`. -/
+def runState (alg : OnlineAlgorithm α σ β) : σ → List α → σ
   | s, []      => s
   | s, r :: rs =>
       match alg.step s (some r) with
       | (s', some _) => s'
-      | (s', none)   => alg.scanState s' rs
+      | (s', none)   => alg.runState s' rs
 
-@[simp] theorem scanState_nil (alg : OnlineAlgorithm α σ β) (s : σ) :
-    alg.scanState s [] = s := rfl
+@[simp] theorem runState_nil (alg : OnlineAlgorithm α σ β) (s : σ) :
+    alg.runState s [] = s := rfl
 
-theorem scanState_cons (alg : OnlineAlgorithm α σ β)
+theorem runState_cons (alg : OnlineAlgorithm α σ β)
     (s : σ) (r : α) (rs : List α) :
-    alg.scanState s (r :: rs) =
+    alg.runState s (r :: rs) =
       match alg.step s (some r) with
       | (s', some _) => s'
-      | (s', none)   => alg.scanState s' rs := rfl
+      | (s', none)   => alg.runState s' rs := rfl
 
 /-- If the step on `r` halts (emits an output), the halting state is the
 post-step state `s'`; the rest is not processed. -/
-@[simp] theorem scanState_cons_some (alg : OnlineAlgorithm α σ β)
+@[simp] theorem runState_cons_some (alg : OnlineAlgorithm α σ β)
     (s s' : σ) (o : β) (r : α) (rs : List α)
     (h : alg.step s (some r) = (s', some o)) :
-    alg.scanState s (r :: rs) = s' := by
-  rw [scanState_cons, h]
+    alg.runState s (r :: rs) = s' := by
+  rw [runState_cons, h]
 
-/-- If the step on `r` defers (`none`), the scan continues on `rs`. -/
-@[simp] theorem scanState_cons_none (alg : OnlineAlgorithm α σ β)
+/-- If the step on `r` defers (`none`), the run continues on `rs`. -/
+@[simp] theorem runState_cons_none (alg : OnlineAlgorithm α σ β)
     (s s' : σ) (r : α) (rs : List α)
     (h : alg.step s (some r) = (s', none)) :
-    alg.scanState s (r :: rs) = alg.scanState s' rs := by
-  rw [scanState_cons, h]
+    alg.runState s (r :: rs) = alg.runState s' rs := by
+  rw [runState_cons, h]
 
-/-- Scanning `xs ++ ys` where every request in `xs` defers (`none`)
-factors through the state reached after `xs`. -/
-theorem scan_append_of_forall_none (alg : OnlineAlgorithm α σ β)
+/-- Running on `xs ++ ys` where every request in `xs` defers (`none`)
+factors through the state reached after `xs`: the prefix produces no
+output, so the run continues into `ys` from that state. -/
+theorem run_append_of_forall_none (alg : OnlineAlgorithm α σ β)
     (s : σ) (xs ys : List α)
-    (h : alg.scan s xs = none) :
-    alg.scan s (xs ++ ys) = alg.scan (alg.scanState s xs) ys := by
+    (h : alg.run s xs = none) :
+    alg.run s (xs ++ ys) = alg.run (alg.runState s xs) ys := by
   induction xs generalizing s with
   | nil => simp
   | cons r rs ih =>
@@ -183,20 +192,20 @@ theorem scan_append_of_forall_none (alg : OnlineAlgorithm α σ β)
       | mk s' o =>
           cases o with
           | some o =>
-              rw [scan_cons_some _ _ _ _ _ _ hstep] at h
+              rw [run_cons_some _ _ _ _ _ _ hstep] at h
               simp at h
           | none =>
-              rw [scan_cons_none _ _ _ _ _ hstep] at h
+              rw [run_cons_none _ _ _ _ _ hstep] at h
               simp only [List.cons_append]
-              rw [scan_cons_none _ _ _ _ _ hstep,
-                  scanState_cons_none _ _ _ _ _ hstep]
+              rw [run_cons_none _ _ _ _ _ hstep,
+                  runState_cons_none _ _ _ _ _ hstep]
               exact ih s' h
 
-/-- State version of `scan_append_of_forall_none`. -/
-theorem scanState_append_of_forall_none (alg : OnlineAlgorithm α σ β)
+/-- State version of `run_append_of_forall_none`. -/
+theorem runState_append_of_forall_none (alg : OnlineAlgorithm α σ β)
     (s : σ) (xs ys : List α)
-    (h : alg.scan s xs = none) :
-    alg.scanState s (xs ++ ys) = alg.scanState (alg.scanState s xs) ys := by
+    (h : alg.run s xs = none) :
+    alg.runState s (xs ++ ys) = alg.runState (alg.runState s xs) ys := by
   induction xs generalizing s with
   | nil => simp
   | cons r rs ih =>
@@ -204,21 +213,21 @@ theorem scanState_append_of_forall_none (alg : OnlineAlgorithm α σ β)
       | mk s' o =>
           cases o with
           | some o =>
-              rw [scan_cons_some _ _ _ _ _ _ hstep] at h
+              rw [run_cons_some _ _ _ _ _ _ hstep] at h
               simp at h
           | none =>
-              rw [scan_cons_none _ _ _ _ _ hstep] at h
+              rw [run_cons_none _ _ _ _ _ hstep] at h
               simp only [List.cons_append]
-              rw [scanState_cons_none _ _ _ _ _ hstep,
-                  scanState_cons_none _ _ _ _ _ hstep]
+              rw [runState_cons_none _ _ _ _ _ hstep,
+                  runState_cons_none _ _ _ _ _ hstep]
               exact ih s' h
 
 /-- If the prefix `xs` already emits an output, the halting state over
 `xs ++ ys` is reached within `xs`: the suffix is never processed. -/
-theorem scanState_append_of_scan_isSome (alg : OnlineAlgorithm α σ β)
+theorem runState_append_of_run_isSome (alg : OnlineAlgorithm α σ β)
     (s : σ) (xs ys : List α)
-    (h : (alg.scan s xs).isSome) :
-    alg.scanState s (xs ++ ys) = alg.scanState s xs := by
+    (h : (alg.run s xs).isSome) :
+    alg.runState s (xs ++ ys) = alg.runState s xs := by
   induction xs generalizing s with
   | nil => simp at h
   | cons r rs ih =>
@@ -226,56 +235,57 @@ theorem scanState_append_of_scan_isSome (alg : OnlineAlgorithm α σ β)
       | mk s' o =>
           cases o with
           | some o =>
-              rw [scanState_cons _ _ _ _, hstep]
+              rw [runState_cons _ _ _ _, hstep]
               simp only [List.cons_append]
-              rw [scanState_cons _ _ _ _, hstep]
+              rw [runState_cons _ _ _ _, hstep]
           | none =>
-              rw [scan_cons_none _ _ _ _ _ hstep] at h
+              rw [run_cons_none _ _ _ _ _ hstep] at h
               simp only [List.cons_append]
-              rw [scanState_cons_none _ _ _ _ _ hstep,
-                  scanState_cons_none _ _ _ _ _ hstep]
+              rw [runState_cons_none _ _ _ _ _ hstep,
+                  runState_cons_none _ _ _ _ _ hstep]
               exact ih s' h
 
-/-! ### Drivers: `run` / `runState` / `runAll`
+/-! ### End of input
 
-These wrap the core with the terminal end-of-input step `step _ none`. -/
+`finalize` is the one-shot end-of-input step: when the stream is
+exhausted, the algorithm is given a final `step _ none` to commit a
+decision it could not make earlier (it never knew which request was last).
+This is opt-in — `run` itself never takes it — so stopping problems that
+have no forced final decision (e.g. the single-item auction: no clearing
+bid simply means no sale) ignore it entirely. -/
 
-/-- The observable result of a **stopping** run: the first output emitted
-while scanning the requests, or — if the requests are exhausted without a
-decision — the output of the end-of-input step `step _ none`. -/
-def run (alg : OnlineAlgorithm α σ β) (s : σ) (rs : List α) : Option β :=
-  match alg.scan s rs with
-  | some o => some o
-  | none   => (alg.step (alg.scanState s rs) none).2
+/-- The end-of-input output: the algorithm's final decision when the stream
+is exhausted. -/
+def finalize (alg : OnlineAlgorithm α σ β) (s : σ) : Option β :=
+  (alg.step s none).2
 
-/-- The halting state of `run`: the scan's halting state if it emitted,
-otherwise the state after the end-of-input step. -/
-def runState (alg : OnlineAlgorithm α σ β) (s : σ) (rs : List α) : σ :=
-  match alg.scan s rs with
-  | some _ => alg.scanState s rs
-  | none   => (alg.step (alg.scanState s rs) none).1
+/-- The state after the end-of-input step. -/
+def finalizeState (alg : OnlineAlgorithm α σ β) (s : σ) : σ :=
+  (alg.step s none).1
 
-/-- On no requests, `run` is exactly the end-of-input step's output. -/
-@[simp] theorem run_nil (alg : OnlineAlgorithm α σ β) (s : σ) :
-    alg.run s [] = (alg.step s none).2 := rfl
+/-- Run to the end, then force a decision via the end-of-input step if no
+output was emitted while scanning the requests. The driver for stopping
+problems that must commit by the end of the stream (secretary hiring). -/
+def runOrFinalize (alg : OnlineAlgorithm α σ β) (s : σ) (rs : List α) : Option β :=
+  (alg.run s rs).orElse (fun _ => alg.finalize (alg.runState s rs))
 
-/-- On no requests, `runState` is the end-of-input step's state. -/
-@[simp] theorem runState_nil (alg : OnlineAlgorithm α σ β) (s : σ) :
-    alg.runState s [] = (alg.step s none).1 := rfl
+/-! ### Streaming
 
-/-- Drive the machine to the **end** of the request list without halting,
-collecting every emitted output in arrival order, including a possible
-final output from the end-of-input step. The driver for *streaming*
-problems — scheduling, matching, paging. -/
+`runAll` never halts: it gathers every emitted output in arrival order.
+The driver for streaming problems — scheduling, matching, paging. Like
+`run`, it processes only genuine requests; an algorithm that also wants a
+final output at end of stream appends `finalize`. -/
+
+/-- Collect every emitted output across the genuine requests, in order. -/
 def runAll (alg : OnlineAlgorithm α σ β) : σ → List α → List β
-  | s, []      =>
-      match (alg.step s none).2 with
-      | some o => [o]
-      | none   => []
+  | _, []      => []
   | s, r :: rs =>
       match alg.step s (some r) with
       | (s', some o) => o :: alg.runAll s' rs
       | (s', none)   => alg.runAll s' rs
+
+@[simp] theorem runAll_nil (alg : OnlineAlgorithm α σ β) (s : σ) :
+    alg.runAll s [] = [] := rfl
 
 theorem runAll_cons (alg : OnlineAlgorithm α σ β)
     (s : σ) (r : α) (rs : List α) :
@@ -297,7 +307,6 @@ theorem runAll_cons (alg : OnlineAlgorithm α σ β)
     (h : alg.step s (some r) = (s', none)) :
     alg.runAll s (r :: rs) = alg.runAll s' rs := by
   rw [runAll_cons, h]
-
 end OnlineAlgorithm
 
 /-! ### Competitive ratio
