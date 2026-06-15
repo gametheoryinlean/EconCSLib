@@ -102,7 +102,7 @@ def toOnlineAlgorithm : OnlineAlgorithm F (AuctionState F) F where
 /-- Run `A` on a bid sequence, returning the sale price: `some p` if some
 bidder cleared the posted price, `none` if every bidder was rejected. -/
 def run (bids : List F) : Option F :=
-  A.toOnlineAlgorithm.run A.toOnlineAlgorithm.init bids
+  (A.toOnlineAlgorithm.run A.toOnlineAlgorithm.init bids).result
 
 /-- The state immediately *before* bidder `i` is processed: the state
 reached by running the bids `b 0, …, b (i.val − 1)` (no end-of-input
@@ -261,9 +261,9 @@ history is `h₀ ++ L`), or some bidder clears at position `w` with
 trajectory. -/
 private lemma auction_dichotomy :
     ∀ (L h₀ : List F),
-      (A.toOnlineAlgorithm.run (.unsold h₀) L = none ∧
+      ((A.toOnlineAlgorithm.run (.unsold h₀) L).result = none ∧
          A.toOnlineAlgorithm.runState (.unsold h₀) L = .unsold (h₀ ++ L)) ∨
-      (∃ w p, A.toOnlineAlgorithm.run (.unsold h₀) L = some p ∧
+      (∃ w p, (A.toOnlineAlgorithm.run (.unsold h₀) L).result = some p ∧
          A.toOnlineAlgorithm.runState (.unsold h₀) L = .sold w p ∧
          h₀.length ≤ w ∧ w < h₀.length + L.length) := by
   intro L
@@ -279,7 +279,7 @@ private lemma auction_dichotomy :
           show A.step (.unsold h₀) (some x) = _
           simp [SingleItemAuction.step, hc]
         refine ⟨h₀.length, A.price h₀, ?_, ?_, le_refl _, ?_⟩
-        · rw [OnlineAlgorithm.run_cons_some _ _ _ _ _ _ hstep]
+        · simp [OnlineAlgorithm.run_cons_some _ _ _ _ _ _ hstep]
         · rw [OnlineAlgorithm.runState_cons_some _ _ _ _ _ _ hstep]
         · simp
       · -- bidder rejected: recurse on the extended history
