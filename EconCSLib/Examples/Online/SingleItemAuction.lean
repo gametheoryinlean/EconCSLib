@@ -43,8 +43,8 @@ posted price.
   highest valuation: a two-bidder adversary suffices (Problem 2.1(b)).
 * `Secretary.competitive` — under uniformly random arrival, the
   secretary-style threshold rule achieves expected welfare ≥ `(1/4) · max v`
-  (Problem 2.1(c)). The main combinatorial sub-lemmas are stated and the
-  high-level proof is laid out; some sub-lemmas are deferred via `sorry`.
+  (Problem 2.1(c)). Fully proved: the welfare characterisation under the
+  favourable event and the exact count of the favourable permutation set.
 -/
 
 namespace Online.Auction
@@ -1006,6 +1006,257 @@ private lemma factorial_le_four_split (n : ℕ) (hn : 2 ≤ n) :
       nlinarith
   exact Nat.mul_le_mul_right _ hk
 
+/-! #### Cardinality of the favourable set
+
+The favourable set has exactly `(n - n/2) · (n/2) · (n-2)!` permutations;
+we prove the `≤` direction, which is what the competitive bound needs. -/
+
+/-- For distinct `a ≠ c` and distinct `x ≠ y` in any type with decidable
+equality, there is a permutation sending `a ↦ x` and `c ↦ y`. -/
+private lemma exists_perm_two {α : Type*} [DecidableEq α] {a c x y : α}
+    (hac : a ≠ c) (hxy : x ≠ y) :
+    ∃ ρ : Equiv.Perm α, ρ a = x ∧ ρ c = y := by
+  classical
+  -- t sends a ↦ x; let c' = t c, then swap c' y fixes x and sends c' ↦ y.
+  set t := Equiv.swap a x with ht
+  have hcx : t c ≠ x := by
+    have hta : t a = x := by rw [ht, Equiv.swap_apply_left]
+    rw [← hta]
+    exact fun h => hac (t.injective h).symm
+  refine ⟨Equiv.swap (t c) y * t, ?_, ?_⟩
+  · rw [Equiv.Perm.mul_apply, ht, Equiv.swap_apply_left, ← ht]
+    exact Equiv.swap_apply_of_ne_of_ne (Ne.symm hcx) hxy
+  · rw [Equiv.Perm.mul_apply, Equiv.swap_apply_left]
+
+/-- Count of permutations fixing two given distinct points `a ≠ c` is `(n-2)!`. -/
+private lemma fix_two_card {n : ℕ} {a c : Fin n} (hac : a ≠ c) :
+    (Finset.univ.filter (fun π : Equiv.Perm (Fin n) => π a = a ∧ π c = c)).card
+      = (n - 2).factorial := by
+  classical
+  set p : Fin n → Prop := fun z => z ≠ a ∧ z ≠ c with hp
+  -- The filter card equals the card of the subtype {f // ∀ z, ¬p z → f z = z}.
+  have hcard_eq :
+      (Finset.univ.filter (fun π : Equiv.Perm (Fin n) => π a = a ∧ π c = c)).card
+        = Fintype.card {f : Equiv.Perm (Fin n) // ∀ z, ¬ p z → f z = z} := by
+    rw [Fintype.card_subtype]
+    congr 1
+    apply Finset.filter_congr
+    intro π _
+    simp only [hp, not_and_or, not_not]
+    constructor
+    · rintro ⟨ha, hc⟩ z (rfl | rfl)
+      · exact ha
+      · exact hc
+    · intro h
+      exact ⟨h a (Or.inl rfl), h c (Or.inr rfl)⟩
+  rw [hcard_eq, ← Fintype.card_congr (Equiv.Perm.subtypeEquivSubtypePerm p),
+    Fintype.card_perm]
+  -- Now: (Fintype.card (Subtype p))! = (n - 2)!
+  congr 1
+  rw [Fintype.card_subtype]
+  -- #{z | z ≠ a ∧ z ≠ c} = n - 2
+  have hset : Finset.filter p (Finset.univ : Finset (Fin n))
+      = (Finset.univ.erase a).erase c := by
+    ext z
+    simp only [hp, Finset.mem_filter, Finset.mem_erase, Finset.mem_univ, and_true]
+    tauto
+  have : ({x | x ≠ a ∧ x ≠ c} : Finset (Fin n)) = (Finset.univ.erase a).erase c := hset
+  rw [this, Finset.card_erase_of_mem (Finset.mem_erase.2 ⟨hac.symm, Finset.mem_univ _⟩),
+    Finset.card_erase_of_mem (Finset.mem_univ _), Finset.card_univ, Fintype.card_fin]
+  omega
+
+/-- Inner count: for fixed distinct `a ≠ c` in `Fin n` and fixed distinct
+`x ≠ y`, the number of permutations sending `a ↦ x` and `c ↦ y` is `(n-2)!`. -/
+private lemma fiber_card {n : ℕ} {a c x y : Fin n} (hac : a ≠ c) (hxy : x ≠ y) :
+    (Finset.univ.filter (fun π : Equiv.Perm (Fin n) => π a = x ∧ π c = y)).card
+      = (n - 2).factorial := by
+  classical
+  obtain ⟨ρ, hρa, hρc⟩ := exists_perm_two hac hxy
+  rw [← fix_two_card hac]
+  apply Finset.card_nbij' (fun π => ρ⁻¹ * π) (fun π => ρ * π)
+  · intro π hπ
+    simp only [Finset.coe_filter, Set.mem_setOf_eq, Finset.mem_univ, true_and] at hπ ⊢
+    refine ⟨?_, ?_⟩
+    · rw [Equiv.Perm.mul_apply, hπ.1, ← hρa]; exact ρ.symm_apply_apply a
+    · rw [Equiv.Perm.mul_apply, hπ.2, ← hρc]; exact ρ.symm_apply_apply c
+  · intro π hπ
+    simp only [Finset.coe_filter, Set.mem_setOf_eq, Finset.mem_univ, true_and] at hπ ⊢
+    refine ⟨?_, ?_⟩
+    · rw [Equiv.Perm.mul_apply, hπ.1, hρa]
+    · rw [Equiv.Perm.mul_apply, hπ.2, hρc]
+  · intro π _
+    simp [← mul_assoc]
+  · intro π _
+    simp [← mul_assoc]
+
+/-- The first-half positions `{x : Fin n | x.val < n/2}` number `n/2`. -/
+private lemma card_first_half (n : ℕ) :
+    (Finset.univ.filter (fun x : Fin n => x.val < n / 2)).card = n / 2 := by
+  classical
+  conv_rhs => rw [show n / 2 = (Finset.range (n / 2)).card from (Finset.card_range _).symm]
+  refine Finset.card_bij' (fun x _ => x.val)
+    (fun k hk => (⟨k, (Finset.mem_range.1 hk).trans_le (Nat.div_le_self n 2)⟩ : Fin n))
+    ?_ ?_ ?_ ?_
+  · intro x hx
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_range] at hx ⊢
+    exact hx
+  · intro k hk
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_range] at hk ⊢
+    exact hk
+  · intro x _; rfl
+  · intro k _; rfl
+
+/-- The second-half positions `{x : Fin n | n/2 ≤ x.val}` number `n - n/2`. -/
+private lemma card_second_half (n : ℕ) :
+    (Finset.univ.filter (fun x : Fin n => n / 2 ≤ x.val)).card = n - n / 2 := by
+  classical
+  have hcompl : (Finset.univ.filter (fun x : Fin n => n / 2 ≤ x.val))
+      = (Finset.univ.filter (fun x : Fin n => x.val < n / 2))ᶜ := by
+    ext x
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_compl, not_lt]
+  rw [hcompl, Finset.card_compl, card_first_half, Fintype.card_fin]
+
+/-- The count `Q` of permutations sending a fixed `a` into the second half and a fixed
+distinct `c` into the first half equals `(n - n/2) * (n/2) * (n-2)!`. -/
+private lemma count_Q {n : ℕ} {a c : Fin n} (hac : a ≠ c) :
+    (Finset.univ.filter (fun π : Equiv.Perm (Fin n) =>
+      n / 2 ≤ (π a).val ∧ (π c).val < n / 2)).card
+      = (n - n / 2) * (n / 2) * (n - 2).factorial := by
+  classical
+  set SH := Finset.univ.filter (fun x : Fin n => n / 2 ≤ x.val) with hSH
+  set FH := Finset.univ.filter (fun x : Fin n => x.val < n / 2) with hFH
+  -- Partition Q over the pair (π a, π c) ∈ SH ×ˢ FH.
+  have hmaps : (↑(Finset.univ.filter (fun π : Equiv.Perm (Fin n) =>
+      n / 2 ≤ (π a).val ∧ (π c).val < n / 2)) : Set (Equiv.Perm (Fin n))).MapsTo
+        (fun π => (π a, π c)) (↑(SH ×ˢ FH)) := by
+    intro π hπ
+    simp only [Finset.coe_filter, Set.mem_setOf_eq, Finset.mem_univ, true_and] at hπ
+    simp only [Finset.coe_product, Set.mem_prod, Finset.mem_coe, hSH, hFH,
+      Finset.mem_filter, Finset.mem_univ, true_and]
+    exact ⟨hπ.1, hπ.2⟩
+  rw [Finset.card_eq_sum_card_fiberwise hmaps]
+  -- Each fiber over (x, y) with x ∈ SH, y ∈ FH has card (n-2)!.
+  have hfib : ∀ p ∈ SH ×ˢ FH,
+      (Finset.univ.filter (fun π : Equiv.Perm (Fin n) =>
+          n / 2 ≤ (π a).val ∧ (π c).val < n / 2) |>.filter
+          (fun π => (π a, π c) = p)).card = (n - 2).factorial := by
+    rintro ⟨x, y⟩ hp
+    simp only [hSH, hFH, Finset.mem_product, Finset.mem_filter, Finset.mem_univ,
+      true_and] at hp
+    have hxy : x ≠ y := by
+      intro h; rw [h] at hp; omega
+    -- The double filter equals the single fiber filter π a = x ∧ π c = y.
+    have hset : (Finset.univ.filter (fun π : Equiv.Perm (Fin n) =>
+          n / 2 ≤ (π a).val ∧ (π c).val < n / 2) |>.filter
+          (fun π => (π a, π c) = (x, y)))
+        = Finset.univ.filter (fun π : Equiv.Perm (Fin n) => π a = x ∧ π c = y) := by
+      ext π
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and, Prod.mk.injEq]
+      constructor
+      · rintro ⟨_, h1, h2⟩; exact ⟨h1, h2⟩
+      · rintro ⟨h1, h2⟩
+        refine ⟨⟨?_, ?_⟩, h1, h2⟩
+        · rw [h1]; exact hp.1
+        · rw [h2]; exact hp.2
+    rw [hset, fiber_card hac hxy]
+  rw [Finset.sum_congr rfl hfib, Finset.sum_const, Finset.card_product, smul_eq_mul,
+    hSH, hFH, card_second_half, card_first_half]
+
+/-- **Target.** The favourable set has at least `(n - n/2) · (n/2) · (n-2)!`
+permutations. (Equality in fact holds; a lower bound is all we need.) -/
+theorem favorableSet_card_lower {n : ℕ} (hn : 2 ≤ n) (v : Fin n → F)
+    (hv_inj : Function.Injective v) :
+    (n - n / 2) * (n / 2) * (n - 2).factorial ≤ (favorableSet v).card := by
+  classical
+  -- Step 1: argmax a and second-largest c.
+  have hne : (Finset.univ : Finset (Fin n)).Nonempty :=
+    ⟨⟨0, by omega⟩, Finset.mem_univ _⟩
+  obtain ⟨a, -, ha⟩ := Finset.exists_max_image Finset.univ v hne
+  have ha' : ∀ j, v j ≤ v a := fun j => ha j (Finset.mem_univ _)
+  have herase : (Finset.univ.erase a).Nonempty := by
+    rw [← Finset.card_pos, Finset.card_erase_of_mem (Finset.mem_univ a),
+      Finset.card_univ, Fintype.card_fin]
+    omega
+  obtain ⟨c, hc_mem, hc⟩ := Finset.exists_max_image (Finset.univ.erase a) v herase
+  have hca : c ≠ a := (Finset.mem_erase.1 hc_mem).1
+  have hc' : ∀ j, j ≠ a → v j ≤ v c := fun j hj =>
+    hc j (Finset.mem_erase.2 ⟨hj, Finset.mem_univ _⟩)
+  have hac : a ≠ c := fun h => hca h.symm
+  have hcltA : v c < v a := by
+    refine lt_of_le_of_ne (ha' c) ?_
+    intro h
+    exact hca (hv_inj h)
+  -- Step 2: characterize favourability by inverse positions.
+  have hchar : ∀ σ : Equiv.Perm (Fin n),
+      Nonempty (Favorable v σ) ↔ (n / 2 ≤ (σ⁻¹ a).val ∧ (σ⁻¹ c).val < n / 2) := by
+    intro σ
+    constructor
+    · rintro ⟨fav⟩
+      have hmax : σ fav.max_pos = a := by
+        apply hv_inj
+        exact le_antisymm (ha' _) (fav.v_is_max a)
+      have hsec : σ fav.second_pos = c := by
+        apply hv_inj
+        refine le_antisymm (hc' _ ?_) (fav.v_is_second c ?_)
+        · rw [hmax.symm]
+          intro h
+          have := fav.v_second_lt_max
+          rw [σ.injective h] at this
+          exact lt_irrefl _ this
+        · rw [hmax]
+          exact hca
+      have hmp : σ⁻¹ a = fav.max_pos := by
+        rw [← hmax]; exact σ.symm_apply_apply _
+      have hsp : σ⁻¹ c = fav.second_pos := by
+        rw [← hsec]; exact σ.symm_apply_apply _
+      rw [hmp, hsp]
+      exact ⟨fav.max_in_second_half, fav.second_in_first_half⟩
+    · rintro ⟨h1, h2⟩
+      refine ⟨{
+        max_pos := σ⁻¹ a
+        second_pos := σ⁻¹ c
+        v_is_max := ?_
+        v_is_second := ?_
+        v_second_lt_max := ?_
+        max_in_second_half := h1
+        second_in_first_half := h2 }⟩
+      · intro j
+        rw [show σ (σ⁻¹ a) = a from σ.apply_symm_apply a]
+        exact ha' j
+      · intro j hj
+        rw [show σ (σ⁻¹ a) = a from σ.apply_symm_apply a] at hj
+        rw [show σ (σ⁻¹ c) = c from σ.apply_symm_apply c]
+        exact hc' j hj
+      · rw [show σ (σ⁻¹ a) = a from σ.apply_symm_apply a,
+          show σ (σ⁻¹ c) = c from σ.apply_symm_apply c]
+        exact hcltA
+  -- Step 3: rewrite favorableSet as a filter on inverse positions.
+  have hset_eq : favorableSet v
+      = Finset.univ.filter (fun σ : Equiv.Perm (Fin n) =>
+          n / 2 ≤ (σ⁻¹ a).val ∧ (σ⁻¹ c).val < n / 2) := by
+    unfold favorableSet
+    ext σ
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    exact hchar σ
+  rw [hset_eq]
+  -- Step 4: reindex by σ ↦ σ⁻¹.
+  have hreindex : (Finset.univ.filter (fun σ : Equiv.Perm (Fin n) =>
+        n / 2 ≤ (σ⁻¹ a).val ∧ (σ⁻¹ c).val < n / 2)).card
+      = (Finset.univ.filter (fun π : Equiv.Perm (Fin n) =>
+        n / 2 ≤ (π a).val ∧ (π c).val < n / 2)).card := by
+    apply Finset.card_nbij' (fun σ => σ⁻¹) (fun π => π⁻¹)
+    · intro σ hσ
+      simp only [Finset.coe_filter, Set.mem_setOf_eq, Finset.mem_univ, true_and] at hσ ⊢
+      exact hσ
+    · intro π hπ
+      simp only [Finset.coe_filter, Set.mem_setOf_eq, Finset.mem_univ, true_and,
+        inv_inv] at hπ ⊢
+      exact hπ
+    · intro σ _; simp
+    · intro π _; simp
+  rw [hreindex, count_Q hac]
+
+
 /-- **Key combinatorial lemma (deferred).** The favourable event has
 probability at least `1/4`: equivalently, four times its cardinality is
 at least `n!`.
@@ -1032,7 +1283,16 @@ the only remaining piece. -/
 lemma favorableSet_card_ge {n : ℕ} (hn : 2 ≤ n)
     (v : Fin n → F) (hv_inj : Function.Injective v) :
     (n.factorial : F) ≤ 4 * ((favorableSet v).card : F) := by
-  sorry
+  -- `n! ≤ 4·(n−n/2)·(n/2)·(n−2)!` (arithmetic) and
+  -- `(n−n/2)·(n/2)·(n−2)! ≤ |favorableSet|` (counting), combined over ℕ then cast.
+  have hlow : (n - n / 2) * (n / 2) * (n - 2).factorial ≤ (favorableSet v).card :=
+    favorableSet_card_lower hn v hv_inj
+  have hnat : n.factorial ≤ 4 * (favorableSet v).card :=
+    calc n.factorial ≤ 4 * (n - n / 2) * (n / 2) * (n - 2).factorial :=
+            factorial_le_four_split n hn
+      _ = 4 * ((n - n / 2) * (n / 2) * (n - 2).factorial) := by ring
+      _ ≤ 4 * (favorableSet v).card := Nat.mul_le_mul_left _ hlow
+  exact_mod_cast hnat
 
 /-- **Problem 2.1 (c): a 1/4-competitive deterministic online auction
 under uniformly random arrival.**
