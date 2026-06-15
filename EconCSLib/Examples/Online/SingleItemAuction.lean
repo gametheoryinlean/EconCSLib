@@ -108,7 +108,7 @@ def run (bids : List F) : Option F :=
 reached by running the bids `b 0, …, b (i.val − 1)` (no end-of-input
 step — bidder `i` is the next genuine input). -/
 def stateBeforeStep {n : ℕ} (b : Fin n → F) (i : Fin n) : AuctionState F :=
-  A.toOnlineAlgorithm.runState (.unsold [])
+  A.toOnlineAlgorithm.runStatus (.unsold [])
     (List.ofFn (fun j : Fin i.val => b ⟨j.val, j.isLt.trans i.isLt⟩))
 
 /-! ### Welfare via direct recursion
@@ -261,14 +261,12 @@ history is `h₀ ++ L`), or some bidder clears at position `w` with
 trajectory. -/
 private lemma auction_dichotomy :
     ∀ (L h₀ : List F),
-      ((A.toOnlineAlgorithm.run (.unsold h₀) L).2 = none ∧
-         A.toOnlineAlgorithm.runState (.unsold h₀) L = .unsold (h₀ ++ L)) ∨
-      (∃ w p, (A.toOnlineAlgorithm.run (.unsold h₀) L).2 = some p ∧
-         A.toOnlineAlgorithm.runState (.unsold h₀) L = .sold w p ∧
+      A.toOnlineAlgorithm.run (.unsold h₀) L = (.unsold (h₀ ++ L), none) ∨
+      (∃ w p, A.toOnlineAlgorithm.run (.unsold h₀) L = (.sold w p, some p) ∧
          h₀.length ≤ w ∧ w < h₀.length + L.length) := by
   intro L
   induction L with
-  | nil => intro h₀; exact Or.inl ⟨rfl, by simp⟩
+  | nil => intro h₀; left; rw [List.append_nil]; rfl
   | cons x xs ih =>
       intro h₀
       by_cases hc : A.price h₀ ≤ x
@@ -278,25 +276,20 @@ private lemma auction_dichotomy :
             = (.sold h₀.length (A.price h₀), some (A.price h₀)) := by
           show A.step (.unsold h₀) (some x) = _
           simp [SingleItemAuction.step, hc]
-        refine ⟨h₀.length, A.price h₀, ?_, ?_, le_refl _, ?_⟩
-        · simp [OnlineAlgorithm.run_cons_some _ _ _ _ _ _ hstep]
-        · rw [OnlineAlgorithm.runState_cons_some _ _ _ _ _ _ hstep]
-        · simp
+        refine ⟨h₀.length, A.price h₀,
+          by rw [OnlineAlgorithm.run_cons_some _ _ _ _ _ _ hstep], le_refl _, ?_⟩
+        simp only [List.length_cons]; omega
       · -- bidder rejected: recurse on the extended history
         have hstep : A.toOnlineAlgorithm.step (.unsold h₀) (some x)
             = (.unsold (h₀ ++ [x]), none) := by
           show A.step (.unsold h₀) (some x) = _
           simp [SingleItemAuction.step, hc]
-        rcases ih (h₀ ++ [x]) with ⟨hn, hs⟩ | ⟨w, p, hrun, hs, hlb, hub⟩
+        rw [OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep]
+        rcases ih (h₀ ++ [x]) with hrun | ⟨w, p, hrun, hlb, hub⟩
         · left
-          rw [OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep,
-              OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep]
-          refine ⟨hn, ?_⟩
-          rw [hs, List.append_assoc, List.cons_append, List.nil_append]
+          rw [hrun, List.append_assoc, List.cons_append, List.nil_append]
         · right
-          refine ⟨w, p, ?_, ?_, ?_, ?_⟩
-          · rw [OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep]; exact hrun
-          · rw [OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep]; exact hs
+          refine ⟨w, p, hrun, ?_, ?_⟩
           · simp only [List.length_append, List.length_cons, List.length_nil] at hlb ⊢
             omega
           · simp only [List.length_append, List.length_cons, List.length_nil] at hub ⊢
@@ -317,47 +310,67 @@ private lemma take_ofFn_eq_pre {n : ℕ} (b : Fin n → F) (i : Fin n) :
 `sold w p` if some bidder cleared (winner position `w`, price `p`), else
 `unsold _`. This is the global allocation read by the mechanism wrapper. -/
 def finalOutcome {n : ℕ} (b : Fin n → F) : AuctionState F :=
-  A.toOnlineAlgorithm.runState (.unsold []) (List.ofFn b)
+  A.toOnlineAlgorithm.runStatus (.unsold []) (List.ofFn b)
 
-/-- A `sold` state is absorbing: once the item is sold, every later bid
-leaves the state unchanged. -/
-private lemma runState_from_sold (w : ℕ) (p : F) :
-    ∀ (L : List F), A.toOnlineAlgorithm.runState (.sold w p) L = .sold w p := by
-  intro L
-  induction L with
-  | nil => rfl
-  | cons x xs ih =>
-      have hstep : A.toOnlineAlgorithm.step (.sold w p) (some x) = (.sold w p, none) := rfl
-      rw [OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep]; exact ih
+/-- The auction's end-of-input step preserves the state: it posts no price,
+so an unsold auction stays unsold and a sold one stays sold. -/
+private lemma step_none_fst (s : AuctionState F) :
+    (A.toOnlineAlgorithm.step s none).1 = s := by cases s <;> rfl
 
-/-- If the run on `xs` already halts in `sold w p`, appending more bids
-keeps the halting state at `sold w p` (`sold` absorbs). This replaces the
-generic "halt freezes state" lemma, which no longer holds once `run` takes
-an end-of-input step. -/
-private lemma runState_append_eq_self_of_sold (w : ℕ) (p : F) :
+/-- The auction's end-of-input step never commits a sale. -/
+private lemma step_none_snd (s : AuctionState F) :
+    (A.toOnlineAlgorithm.step s none).2 = none := by cases s <;> rfl
+
+/-- If scanning `xs` from `s` commits **no** sale, the run on `xs ++ ys`
+resumes from the state reached after `xs`. (Holds because the auction's
+end-of-input step preserves the state, so the terminal state after `xs`
+alone is the same resume point.) -/
+private lemma run_append_of_result_none :
     ∀ (s : AuctionState F) (xs ys : List F),
-      A.toOnlineAlgorithm.runState s xs = .sold w p →
-      A.toOnlineAlgorithm.runState s (xs ++ ys) = .sold w p := by
+      (A.toOnlineAlgorithm.run s xs).2 = none →
+      A.toOnlineAlgorithm.run s (xs ++ ys)
+        = A.toOnlineAlgorithm.run (A.toOnlineAlgorithm.run s xs).1 ys := by
   intro s xs
   induction xs generalizing s with
-  | nil =>
-      intro ys h
-      simp only [List.nil_append]
-      rw [OnlineAlgorithm.runState_nil] at h
-      rw [h]; exact A.runState_from_sold w p ys
+  | nil => intro ys _; simp only [List.nil_append, OnlineAlgorithm.run_nil, A.step_none_fst]
   | cons r rs ih =>
       intro ys h
       cases hstep : A.toOnlineAlgorithm.step s (some r) with
       | mk s' o =>
           cases o with
           | some o' =>
-              rw [OnlineAlgorithm.runState_cons_some _ _ _ _ _ _ hstep] at h
-              simp only [List.cons_append]
-              rw [OnlineAlgorithm.runState_cons_some _ _ _ _ _ _ hstep]; exact h
+              rw [OnlineAlgorithm.run_cons_some _ _ _ _ _ _ hstep] at h; simp at h
           | none =>
-              rw [OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep] at h
+              rw [OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep] at h
               simp only [List.cons_append]
-              rw [OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep]
+              rw [OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep,
+                  OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep]
+              exact ih s' ys h
+
+/-- If scanning `xs` from `s` **commits** a sale, appending more bids does
+not change the run: it already halted within `xs`. (Holds because the
+end-of-input step never sells, so the only emitting step is inside `xs`.) -/
+private lemma run_append_of_result_isSome :
+    ∀ (s : AuctionState F) (xs ys : List F),
+      (A.toOnlineAlgorithm.run s xs).2.isSome →
+      A.toOnlineAlgorithm.run s (xs ++ ys) = A.toOnlineAlgorithm.run s xs := by
+  intro s xs
+  induction xs generalizing s with
+  | nil => intro ys h; rw [OnlineAlgorithm.run_nil, A.step_none_snd] at h; simp at h
+  | cons r rs ih =>
+      intro ys h
+      cases hstep : A.toOnlineAlgorithm.step s (some r) with
+      | mk s' o =>
+          cases o with
+          | some o' =>
+              simp only [List.cons_append]
+              rw [OnlineAlgorithm.run_cons_some _ _ _ _ _ _ hstep,
+                  OnlineAlgorithm.run_cons_some _ _ _ _ _ _ hstep]
+          | none =>
+              rw [OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep] at h
+              simp only [List.cons_append]
+              rw [OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep,
+                  OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep]
               exact ih s' ys h
 
 /-- **Bridge lemma.** The auction's global outcome, read at bidder `i`,
@@ -371,13 +384,14 @@ lemma mech_utility_bridge {n : ℕ} (b v : Fin n → F) (i : Fin n) :
      | .sold w p => if w = i.val then v i - p else 0
      | .unsold _ => 0)
     = A.utility v b i := by
-  unfold finalOutcome
   -- `pre` = first `i` bids = the list `stateBeforeStep b i` runs on.
   set pre := List.ofFn (fun j : Fin i.val => b ⟨j.val, j.isLt.trans i.isLt⟩)
     with hpre
   have hstate : A.stateBeforeStep b i
-      = A.toOnlineAlgorithm.runState (.unsold []) pre := rfl
+      = (A.toOnlineAlgorithm.run (.unsold []) pre).1 := rfl
   have hpre_len : pre.length = i.val := by rw [hpre, List.length_ofFn]
+  have hfo : A.finalOutcome b = (A.toOnlineAlgorithm.run (.unsold []) (List.ofFn b)).1 := rfl
+  rw [hfo]
   -- Split `ofFn b = pre ++ (b i :: drop (i+1))`.
   have hsplit : List.ofFn b = pre ++ (b i :: (List.ofFn b).drop (i.val + 1)) := by
     conv_lhs => rw [← List.take_append_drop i.val (List.ofFn b)]
@@ -387,41 +401,42 @@ lemma mech_utility_bridge {n : ℕ} (b v : Fin n → F) (i : Fin n) :
     rw [List.drop_eq_getElem_cons hlen]
     congr 1
     rw [List.getElem_ofFn]
-  rcases A.auction_dichotomy pre [] with ⟨hnone, hunsold⟩ | ⟨w, p, hrun, hsold, _, hub⟩
-  · -- No bidder before `i` clears: continue the run from `unsold pre`.
-    rw [List.nil_append] at hunsold
-    have hsb : A.stateBeforeStep b i = .unsold pre := by rw [hstate, hunsold]
-    rw [hsplit, A.toOnlineAlgorithm.runState_append_of_forall_none _ _ _ hnone, hunsold]
-    unfold SingleItemAuction.utility
+  rw [hsplit]
+  rcases A.auction_dichotomy pre [] with hpre_run | ⟨w, p, hpre_run, _, hub⟩
+  · -- No bidder before `i` clears: resume the run from `unsold pre`.
+    rw [List.nil_append] at hpre_run
+    have hsb : A.stateBeforeStep b i = .unsold pre := by rw [hstate, hpre_run]
+    have hnone : (A.toOnlineAlgorithm.run (.unsold []) pre).2 = none := by rw [hpre_run]
+    rw [A.run_append_of_result_none _ _ _ hnone, hpre_run]
     by_cases hc : A.price pre ≤ b i
     · -- bidder `i` clears: run halts at `sold pre.length (price pre)`.
       have hstep : A.toOnlineAlgorithm.step (.unsold pre) (some (b i))
           = (.sold pre.length (A.price pre), some (A.price pre)) := by
         show A.step (.unsold pre) (some (b i)) = _
         simp [SingleItemAuction.step, hc]
-      simp only [OnlineAlgorithm.runState_cons_some _ _ _ _ _ _ hstep, hsb, hpre_len,
-        if_pos rfl, hc, if_true]
+      rw [OnlineAlgorithm.run_cons_some _ _ _ _ _ _ hstep]
+      simp [SingleItemAuction.utility, hsb, hpre_len, hc]
     · -- bidder `i` rejected: any later winner is at position `> i`.
       have hstep : A.toOnlineAlgorithm.step (.unsold pre) (some (b i))
           = (.unsold (pre ++ [b i]), none) := by
         show A.step (.unsold pre) (some (b i)) = _
         simp [SingleItemAuction.step, hc]
-      rw [OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep]
+      rw [OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep]
       rcases A.auction_dichotomy ((List.ofFn b).drop (i.val + 1)) (pre ++ [b i]) with
-        ⟨_, hu⟩ | ⟨w, p, _, hs, hlb, _⟩
-      · simp only [hu, hsb, hc, if_false]
+        hu | ⟨w, p, hs, hlb, _⟩
+      · rw [hu]; simp [SingleItemAuction.utility, hsb, hc]
       · have hwi : i.val < w := by
           simp only [List.length_append, List.length_cons, List.length_nil, hpre_len] at hlb
           omega
-        simp only [hs, hsb, hc, if_false, if_neg (show ¬ w = i.val by omega)]
-  · -- Some bidder before `i` clears: `sold` absorbs, so later bids don't move it.
-    have hsb : A.stateBeforeStep b i = .sold w p := by rw [hstate, hsold]
+        rw [hs]; simp [SingleItemAuction.utility, hsb, hc, show ¬ w = i.val by omega]
+  · -- Some bidder before `i` clears: the run already halted within `pre`.
+    have hsb : A.stateBeforeStep b i = .sold w p := by rw [hstate, hpre_run]
+    have hsome : (A.toOnlineAlgorithm.run (.unsold []) pre).2.isSome := by rw [hpre_run]; rfl
     have hwi : w < i.val := by
       simp only [List.length_nil, Nat.zero_add, hpre_len] at hub
       omega
-    rw [hsplit, A.runState_append_eq_self_of_sold w p (.unsold []) pre _ hsold]
-    unfold SingleItemAuction.utility
-    simp only [hsb, if_neg (show ¬ w = i.val by omega)]
+    rw [A.run_append_of_result_isSome _ _ _ hsome, hpre_run]
+    simp [SingleItemAuction.utility, hsb, show ¬ w = i.val by omega]
 
 /-! ### (b) No constant-factor competitive ratio against an adversary -/
 

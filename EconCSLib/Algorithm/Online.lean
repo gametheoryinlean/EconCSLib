@@ -33,10 +33,8 @@ the other.
 * `OnlineAlgorithm.run` — drive the machine for a *stopping problem*:
   halt at the first step that emits an output, returning the pair
   `(terminal state, result)`; the result is `none` if the inputs were
-  exhausted and the end-of-input step also declined.
-* `OnlineAlgorithm.runState` — the *resume* state: the state reached by
-  the genuine requests, with no end-of-input step. The right notion for
-  compositional reasoning (splitting a stream at an interior point).
+  exhausted and the end-of-input step also declined. The terminal state is
+  read as `(run …).1`, the decision as `(run …).2`.
 * `OnlineAlgorithm.runAll` — drive the machine for a *streaming problem*:
   never halt, instead collect **every** emitted output in arrival order.
 * `IsCompetitiveMax`, `IsCompetitiveMin` — `c`-competitiveness against an
@@ -64,12 +62,11 @@ problem are supported; only the *driver* differs.
   output from the end-of-input step.
 
 `run` returns a pair: `(run …).1` is the **terminal** state (after the
-end-of-input step) and `(run …).2` is the decision.
-`runState` is the **resume** state — the genuine requests only, *no*
-end-of-input step. The two differ exactly by that final `step _ none` and
-coincide when it preserves the state. The resume state is what carries a
-clean concatenation law (`runState_append_of_forall_none`), needed when a
-request stream is split at an interior point (e.g. isolating one bidder).
+end-of-input step) and `(run …).2` is the decision. Compositional facts
+about splitting a request stream — needed e.g. to isolate one bidder —
+are proved per instance from `run_cons_some` / `run_cons_none`; for the
+single-item auction the end-of-input step preserves the state, which keeps
+those splitting lemmas clean.
 
 ## References
 
@@ -139,72 +136,14 @@ theorem run_cons (alg : OnlineAlgorithm α σ β)
     alg.run s (r :: rs) = alg.run s' rs := by
   rw [run_cons, h]
 
-/-! ### Resume state
+/-- The **decision** `run` commits to — the second component of `run`. -/
+abbrev runResult (alg : OnlineAlgorithm α σ β) (s : σ) (rs : List α) : Option β :=
+  (alg.run s rs).2
 
-`runState` is the **resume** state: the state reached by feeding the
-genuine requests, halting at the first emitted output, with **no**
-end-of-input step. It is the state *before the next genuine request*, the
-right notion for compositional reasoning — splitting a request stream at an
-interior point, where the stream is *not* ending. It differs from
-`(run …).state` only by the final `step _ none`; the two coincide whenever
-that end-of-input step preserves the state. -/
-
-/-- The resume state: scan the genuine requests, halting at the first
-emitting one, taking **no** end-of-input step. -/
-def runState (alg : OnlineAlgorithm α σ β) : σ → List α → σ
-  | s, []      => s
-  | s, r :: rs =>
-      match alg.step s (some r) with
-      | (s', some _) => s'
-      | (s', none)   => alg.runState s' rs
-
-@[simp] theorem runState_nil (alg : OnlineAlgorithm α σ β) (s : σ) :
-    alg.runState s [] = s := rfl
-
-theorem runState_cons (alg : OnlineAlgorithm α σ β)
-    (s : σ) (r : α) (rs : List α) :
-    alg.runState s (r :: rs) =
-      match alg.step s (some r) with
-      | (s', some _) => s'
-      | (s', none)   => alg.runState s' rs := rfl
-
-/-- If the step on `r` halts (emits an output), the resume state is the
-post-step state `s'`; the rest is not processed. -/
-@[simp] theorem runState_cons_some (alg : OnlineAlgorithm α σ β)
-    (s s' : σ) (o : β) (r : α) (rs : List α)
-    (h : alg.step s (some r) = (s', some o)) :
-    alg.runState s (r :: rs) = s' := by
-  rw [runState_cons, h]
-
-/-- If the step on `r` defers (`none`), the run continues on `rs`. -/
-@[simp] theorem runState_cons_none (alg : OnlineAlgorithm α σ β)
-    (s s' : σ) (r : α) (rs : List α)
-    (h : alg.step s (some r) = (s', none)) :
-    alg.runState s (r :: rs) = alg.runState s' rs := by
-  rw [runState_cons, h]
-
-/-- Running on `xs ++ ys` where the scan of `xs` emits nothing factors
-through the resume state after `xs`: the prefix produces no output, so the
-run resumes into `ys` from that state. -/
-theorem runState_append_of_forall_none (alg : OnlineAlgorithm α σ β)
-    (s : σ) (xs ys : List α)
-    (h : (alg.run s xs).2 = none) :
-    alg.runState s (xs ++ ys) = alg.runState (alg.runState s xs) ys := by
-  induction xs generalizing s with
-  | nil => simp
-  | cons r rs ih =>
-      cases hstep : alg.step s (some r) with
-      | mk s' o =>
-          cases o with
-          | some o =>
-              rw [run_cons_some _ _ _ _ _ _ hstep] at h
-              simp at h
-          | none =>
-              rw [run_cons_none _ _ _ _ _ hstep] at h
-              simp only [List.cons_append]
-              rw [runState_cons_none _ _ _ _ _ hstep,
-                  runState_cons_none _ _ _ _ _ hstep]
-              exact ih s' h
+/-- The **terminal status** (state) `run` halts in — the first component of
+`run`, after the end-of-input step. -/
+abbrev runStatus (alg : OnlineAlgorithm α σ β) (s : σ) (rs : List α) : σ :=
+  (alg.run s rs).1
 
 /-! ### Streaming
 
