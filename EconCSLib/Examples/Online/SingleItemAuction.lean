@@ -90,13 +90,18 @@ def step : AuctionState F → F → AuctionState F × Option F
       else (.unsold (h ++ [b]), none)
   | .sold w p, _ => (.sold w p, none)
 
-/-- Embed `A` as a generic `OnlineAlgorithm`. -/
-def toOnlineAlgorithm : OnlineAlgorithm F (AuctionState F) (Option F) where
+/-- Embed `A` as a generic `OnlineAlgorithm`. The per-step output is the
+sale price `F`: `step` emits `some p` exactly when the current bidder
+wins (halting the run), and `none` otherwise. -/
+def toOnlineAlgorithm : OnlineAlgorithm F (AuctionState F) F where
   init := .unsold []
   step := A.step
 
-/-- Run `A` on a bid sequence: `(final state, answers in arrival order)`. -/
-def run (bids : List F) : AuctionState F × List (Option F) :=
+/-- Run `A` on a bid sequence: `(state at the sale, sale price)`. The run
+halts at the first bidder who clears the posted price; the second
+component is `some p` if a sale happened, `none` if every bidder was
+rejected. -/
+def run (bids : List F) : AuctionState F × Option F :=
   A.toOnlineAlgorithm.run A.toOnlineAlgorithm.init bids
 
 /-- The state immediately *before* bidder `i` is processed: the result of
