@@ -97,18 +97,16 @@ def toOnlineAlgorithm : OnlineAlgorithm F (AuctionState F) F where
   init := .unsold []
   step := A.step
 
-/-- Run `A` on a bid sequence: `(state at the sale, sale price)`. The run
-halts at the first bidder who clears the posted price; the second
-component is `some p` if a sale happened, `none` if every bidder was
-rejected. -/
-def run (bids : List F) : AuctionState F × Option F :=
+/-- Run `A` on a bid sequence, returning the sale price: `some p` if some
+bidder cleared the posted price, `none` if every bidder was rejected. -/
+def run (bids : List F) : Option F :=
   A.toOnlineAlgorithm.run A.toOnlineAlgorithm.init bids
 
-/-- The state immediately *before* bidder `i` is processed: the result of
-driving the state machine on bids `b 0, …, b (i.val − 1)`. -/
+/-- The state immediately *before* bidder `i` is processed: the state
+reached by driving the machine on bids `b 0, …, b (i.val − 1)`. -/
 def stateBeforeStep {n : ℕ} (b : Fin n → F) (i : Fin n) : AuctionState F :=
-  (A.toOnlineAlgorithm.run (.unsold [])
-    (List.ofFn (fun j : Fin i.val => b ⟨j.val, j.isLt.trans i.isLt⟩))).1
+  A.toOnlineAlgorithm.runState (.unsold [])
+    (List.ofFn (fun j : Fin i.val => b ⟨j.val, j.isLt.trans i.isLt⟩))
 
 /-! ### Welfare via direct recursion
 
