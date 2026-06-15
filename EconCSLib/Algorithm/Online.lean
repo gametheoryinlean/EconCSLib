@@ -31,9 +31,9 @@ the other.
   A step *may or may not* emit an output: emitting an output signals that
   the algorithm has reached its decision and **halts**.
 * `OnlineAlgorithm.run` — drive the machine for a *stopping problem*:
-  halt at the first step that emits an output, returning a `RunResult`
-  with the terminal `state` and the `result` (`none` if the inputs were
-  exhausted and the end-of-input step also declined).
+  halt at the first step that emits an output, returning the pair
+  `(terminal state, result)`; the result is `none` if the inputs were
+  exhausted and the end-of-input step also declined.
 * `OnlineAlgorithm.runState` — the *resume* state: the state reached by
   the genuine requests, with no end-of-input step. The right notion for
   compositional reasoning (splitting a stream at an interior point).
@@ -63,8 +63,8 @@ problem are supported; only the *driver* differs.
   halts and gathers every emitted output, including a possible final
   output from the end-of-input step.
 
-`run` returns a `RunResult`: `(run …).state` is the **terminal** state
-(after the end-of-input step) and `(run …).result` is the decision.
+`run` returns a pair: `(run …).1` is the **terminal** state (after the
+end-of-input step) and `(run …).2` is the decision.
 `runState` is the **resume** state — the genuine requests only, *no*
 end-of-input step. The two differ exactly by that final `step _ none` and
 coincide when it preserves the state. The resume state is what carries a
@@ -101,46 +101,35 @@ namespace OnlineAlgorithm
 
 variable {α σ β : Type*}
 
-/-- The result of a stopping run: the **terminal state** reached when the
-machine halts, together with the **result** it produced (`none` if even the
-end-of-input step declined to commit). `run` returns this so callers can
-read both `(run …).state` and `(run …).result`. -/
-structure RunResult (State Output : Type*) where
-  /-- The state at the moment the run halts (a request emitted, or the
-  end-of-input step was taken). -/
-  state : State
-  /-- The committed decision, if any. -/
-  result : Option Output
-
 /-- Drive the machine across the requests, halting at the **first** step
 that emits an output. When the genuine requests are exhausted without a
 commitment, the machine is given the **end-of-input** step `step _ none` —
 its last chance to decide, since it never knew which request was last — and
-its state and output become the result. So `(run s rs).result` is the
-decision and `(run s rs).state` is the terminal state. -/
-def run (alg : OnlineAlgorithm α σ β) : σ → List α → RunResult σ β
-  | s, []      => ⟨(alg.step s none).1, (alg.step s none).2⟩
+its `(state, output)` pair *is* the result. So `(run s rs).1` is the
+terminal state and `(run s rs).2` is the decision. -/
+def run (alg : OnlineAlgorithm α σ β) : σ → List α → σ × Option β
+  | s, []      => alg.step s none
   | s, r :: rs =>
       match alg.step s (some r) with
-      | (s', some o) => ⟨s', some o⟩
+      | (s', some o) => (s', some o)
       | (s', none)   => alg.run s' rs
 
 /-- On no requests, `run` is exactly the end-of-input step. -/
 @[simp] theorem run_nil (alg : OnlineAlgorithm α σ β) (s : σ) :
-    alg.run s [] = ⟨(alg.step s none).1, (alg.step s none).2⟩ := rfl
+    alg.run s [] = alg.step s none := rfl
 
 theorem run_cons (alg : OnlineAlgorithm α σ β)
     (s : σ) (r : α) (rs : List α) :
     alg.run s (r :: rs) =
       match alg.step s (some r) with
-      | (s', some o) => ⟨s', some o⟩
+      | (s', some o) => (s', some o)
       | (s', none)   => alg.run s' rs := rfl
 
 /-- If the step on `r` halts with output `o`, the run halts there. -/
 @[simp] theorem run_cons_some (alg : OnlineAlgorithm α σ β)
     (s s' : σ) (o : β) (r : α) (rs : List α)
     (h : alg.step s (some r) = (s', some o)) :
-    alg.run s (r :: rs) = ⟨s', some o⟩ := by
+    alg.run s (r :: rs) = (s', some o) := by
   rw [run_cons, h]
 
 /-- If the step on `r` defers (`none`), the run continues on `rs`. -/
@@ -199,7 +188,7 @@ through the resume state after `xs`: the prefix produces no output, so the
 run resumes into `ys` from that state. -/
 theorem runState_append_of_forall_none (alg : OnlineAlgorithm α σ β)
     (s : σ) (xs ys : List α)
-    (h : (alg.run s xs).result = none) :
+    (h : (alg.run s xs).2 = none) :
     alg.runState s (xs ++ ys) = alg.runState (alg.runState s xs) ys := by
   induction xs generalizing s with
   | nil => simp
