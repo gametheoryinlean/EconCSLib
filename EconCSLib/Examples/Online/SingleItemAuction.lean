@@ -236,6 +236,150 @@ theorem dsic {n : ℕ} (v b : Fin n → F) (i : Fin n) :
   | .unsold h => exact A.local_dsic_unsold h (v i) (b i)
   | .sold _ _ => exact le_refl _
 
+/-! ### (a′) DSIC through the library `MechanismWithTransfers` interface
+
+Part (a) above is the self-contained statement. Here we re-express it as
+an instance of the library's dominant-strategy incentive-compatibility
+predicate `MechanismWithTransfers.isDSIC` (the same one Vickrey's theorem
+uses), so the online auction's truthfulness is certified by *exactly* the
+general mechanism-design definition — not a bespoke restatement.
+
+The online auction becomes a `MechanismWithTransfers` whose allocation
+rule returns the winning position (`Option ℕ`) and whose payment rule
+charges the winner the clearing price. The bridge lemma identifies the
+induced quasi-linear utility with `utility`, and DSIC then follows from
+`dsic` above. -/
+
+/-- Structural dichotomy of the auction run from an arbitrary starting
+history `h₀`: either no bidder clears (the run emits nothing and the final
+history is `h₀ ++ L`), or some bidder clears at position `w` with
+`h₀.length ≤ w < h₀.length + L.length` and the run halts in state
+`sold w p`. This is the single fact the bridge needs about the global
+trajectory. -/
+private lemma auction_dichotomy :
+    ∀ (L h₀ : List F),
+      (A.toOnlineAlgorithm.run (.unsold h₀) L = none ∧
+         A.toOnlineAlgorithm.runState (.unsold h₀) L = .unsold (h₀ ++ L)) ∨
+      (∃ w p, A.toOnlineAlgorithm.run (.unsold h₀) L = some p ∧
+         A.toOnlineAlgorithm.runState (.unsold h₀) L = .sold w p ∧
+         h₀.length ≤ w ∧ w < h₀.length + L.length) := by
+  intro L
+  induction L with
+  | nil => intro h₀; left; simp
+  | cons x xs ih =>
+      intro h₀
+      by_cases hc : A.price h₀ ≤ x
+      · -- bidder clears at this step: winner = current history length
+        right
+        have hstep : A.toOnlineAlgorithm.step (.unsold h₀) x
+            = (.sold h₀.length (A.price h₀), some (A.price h₀)) := by
+          show A.step (.unsold h₀) x = _
+          simp [SingleItemAuction.step, hc]
+        refine ⟨h₀.length, A.price h₀, ?_, ?_, le_refl _, ?_⟩
+        · rw [OnlineAlgorithm.run_cons_some _ _ _ _ _ _ hstep]
+        · rw [OnlineAlgorithm.runState_cons_some _ _ _ _ _ _ hstep]
+        · simp
+      · -- bidder rejected: recurse on the extended history
+        have hstep : A.toOnlineAlgorithm.step (.unsold h₀) x
+            = (.unsold (h₀ ++ [x]), none) := by
+          show A.step (.unsold h₀) x = _
+          simp [SingleItemAuction.step, hc]
+        rcases ih (h₀ ++ [x]) with ⟨hn, hs⟩ | ⟨w, p, hrun, hs, hlb, hub⟩
+        · left
+          rw [OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep,
+              OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep]
+          refine ⟨hn, ?_⟩
+          rw [hs, List.append_assoc, List.cons_append, List.nil_append]
+        · right
+          refine ⟨w, p, ?_, ?_, ?_, ?_⟩
+          · rw [OnlineAlgorithm.run_cons_none _ _ _ _ _ hstep]; exact hrun
+          · rw [OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep]; exact hs
+          · simp only [List.length_append, List.length_cons, List.length_nil] at hlb ⊢
+            omega
+          · simp only [List.length_append, List.length_cons, List.length_nil] at hub ⊢
+            omega
+
+/-- The prefix `take i` of `List.ofFn b` is exactly the list of the first
+`i` bids — the input that `stateBeforeStep b i` runs on. -/
+private lemma take_ofFn_eq_pre {n : ℕ} (b : Fin n → F) (i : Fin n) :
+    (List.ofFn b).take i.val
+      = List.ofFn (fun j : Fin i.val => b ⟨j.val, j.isLt.trans i.isLt⟩) := by
+  apply List.ext_getElem
+  · simp only [List.length_take, List.length_ofFn]
+    omega
+  · intro k h1 h2
+    simp only [List.getElem_take, List.getElem_ofFn]
+
+/-- The auction's **final outcome** on the truthful run of bid profile `b`:
+`sold w p` if some bidder cleared (winner position `w`, price `p`), else
+`unsold _`. This is the global allocation read by the mechanism wrapper. -/
+def finalOutcome {n : ℕ} (b : Fin n → F) : AuctionState F :=
+  A.toOnlineAlgorithm.runState (.unsold []) (List.ofFn b)
+
+/-- **Bridge lemma.** The auction's global outcome, read at bidder `i`,
+yields exactly bidder `i`'s `utility`. Concretely: the winner-and-price
+read off `finalOutcome` produces `v i − p` when `i` is the winner and
+`0` otherwise — matching the local `stateBeforeStep` definition of
+`utility`. This is the key fact connecting the global mechanism view to
+the local online one. -/
+lemma mech_utility_bridge {n : ℕ} (b v : Fin n → F) (i : Fin n) :
+    (match A.finalOutcome b with
+     | .sold w p => if w = i.val then v i - p else 0
+     | .unsold _ => 0)
+    = A.utility v b i := by
+  unfold finalOutcome
+  -- `pre` = first `i` bids = the list `stateBeforeStep b i` runs on.
+  set pre := List.ofFn (fun j : Fin i.val => b ⟨j.val, j.isLt.trans i.isLt⟩)
+    with hpre
+  have hstate : A.stateBeforeStep b i
+      = A.toOnlineAlgorithm.runState (.unsold []) pre := rfl
+  have hpre_len : pre.length = i.val := by rw [hpre, List.length_ofFn]
+  -- Split `ofFn b = pre ++ (b i :: drop (i+1))`.
+  have hsplit : List.ofFn b = pre ++ (b i :: (List.ofFn b).drop (i.val + 1)) := by
+    conv_lhs => rw [← List.take_append_drop i.val (List.ofFn b)]
+    rw [take_ofFn_eq_pre, ← hpre]
+    congr 1
+    have hlen : i.val < (List.ofFn b).length := by rw [List.length_ofFn]; exact i.isLt
+    rw [List.drop_eq_getElem_cons hlen]
+    congr 1
+    rw [List.getElem_ofFn]
+  rcases A.auction_dichotomy pre [] with ⟨hnone, hunsold⟩ | ⟨w, p, hrun, hsold, _, hub⟩
+  · -- No bidder before `i` clears: continue the run from `unsold pre`.
+    rw [List.nil_append] at hunsold
+    have hsb : A.stateBeforeStep b i = .unsold pre := by rw [hstate, hunsold]
+    rw [hsplit, A.toOnlineAlgorithm.runState_append_of_forall_none _ _ _ hnone, hunsold]
+    unfold SingleItemAuction.utility
+    by_cases hc : A.price pre ≤ b i
+    · -- bidder `i` clears: run halts at `sold pre.length (price pre)`.
+      have hstep : A.toOnlineAlgorithm.step (.unsold pre) (b i)
+          = (.sold pre.length (A.price pre), some (A.price pre)) := by
+        show A.step (.unsold pre) (b i) = _
+        simp [SingleItemAuction.step, hc]
+      simp only [OnlineAlgorithm.runState_cons_some _ _ _ _ _ _ hstep, hsb, hpre_len,
+        if_pos rfl, hc, if_true]
+    · -- bidder `i` rejected: any later winner is at position `> i`.
+      have hstep : A.toOnlineAlgorithm.step (.unsold pre) (b i)
+          = (.unsold (pre ++ [b i]), none) := by
+        show A.step (.unsold pre) (b i) = _
+        simp [SingleItemAuction.step, hc]
+      rw [OnlineAlgorithm.runState_cons_none _ _ _ _ _ hstep]
+      rcases A.auction_dichotomy ((List.ofFn b).drop (i.val + 1)) (pre ++ [b i]) with
+        ⟨_, hu⟩ | ⟨w, p, _, hs, hlb, _⟩
+      · simp only [hu, hsb, hc, if_false]
+      · have hwi : i.val < w := by
+          simp only [List.length_append, List.length_cons, List.length_nil, hpre_len] at hlb
+          omega
+        simp only [hs, hsb, hc, if_false, if_neg (show ¬ w = i.val by omega)]
+  · -- Some bidder before `i` clears: the run halts in the prefix.
+    have hsome : (A.toOnlineAlgorithm.run (.unsold []) pre).isSome := by rw [hrun]; rfl
+    have hsb : A.stateBeforeStep b i = .sold w p := by rw [hstate, hsold]
+    have hwi : w < i.val := by
+      simp only [List.length_nil, Nat.zero_add, hpre_len] at hub
+      omega
+    rw [hsplit, A.toOnlineAlgorithm.runState_append_of_run_isSome _ _ _ hsome]
+    unfold SingleItemAuction.utility
+    simp only [hsold, hsb, if_neg (show ¬ w = i.val by omega)]
+
 /-! ### (b) No constant-factor competitive ratio against an adversary -/
 
 /-- Welfare on a two-bidder profile, fully expanded. The branch structure

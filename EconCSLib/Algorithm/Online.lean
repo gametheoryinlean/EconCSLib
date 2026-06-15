@@ -138,6 +138,14 @@ theorem runState_cons (alg : OnlineAlgorithm α σ β)
       | (s', some _) => s'
       | (s', none)   => alg.runState s' rs := rfl
 
+/-- If the step on `r` halts (emits an output), the halting state is the
+post-step state `s'`; the rest is not processed. -/
+@[simp] theorem runState_cons_some (alg : OnlineAlgorithm α σ β)
+    (s s' : σ) (o : β) (r : α) (rs : List α)
+    (h : alg.step s r = (s', some o)) :
+    alg.runState s (r :: rs) = s' := by
+  rw [runState_cons, h]
+
 /-- If the step on `r` defers (`none`), the run continues on `rs`. -/
 @[simp] theorem runState_cons_none (alg : OnlineAlgorithm α σ β)
     (s s' : σ) (r : α) (rs : List α)
@@ -165,6 +173,52 @@ theorem run_append_of_forall_none (alg : OnlineAlgorithm α σ β)
               rw [run_cons_none _ _ _ _ _ hstep] at h
               simp only [List.cons_append]
               rw [run_cons_none _ _ _ _ _ hstep,
+                  runState_cons_none _ _ _ _ _ hstep]
+              exact ih s' h
+
+/-- State version of `run_append_of_forall_none`: if the prefix `xs`
+emits no output, the halting state over `xs ++ ys` is reached by
+continuing from the state after `xs`. -/
+theorem runState_append_of_forall_none (alg : OnlineAlgorithm α σ β)
+    (s : σ) (xs ys : List α)
+    (h : alg.run s xs = none) :
+    alg.runState s (xs ++ ys) = alg.runState (alg.runState s xs) ys := by
+  induction xs generalizing s with
+  | nil => simp
+  | cons r rs ih =>
+      cases hstep : alg.step s r with
+      | mk s' o =>
+          cases o with
+          | some o =>
+              rw [run_cons_some _ _ _ _ _ _ hstep] at h
+              simp at h
+          | none =>
+              rw [run_cons_none _ _ _ _ _ hstep] at h
+              simp only [List.cons_append]
+              rw [runState_cons_none _ _ _ _ _ hstep,
+                  runState_cons_none _ _ _ _ _ hstep]
+              exact ih s' h
+
+/-- If the prefix `xs` already emits an output, the halting state over
+`xs ++ ys` is reached within `xs`: the suffix is never processed. -/
+theorem runState_append_of_run_isSome (alg : OnlineAlgorithm α σ β)
+    (s : σ) (xs ys : List α)
+    (h : (alg.run s xs).isSome) :
+    alg.runState s (xs ++ ys) = alg.runState s xs := by
+  induction xs generalizing s with
+  | nil => simp at h
+  | cons r rs ih =>
+      cases hstep : alg.step s r with
+      | mk s' o =>
+          cases o with
+          | some o =>
+              rw [runState_cons _ _ _ _, hstep]
+              simp only [List.cons_append]
+              rw [runState_cons _ _ _ _, hstep]
+          | none =>
+              rw [run_cons_none _ _ _ _ _ hstep] at h
+              simp only [List.cons_append]
+              rw [runState_cons_none _ _ _ _ _ hstep,
                   runState_cons_none _ _ _ _ _ hstep]
               exact ih s' h
 
