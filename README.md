@@ -76,7 +76,7 @@ history.
 
 Coordinators (alphabetical by surname): [Bei Xiaohui](https://github.com/xbei)
 (NTU), Fu Hongfei, [Ma Jiajun](https://github.com/jiajunma) (XMUM),
-[Zhan JING](https://github.com/zhanquen) (SJTU).
+[Jing Zhan](https://github.com/zhanquen) (SJTU).
 
 Contributors: [Wang Haocheng](https://github.com/hcWang942),
 [Lü Yuwei (吕宇维)](https://github.com/lyw-ops),
