@@ -39,8 +39,8 @@ def inducedSharePref {N R S : Type*}
   fun i =>
     { rel := fun s t => I.utility i t ≤ I.utility i s
       prop :=
-        { reflexive := fun s => le_rfl
-          transitive := fun _ _ _ hst htu => le_trans htu hst
+        { reflexive := ⟨fun s => le_rfl⟩
+          transitive := ⟨fun _ _ _ hst htu => le_trans htu hst⟩
           total := fun s t =>
             by
               rcases le_total (I.utility i s) (I.utility i t) with h | h
