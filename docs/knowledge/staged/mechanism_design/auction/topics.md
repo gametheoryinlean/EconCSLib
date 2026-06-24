@@ -13,6 +13,12 @@ Canonical folder topic: `auction`
   stubs (Dutch/English equivalences, symmetric IPV equilibria for first-
   price and all-pay, entry fee and reserve price analysis, risk-aversion
   comparisons).
+- `auction.online` - online single-item (posted-price) auction where bidders
+  arrive sequentially and the posted price may depend only on prior bids: the
+  `OnlineAlgorithm` embedding, DSIC of truthful bidding, the impossibility of a
+  constant deterministic competitive ratio, and the secretary-style
+  1/4-competitive welfare guarantee under uniformly random arrival
+  (Roughgarden, *Twenty Lectures*, Problem 2.1).
 
 ## Source Guidance
 

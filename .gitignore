@@ -24,3 +24,6 @@ __pycache__/
 
 # Generated documentation sites
 _site/
+
+# Temporary scratch development files (not part of the library)
+/Scratch/

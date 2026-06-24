@@ -54,8 +54,11 @@ abbrev deviate {G : StrategicGame N U} [DecidableEq N]
     (σ : G.Profile) (i : N) (s' : G.strategy i) : G.Profile :=
   Function.update σ i s'
 
-/-- `σ[i ↦ s']` is the profile where player `i` switches to `s'`. -/
-notation:max σ "[" i " ↦ " s "]" => StrategicGame.deviate σ i s
+/-- `σ[i ↦ s']` is the profile where player `i` switches to `s'`.
+
+Scoped to keep the postfix `[…]` bracket from clashing with list literals
+(`… []`) in importing files; `open scoped StrategicGame` to use it. -/
+scoped notation:max σ "[" i " ↦ " s "]" => StrategicGame.deviate σ i s
 
 namespace Profile
 

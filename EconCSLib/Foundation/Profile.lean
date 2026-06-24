@@ -28,12 +28,15 @@ abbrev deviate {N : Type*} {S : N → Type*} [DecidableEq N]
     (σ : Profile N S) (i : N) (s' : S i) : Profile N S :=
   Function.update σ i s'
 
-/-- `σ[i ↦ s']` is the profile where index `i` holds `s'` and all others are as in `σ`. -/
-notation:max σ "[" i " ↦ " s "]" => deviate σ i s
-
 namespace Profile
 
 variable {N : Type*} {S : N → Type*} [DecidableEq N]
+
+/-- `σ[i ↦ s']` is the profile where index `i` holds `s'` and all others are as in `σ`.
+
+Scoped to keep the postfix `[…]` bracket from clashing with list literals
+(`… []`) in importing files; `open scoped Profile` to use it. -/
+scoped notation:max σ "[" i " ↦ " s "]" => deviate σ i s
 
 /-- Deviating to the same value is the identity. -/
 @[simp]

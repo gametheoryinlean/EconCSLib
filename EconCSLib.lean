@@ -21,6 +21,9 @@ import EconCSLib.Foundation.Utility.AffineTransform
 import EconCSLib.Foundation.Utility.Lottery
 import EconCSLib.Foundation.Utility.VNMAxioms
 
+-- Algorithm: algorithmic vocabulary (online algorithms, etc.)
+import EconCSLib.Algorithm.Online
+
 -- Math: infrastructure with no game vocabulary
 import EconCSLib.Math.Simplex
 

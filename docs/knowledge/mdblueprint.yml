@@ -24,6 +24,10 @@ sources:
       title: "An Iterative Method of Solving a Game"
       short: "Robinson 1951"
       authors: "Julia Robinson"
+    - id: roughgarden-twenty-lectures
+      title: "Twenty Lectures on Algorithmic Game Theory"
+      short: "Roughgarden 2016"
+      authors: "Tim Roughgarden"
 
 topics:
   - id: foundation
@@ -100,6 +104,8 @@ topics:
     title: Knapsack Auctions
   - id: mechanism_design.auction.bayesian
     title: Bayesian Auctions
+  - id: mechanism_design.auction.online
+    title: Online & Posted-Price Auctions
   - id: math.fixed_point
     title: Fixed Point Theorems
   - id: math.linear_algebra
