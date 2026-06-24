@@ -14,6 +14,8 @@ lean:
   modules:
     - EconCSLib.Examples.Online.SingleItemAuction
   declarations:
+    - Online.Auction.SingleItemAuction.welfareFrom_eq_zero
+    - Online.Auction.SingleItemAuction.welfare_can_be_zero
     - Online.Auction.SingleItemAuction.no_constant_competitive_ratio
 verification:
   statement: accepted
@@ -29,48 +31,67 @@ tags:
 
 # No Deterministic Constant Competitive Ratio
 
-**Theorem (Roughgarden, Problem 2.1(b)).** No deterministic online
-single-item auction guarantees a constant fraction of the highest
-valuation against adversarial inputs. For every constant $c > 0$ and every
-pricing rule $A$ there is a valuation profile $v$ (two bidders already
-suffice) with $\max(v_0, v_1) > 0$ and
+The sharp content of Problem 2.1(b) is that a deterministic online auction
+can be forced to capture **zero** welfare while the optimum is positive.
+
+**Theorem (`welfare_can_be_zero`).** Let $A$ be any deterministic online
+single-item auction that posts a positive opening price,
+$0 < A.\mathrm{price}\,[\,]$. Then for every $n \ge 1$ there is an
+$n$-bidder valuation profile $v$ with $\mathrm{maxV}\,v > 0$ and
 
 $$
-A.\mathrm{welfare}(v,\, v) \;<\; c \cdot \max(v_0,\, v_1).
+A.\mathrm{welfare}(v,\, v) \;=\; 0 .
 $$
+
+**Corollary (`no_constant_competitive_ratio`).** Hence $A$ has no constant
+competitive ratio: for every $c > 0$ and every $n \ge 1$ some profile gives
+$A.\mathrm{welfare}(v,\,v) = 0 < c \cdot \mathrm{maxV}\,v$.
+
+## Why the quantifiers are exactly these
+
+- **Per `n`, not just $n = 2$.** A posted-price auction may depend on the
+  number of bidders (the secretary auction
+  [[mechanism_design.auction.online.secretary_quarter_competitive]] splits at
+  $\lfloor n/2 \rfloor$), so refuting competitiveness on a $2$-bidder input
+  says nothing about $3$-bidder inputs. The impossibility must — and does —
+  hold for **every** $n$. The same one-line adversary works at all $n$.
+- **Positive opening price, and $n \ge 1$ is then tight.** With
+  $A.\mathrm{price}\,[\,] \le 0$ a lone first bidder wins the item for free,
+  so a single-bidder auction would capture full welfare; the impossibility
+  genuinely fails at $n = 1$ for such giveaways. Requiring a positive
+  opening price — the natural assumption for an auction — removes exactly
+  that obstruction, and then a single bidder already suffices.
 
 ## Proof
 
-Fix the pricing rule $A$ and the constant $c$. Only the first posted price
-$p_0 = A.\mathrm{price}\,[\,]$ matters, and the adversary plays against it
-with two bidders:
+Fix $A$ with $p_0 = A.\mathrm{price}\,[\,] > 0$. The adversary is one
+construction, independent of $n$: bidder $0$ values the item at $p_0 / 2$
+and every later bidder values it at $0$.
 
-- **If $p_0 > 0$:** present a first bidder with a tiny valuation
-  $v_0 \in (0, p_0)$, below the price, who is rejected; then a second bidder
-  whose valuation is also small. The high value the mechanism *could* have
-  captured never materialises, so realised welfare is a vanishing fraction
-  of the maximum.
-- **If $p_0 \le 0$:** the first bidder (with any positive valuation) clears
-  the price immediately, so the item is sold to an arbitrarily low bidder
-  while a much higher second valuation is locked out.
+- $\mathrm{maxV}\,v \ge v_0 = p_0/2 > 0$.
+- Bidder $0$ faces the posted price $p_0$ and bids $p_0/2 < p_0$, so they are
+  rejected (the winning rule is $p_0 \le \mathrm{bid}$). Every remaining
+  bidder values the item at $0$, so whoever — if anyone — wins later
+  contributes welfare $0$. Hence $A.\mathrm{welfare}(v,v) = 0$.
 
-In both branches the adversary drives the welfare ratio below the target
-$c$, because the deterministic price $p_0$ is committed *before any bid is
-seen* and the adversary tailors the two valuations to that single number.
+The valuation-zero tail is handled by the structural lemma
+`welfareFrom_eq_zero`: once the only positive bidder is rejected, the
+recursion runs over a list of zero valuations and can only output $0$. The
+corollary is immediate, since $\mathrm{welfare} = 0 < c \cdot \mathrm{maxV}$.
 
 ## Why it matters
 
-This is the impossibility half of Problem 2.1, and it motivates the two
-escapes used elsewhere in the example file:
+This is the impossibility half of Problem 2.1, and it motivates the escape
+used in the positive result:
 
 - **Randomise the input** (rather than the mechanism): under uniformly
   random arrival order the secretary-style threshold rule recovers a
   constant guarantee, the $1/4$ bound of
   [[mechanism_design.auction.online.secretary_quarter_competitive]].
 - The contrast is the standard online-algorithms story: worst-case
-  competitive analysis can be hopeless precisely when the algorithm must
-  commit before seeing the data, while average-case (random-order) analysis
-  remains informative.
+  competitive analysis is hopeless precisely because the algorithm must
+  commit to the opening price before seeing any bid, while average-case
+  (random-order) analysis remains informative.
 
 ## References
 

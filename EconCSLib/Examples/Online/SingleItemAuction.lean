@@ -39,9 +39,11 @@ posted price.
 
 * `dsic` — truthful bidding is (weakly) dominant for every bidder under
   every valuation profile (Problem 2.1(a)).
-* `no_constant_competitive_ratio` — for adversarial valuations, no
-  deterministic online auction achieves a constant fraction of the
-  highest valuation: a two-bidder adversary suffices (Problem 2.1(b)).
+* `welfare_can_be_zero` / `no_constant_competitive_ratio` — for every
+  `n ≥ 1`, any deterministic online auction posting a positive opening
+  price can be driven to welfare `0` (while the maximum valuation stays
+  positive) by a single adversary, so it achieves no constant fraction of
+  the highest valuation (Problem 2.1(b)).
 * `Secretary.competitive` — under uniformly random arrival, the
   secretary-style threshold rule achieves expected welfare ≥ `(1/4) · max v`
   (Problem 2.1(c)). Fully proved: the welfare characterisation under the
@@ -74,6 +76,18 @@ current or any future bid. -/
 structure SingleItemAuction (F : Type*) where
   /-- Price posted to the next arrival, given the prior rejection history. -/
   price : List F → F
+
+/-- Maximum of a valuation profile: a small wrapper around `Finset.sup'`
+that absorbs the nonempty proof so callers do not have to provide it.
+Requires `n ≥ 1` to guarantee a witness. Auction-independent — it is the
+offline optimum (give the item to the highest valuation) used as the
+competitive-ratio benchmark. -/
+noncomputable def maxV {n : ℕ} [LinearOrder F] (hn : 1 ≤ n) (v : Fin n → F) : F :=
+  (Finset.univ : Finset (Fin n)).sup' ⟨⟨0, hn⟩, Finset.mem_univ _⟩ v
+
+lemma le_maxV {n : ℕ} [LinearOrder F] (hn : 1 ≤ n) (v : Fin n → F) (i : Fin n) :
+    v i ≤ maxV hn v :=
+  Finset.le_sup' v (Finset.mem_univ i)
 
 namespace SingleItemAuction
 
@@ -160,6 +174,23 @@ lemma welfareFrom_nonneg (L : List (F × F)) (hL : ∀ p ∈ L, 0 ≤ p.1) :
       rcases p with ⟨vi, bi⟩
       have hvi : 0 ≤ vi := hL (vi, bi) (List.mem_cons_self)
       have hrest : ∀ q ∈ rest, 0 ≤ q.1 :=
+        fun q hq => hL q (List.mem_cons_of_mem _ hq)
+      by_cases hcond : A.price h ≤ bi
+      · rw [A.welfareFrom_cons_accept _ _ _ _ hcond]; exact hvi
+      · rw [A.welfareFrom_cons_reject _ _ _ _ hcond]
+        exact ih hrest (h ++ [bi])
+
+/-- If every listed valuation is zero, the welfare-from is zero: the
+auction can only ever output `0` or one of the listed valuations. -/
+lemma welfareFrom_eq_zero (L : List (F × F)) (hL : ∀ p ∈ L, p.1 = 0) :
+    ∀ (h : List F), A.welfareFrom h L = 0 := by
+  induction L with
+  | nil => intro h; rw [A.welfareFrom_nil]
+  | cons p rest ih =>
+      intro h
+      rcases p with ⟨vi, bi⟩
+      have hvi : vi = 0 := hL (vi, bi) List.mem_cons_self
+      have hrest : ∀ q ∈ rest, q.1 = 0 :=
         fun q hq => hL q (List.mem_cons_of_mem _ hq)
       by_cases hcond : A.price h ≤ bi
       · rw [A.welfareFrom_cons_accept _ _ _ _ hcond]; exact hvi
@@ -436,77 +467,49 @@ lemma mech_utility_bridge {n : ℕ} (b v : Fin n → F) (i : Fin n) :
 
 /-! ### (b) No constant-factor competitive ratio against an adversary -/
 
-/-- Welfare on a two-bidder profile, fully expanded. The branch structure
-mirrors the auction's two-step behaviour: bidder 0 wins iff their bid
-clears the initial posted price `A.price []`; otherwise bidder 1 wins iff
-their bid clears the price posted given the history `[b 0]`. -/
-private lemma welfare_two (v b : Fin 2 → F) :
-    A.welfare v b =
-      (if A.price [] ≤ b 0 then v 0
-       else if A.price [b 0] ≤ b 1 then v 1
-       else 0) := by
-  unfold welfare
-  have hlist :
-      List.ofFn (fun i : Fin 2 => (v i, b i)) = [(v 0, b 0), (v 1, b 1)] := rfl
-  rw [hlist]
-  by_cases h0 : A.price [] ≤ b 0
-  · rw [A.welfareFrom_cons_accept _ _ _ _ h0, if_pos h0]
-  · rw [A.welfareFrom_cons_reject _ _ _ _ h0, if_neg h0]
-    simp only [List.nil_append]
-    by_cases h1 : A.price [b 0] ≤ b 1
-    · rw [A.welfareFrom_cons_accept _ _ _ _ h1, if_pos h1]
-    · rw [A.welfareFrom_cons_reject _ _ _ _ h1, if_neg h1]
-      rfl
+/-- **Problem 2.1 (b): welfare can be forced to zero.**
 
-/-- **Problem 2.1 (b): no constant-factor competitive ratio is achievable.**
+For every `n ≥ 1` and every deterministic online auction `A` that posts a
+positive opening price (`0 < A.price []`), there is an `n`-bidder valuation
+profile on which the maximum valuation is strictly positive yet the
+auction's welfare (under truthful bidding) is exactly `0`.
 
-For every constant `c > 0` and every deterministic online auction `A`,
-there exists a two-bidder valuation profile on which the maximum
-valuation is strictly positive yet the auction's welfare (under truthful
-bidding) is strictly less than `c · max v`.
+The adversary is a single construction: bidder `0` values the item at
+`A.price [] / 2` — just under the posted price, so they are rejected — and
+every other bidder values it at `0`. No positive valuation is ever
+captured, so welfare is `0`, while the maximum valuation `A.price []/2`
+stays positive.
 
-The adversary splits on the sign of `A.price []`. If positive, the first
-bidder underbids it (and bidder 2 has valuation zero), so nobody whose
-valuation matters wins. If non-positive, the first bidder is given
-valuation zero and wins immediately at a non-positive price, locking out
-a unit valuation in slot two. -/
-theorem no_constant_competitive_ratio (c : F) (hc : 0 < c)
-    (A : SingleItemAuction F) :
-    ∃ v : Fin 2 → F, 0 < max (v 0) (v 1) ∧
-      A.welfare v v < c * max (v 0) (v 1) := by
-  by_cases hp : 0 < A.price []
-  · -- Adversary: v 0 = (A.price [])/2, v 1 = 0.
-    refine ⟨![A.price [] / 2, 0], ?_, ?_⟩
-    · -- 0 < max (A.price []/2) 0
-      have hhalf : (0 : F) < A.price [] / 2 := div_pos hp two_pos
-      have e0 : (![A.price [] / 2, 0] : Fin 2 → F) 0 = A.price [] / 2 := by simp
-      have e1 : (![A.price [] / 2, 0] : Fin 2 → F) 1 = 0 := by simp
-      rw [e0, e1, max_eq_left hhalf.le]
-      exact hhalf
-    · -- welfare < c * max
-      have hhalf : (0 : F) < A.price [] / 2 := div_pos hp two_pos
-      have e0 : (![A.price [] / 2, 0] : Fin 2 → F) 0 = A.price [] / 2 := by simp
-      have e1 : (![A.price [] / 2, 0] : Fin 2 → F) 1 = 0 := by simp
-      rw [A.welfare_two, e0, e1, max_eq_left hhalf.le]
-      have hbid0 : ¬ A.price [] ≤ A.price [] / 2 := not_le.mpr (half_lt_self hp)
-      rw [if_neg hbid0]
-      have hzero :
-          (if A.price [A.price [] / 2] ≤ (0 : F) then (0 : F) else 0) = 0 := by
-        split_ifs <;> rfl
-      rw [hzero]
-      exact mul_pos hc hhalf
-  · -- A.price [] ≤ 0. Adversary: v 0 = 0, v 1 = 1.
-    push Not at hp
-    refine ⟨![0, 1], ?_, ?_⟩
-    · have e0 : (![0, 1] : Fin 2 → F) 0 = 0 := by simp
-      have e1 : (![0, 1] : Fin 2 → F) 1 = 1 := by simp
-      rw [e0, e1, max_eq_right zero_le_one]
-      exact one_pos
-    · have e0 : (![0, 1] : Fin 2 → F) 0 = 0 := by simp
-      have e1 : (![0, 1] : Fin 2 → F) 1 = 1 := by simp
-      rw [A.welfare_two, e0, e1, max_eq_right zero_le_one]
-      rw [if_pos hp, mul_one]
-      exact hc
+Only the *opening* price needs to be positive; that already rules out the
+degenerate giveaway (`A.price [] ≤ 0`, where a lone first bidder wins for
+free) which is the sole obstruction at `n = 1`. -/
+theorem welfare_can_be_zero (n : ℕ) (hn : 1 ≤ n) (hpos : 0 < A.price []) :
+    ∃ v : Fin n → F, 0 < maxV hn v ∧ A.welfare v v = 0 := by
+  obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+  refine ⟨Fin.cons (A.price [] / 2) (fun _ => 0), ?_, ?_⟩
+  · -- maxV > 0, since bidder 0's valuation is `A.price []/2 > 0`
+    have key := le_maxV hn (Fin.cons (A.price [] / 2) (fun _ : Fin m => (0 : F))) 0
+    rw [Fin.cons_zero] at key
+    exact lt_of_lt_of_le (div_pos hpos two_pos) key
+  · -- welfare = 0: bidder 0 is rejected, every later valuation is 0
+    unfold welfare
+    rw [List.ofFn_succ]
+    simp only [Fin.cons_zero, Fin.cons_succ]
+    rw [A.welfareFrom_cons_reject _ _ _ _ (not_le.mpr (half_lt_self hpos))]
+    refine A.welfareFrom_eq_zero _ ?_ _
+    intro p hpmem
+    obtain ⟨i, rfl⟩ := List.mem_ofFn.mp hpmem
+    rfl
+
+/-- **No constant competitive ratio** (corollary of `welfare_can_be_zero`).
+For every `n ≥ 1`, every `c > 0`, and every deterministic online auction
+`A` with positive opening price, some `n`-bidder profile has positive
+maximum valuation yet welfare strictly below `c · maxV`. -/
+theorem no_constant_competitive_ratio (n : ℕ) (hn : 1 ≤ n) (hpos : 0 < A.price [])
+    (c : F) (hc : 0 < c) :
+    ∃ v : Fin n → F, 0 < maxV hn v ∧ A.welfare v v < c * maxV hn v := by
+  obtain ⟨v, hposv, hzero⟩ := A.welfare_can_be_zero n hn hpos
+  exact ⟨v, hposv, by rw [hzero]; exact mul_pos hc hposv⟩
 
 /-! ### (a) DSIC via the library mechanism predicate
 
@@ -623,16 +626,6 @@ def auction (n : ℕ) (M : F) : SingleItemAuction F where
   price h :=
     if h.length < n / 2 then M + 1
     else h.foldr max 0
-
-/-- Maximum of the valuations: a small wrapper around `Finset.sup'`
-that absorbs the nonempty proof so callers do not have to provide it.
-Requires `n ≥ 1` to guarantee a witness. -/
-noncomputable def maxV {n : ℕ} (hn : 1 ≤ n) (v : Fin n → F) : F :=
-  (Finset.univ : Finset (Fin n)).sup' ⟨⟨0, hn⟩, Finset.mem_univ _⟩ v
-
-lemma le_maxV {n : ℕ} (hn : 1 ≤ n) (v : Fin n → F) (i : Fin n) :
-    v i ≤ maxV hn v :=
-  Finset.le_sup' v (Finset.mem_univ i)
 
 /-- The favourable event: under permutation `σ`, the argmax bidder
 arrives in the second half (position ≥ `n/2`) while the second-largest

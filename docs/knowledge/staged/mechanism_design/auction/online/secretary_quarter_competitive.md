@@ -16,7 +16,7 @@ lean:
     - EconCSLib.Examples.Online.SingleItemAuction
   declarations:
     - Online.Auction.Secretary.auction
-    - Online.Auction.Secretary.maxV
+    - Online.Auction.maxV
     - Online.Auction.Secretary.Favorable
     - Online.Auction.Secretary.welfare_eq_max_of_favorable
     - Online.Auction.Secretary.favorableSet
