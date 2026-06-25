@@ -162,6 +162,11 @@ identity rule to make a tied instance behave like a distinct-valued one — and
 it needs neither a "must-hire-last" forced sale (which would violate
 individual rationality) nor any extra randomness beyond the arrival order.
 
+`competitive_of_nonneg` holds for every `n ≥ 1`: the `n ≥ 2` core is above,
+and `n = 1` is trivial (the lone bidder always clears the zero opening price,
+so welfare `= max v`). Only `n = 0` is excluded, since `max v` is then
+undefined.
+
 ## Why it matters
 
 Together with the deterministic impossibility

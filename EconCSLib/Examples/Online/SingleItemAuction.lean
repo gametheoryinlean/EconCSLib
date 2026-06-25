@@ -49,10 +49,11 @@ posted price.
   for **distinct** valuations (Problem 2.1(c)). Fully proved via the welfare
   characterisation under the favourable event and the exact favourable count.
 * `Secretary.competitive_of_nonneg` — the same `(1/4) · max v` guarantee for
-  **all** nonnegative valuations (ties allowed): bidders are compared by the
-  tie-broken rank `Secretary.surrogate v` (lexicographic `(value, index)`),
-  which makes the order strict so the favourable count and welfare argument
-  carry over from the injective case, with no `must-hire-last` forced sale.
+  **all** nonnegative valuations (ties allowed) and every `n ≥ 1`: bidders are
+  compared by the tie-broken rank `Secretary.surrogate v` (lexicographic
+  `(value, index)`), which makes the order strict so the favourable count and
+  welfare argument carry over from the injective case, with no
+  `must-hire-last` forced sale.
 -/
 
 -- The section variables (`A`, `Field`/`LinearOrder`/`IsStrictOrderedRing F`)
@@ -1525,8 +1526,10 @@ The bids submitted are the surrogate ranks `surrogate v ∘ σ`; the
 welfare credited is the true valuation `v ∘ σ` of the winning bidder.
 This is the route-A tie-break: comparing by `(value, index)` makes the
 effective order strict, so the favourable-event count and welfare
-characterisation carry over from the injective case. -/
-theorem competitive_of_nonneg
+characterisation carry over from the injective case. The `n ≥ 2` core;
+`competitive_of_nonneg` packages it together with the trivial `n = 1`
+case. -/
+private lemma competitive_of_nonneg_ge_two
     {n : ℕ} (hn : 2 ≤ n) (v : Fin n → F)
     (hv_nn : ∀ i, 0 ≤ v i) :
     (1 / 4 : F) * maxV (by omega) v ≤
@@ -1583,6 +1586,55 @@ theorem competitive_of_nonneg
           linarith
     _ = ((favorableSet b).card : F) * MAX := by ring
     _ ≤ ∑ σ : Equiv.Perm (Fin n), (auction n (n : F)).welfare (v ∘ σ) (b ∘ σ) := step1
+
+/-- **Problem 2.1 (c′): the 1/4 guarantee for all nonnegative `v`, down to a
+single bidder.** The `n = 1` case is trivial — the lone bidder always clears
+the zero opening price, so welfare `= max v` — and `n ≥ 2` is the core
+`competitive_of_nonneg_ge_two`. No injectivity, only `0 ≤ v`. -/
+theorem competitive_of_nonneg
+    {n : ℕ} (hn : 1 ≤ n) (v : Fin n → F)
+    (hv_nn : ∀ i, 0 ≤ v i) :
+    (1 / 4 : F) * maxV hn v ≤
+      (∑ σ : Equiv.Perm (Fin n),
+        (auction n (n : F)).welfare (v ∘ σ) (surrogate v ∘ σ)) /
+          (n.factorial : F) := by
+  rcases eq_or_lt_of_le hn with rfl | h2
+  · -- n = 1: the single bidder clears price 0 (its surrogate rank is 0).
+    simp only [Nat.cast_one]
+    have hsurr0 : surrogate v (0 : Fin 1) = 0 := by
+      have hc : (Finset.univ.filter (fun j => slt v j (0 : Fin 1))).card = 0 := by
+        rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
+        intro j _
+        rw [Subsingleton.elim j (0 : Fin 1)]
+        exact slt_irrefl v 0
+      unfold surrogate
+      rw [hc, Nat.cast_zero]
+    have hprice0 : (auction 1 (1 : F)).price [] = 0 := by
+      simp [Secretary.auction]
+    have hcond : (auction 1 (1 : F)).price [] ≤ surrogate v 0 := by
+      rw [hprice0, hsurr0]
+    have hwf : (auction 1 (1 : F)).welfare v (surrogate v) = v 0 := by
+      simp only [SingleItemAuction.welfare, List.ofFn_succ, List.ofFn_zero]
+      rw [SingleItemAuction.welfareFrom_cons_accept _ _ _ _ _ hcond]
+    have hmax : maxV hn v = v 0 := by
+      apply le_antisymm
+      · apply Finset.sup'_le
+        intro j _
+        rw [Subsingleton.elim j (0 : Fin 1)]
+      · exact le_maxV _ v 0
+    have hsum : (∑ σ : Equiv.Perm (Fin 1),
+          (auction 1 (1 : F)).welfare (v ∘ σ) (surrogate v ∘ σ)) = v 0 := by
+      have huniv : (Finset.univ : Finset (Equiv.Perm (Fin 1))) = {1} := by
+        ext σ
+        simp only [Finset.mem_univ, Finset.mem_singleton, true_iff]
+        exact Subsingleton.elim σ 1
+      rw [huniv, Finset.sum_singleton]
+      simp only [Equiv.Perm.coe_one, Function.comp_id]
+      exact hwf
+    have hf1 : (Nat.factorial 1 : F) = 1 := by norm_num
+    rw [hsum, hmax, hf1, div_one]
+    linarith [hv_nn (0 : Fin 1)]
+  · exact competitive_of_nonneg_ge_two h2 v hv_nn
 
 /-- **Problem 2.1 (c): a 1/4-competitive deterministic online auction
 under uniformly random arrival.**
