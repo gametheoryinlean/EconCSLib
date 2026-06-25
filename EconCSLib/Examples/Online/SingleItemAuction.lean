@@ -55,6 +55,10 @@ posted price.
   carry over from the injective case, with no `must-hire-last` forced sale.
 -/
 
+-- The section variables (`A`, `Field`/`LinearOrder`/`IsStrictOrderedRing F`)
+-- are deliberately broad; several order-only or list-only lemmas use a subset.
+set_option linter.unusedSectionVars false
+
 namespace Online.Auction
 
 open Online Function
@@ -740,8 +744,8 @@ private lemma le_foldr_max_of_mem
   | nil => exact absurd hx (List.not_mem_nil)
   | cons a rest ih =>
       rcases List.mem_cons.mp hx with rfl | hx'
-      · simpa using le_max_left _ _
-      · exact (ih hx').trans (by simpa using le_max_right _ _)
+      · rw [List.foldr_cons]; exact le_max_left _ _
+      · exact (ih hx').trans (by rw [List.foldr_cons]; exact le_max_right _ _)
 
 /-- Algebraic identity: `foldr max 0` distributes over list concatenation. -/
 private lemma foldr_max_append
@@ -802,7 +806,7 @@ when `T` is an upper bound on every valuation other than the argmax,
 and `k ≤ max_pos.val`. -/
 private lemma foldr_max_take_le_T
     {n : ℕ} (v : Fin n → F) (σ : Equiv.Perm (Fin n))
-    (hv_inj : Function.Injective v)
+    (_hv_inj : Function.Injective v)
     (hv_nn : ∀ i, 0 ≤ v i)
     (hσ : Favorable v σ)
     (k : ℕ) (hk : k ≤ hσ.max_pos.val) :
@@ -835,7 +839,7 @@ private lemma foldr_max_take_le_T
 private lemma T_le_foldr_max_take
     {n : ℕ} (v : Fin n → F) (σ : Equiv.Perm (Fin n))
     (hσ : Favorable v σ)
-    (k : ℕ) (hk_gt : hσ.second_pos.val < k) (hk_le : k ≤ n) :
+    (k : ℕ) (hk_gt : hσ.second_pos.val < k) (_hk_le : k ≤ n) :
     v (σ hσ.second_pos) ≤ ((List.ofFn (v ∘ σ)).take k).foldr max 0 := by
   apply le_foldr_max_of_mem
   rw [List.mem_take_iff_getElem]
@@ -870,7 +874,7 @@ private theorem welfareFrom_aux
     (hb_inj : Function.Injective b)
     (hb_nn : ∀ i, 0 ≤ b i)
     (hb_le : ∀ i, b i ≤ M)
-    (hσ : Favorable b σ) (hn : 2 ≤ n) :
+    (hσ : Favorable b σ) (_hn : 2 ≤ n) :
     ∀ (d k : ℕ), k + d = hσ.max_pos.val →
     (auction n M).welfareFrom
       ((List.ofFn (b ∘ σ)).take k)
@@ -1062,7 +1066,7 @@ private lemma factorial_le_four_split (n : ℕ) (hn : 2 ≤ n) :
     rcases n with _ | _ | n
     · omega
     · omega
-    · simp [Nat.factorial_succ, Nat.succ_sub_one]
+    · simp [Nat.factorial_succ]
       ring
   rw [hfac]
   -- Goal: n * (n - 1) * (n - 2)! ≤ 4 * (n - n/2) * (n/2) * (n - 2)!
