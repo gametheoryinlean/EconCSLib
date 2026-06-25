@@ -46,8 +46,13 @@ posted price.
   the highest valuation (Problem 2.1(b)).
 * `Secretary.competitive` — under uniformly random arrival, the
   secretary-style threshold rule achieves expected welfare ≥ `(1/4) · max v`
-  (Problem 2.1(c)). Fully proved: the welfare characterisation under the
-  favourable event and the exact count of the favourable permutation set.
+  for **distinct** valuations (Problem 2.1(c)). Fully proved via the welfare
+  characterisation under the favourable event and the exact favourable count.
+* `Secretary.competitive_of_nonneg` — the same `(1/4) · max v` guarantee for
+  **all** nonnegative valuations (ties allowed): bidders are compared by the
+  tie-broken rank `Secretary.surrogate v` (lexicographic `(value, index)`),
+  which makes the order strict so the favourable count and welfare argument
+  carry over from the injective case, with no `must-hire-last` forced sale.
 -/
 
 namespace Online.Auction
@@ -848,21 +853,36 @@ private lemma bid_at {n : ℕ} (v : Fin n → F) (σ : Equiv.Perm (Fin n))
   rw [List.getElem_ofFn]
   rfl
 
-/-- The recursive core of `welfare_eq_max_of_favorable`. For every
-position `k ≤ max_pos.val`, processing the auction from a history
-equal to the first `k` bids yields welfare = `v (σ max_pos)`. Proved by
-induction on `d = max_pos.val − k`. -/
+/-- The recursive core of `welfare_eq_max_of_favorable`, generalised to a
+*separate* accumulated valuation `w` and compared bid `b`. The auction's
+price/threshold/acceptance only ever look at the bid `b`; the value
+returned on the winning step is the valuation `w` of that bidder. The
+favourable event is on the *bid* profile `b` (which must be injective,
+nonnegative, bounded by `M`). For every position `k ≤ max_pos.val`,
+processing the auction from a history equal to the first `k` *bids* yields
+welfare = `w (σ max_pos)`. Proved by induction on `d = max_pos.val − k`.
+
+The original (`w = b = v`) instance recovers `welfare_eq_max_of_favorable`
+for distinct valuations; the surrogate-bid instance powers the
+non-injective `competitive_of_nonneg`. -/
 private theorem welfareFrom_aux
-    {n : ℕ} (M : F) (v : Fin n → F) (σ : Equiv.Perm (Fin n))
-    (hv_inj : Function.Injective v)
-    (hv_nn : ∀ i, 0 ≤ v i)
-    (hv_le : ∀ i, v i ≤ M)
-    (hσ : Favorable v σ) (hn : 2 ≤ n) :
+    {n : ℕ} (M : F) (w b : Fin n → F) (σ : Equiv.Perm (Fin n))
+    (hb_inj : Function.Injective b)
+    (hb_nn : ∀ i, 0 ≤ b i)
+    (hb_le : ∀ i, b i ≤ M)
+    (hσ : Favorable b σ) (hn : 2 ≤ n) :
     ∀ (d k : ℕ), k + d = hσ.max_pos.val →
     (auction n M).welfareFrom
-      ((List.ofFn (v ∘ σ)).take k)
-      (((List.ofFn (v ∘ σ)).drop k).map (fun b => (b, b)))
-    = v (σ hσ.max_pos) := by
+      ((List.ofFn (b ∘ σ)).take k)
+      ((List.ofFn (fun i : Fin n => (w (σ i), b (σ i)))).drop k)
+    = w (σ hσ.max_pos) := by
+  -- The pair list `List.ofFn (fun i => (w (σ i), b (σ i)))` at index `k`.
+  have pair_at : ∀ (k : ℕ) (hk : k < n),
+      (List.ofFn (fun i : Fin n => (w (σ i), b (σ i))))[k]'(by
+        rw [List.length_ofFn]; exact hk)
+        = (w (σ ⟨k, hk⟩), b (σ ⟨k, hk⟩)) := by
+    intro k hk
+    rw [List.getElem_ofFn]
   intro d
   induction d with
   | zero =>
@@ -870,124 +890,145 @@ private theorem welfareFrom_aux
       have hk_eq : k = hσ.max_pos.val := by omega
       -- We have k = max_pos.val and need to process the accepting bid.
       have hk_lt_n : k < n := by rw [hk_eq]; exact hσ.max_pos.isLt
-      -- Split bids.drop k = bids[k] :: bids.drop (k+1)
+      -- Split pairs.drop k = (w,b)[k] :: pairs.drop (k+1)
       have hdrop_cons :
-          (List.ofFn (v ∘ σ)).drop k = v (σ ⟨k, hk_lt_n⟩) ::
-            (List.ofFn (v ∘ σ)).drop (k + 1) := by
-        have hlen : k < (List.ofFn (v ∘ σ)).length := by
+          (List.ofFn (fun i : Fin n => (w (σ i), b (σ i)))).drop k
+            = (w (σ ⟨k, hk_lt_n⟩), b (σ ⟨k, hk_lt_n⟩)) ::
+              (List.ofFn (fun i : Fin n => (w (σ i), b (σ i)))).drop (k + 1) := by
+        have hlen : k < (List.ofFn (fun i : Fin n => (w (σ i), b (σ i)))).length := by
           rw [List.length_ofFn]; exact hk_lt_n
         rw [List.drop_eq_getElem_cons hlen]
         congr 1
-        exact bid_at v σ k hk_lt_n
+        exact pair_at k hk_lt_n
       rw [hdrop_cons]
-      simp only [List.map_cons]
-      -- Now apply welfareFrom_cons_accept with bid = v(σ ⟨k,_⟩)
-      have h_phase2 : ¬ ((List.ofFn (v ∘ σ)).take k).length < n / 2 := by
+      -- Now apply welfareFrom_cons_accept with bid = b(σ ⟨k,_⟩)
+      have h_phase2 : ¬ ((List.ofFn (b ∘ σ)).take k).length < n / 2 := by
         rw [List.length_take, List.length_ofFn]
         have := hσ.max_in_second_half
         omega
       have h_price :
-          (auction n M).price ((List.ofFn (v ∘ σ)).take k) =
-          ((List.ofFn (v ∘ σ)).take k).foldr max 0 :=
+          (auction n M).price ((List.ofFn (b ∘ σ)).take k) =
+          ((List.ofFn (b ∘ σ)).take k).foldr max 0 :=
         auction_price_phase2 M _ h_phase2
       have h_max_le_T :
-          ((List.ofFn (v ∘ σ)).take k).foldr max 0 ≤ v (σ hσ.second_pos) :=
-        foldr_max_take_le_T v σ hv_inj hv_nn hσ k (hk_eq.le)
+          ((List.ofFn (b ∘ σ)).take k).foldr max 0 ≤ b (σ hσ.second_pos) :=
+        foldr_max_take_le_T b σ hb_inj hb_nn hσ k (hk_eq.le)
       have hfin_eq : (⟨k, hk_lt_n⟩ : Fin n) = hσ.max_pos := Fin.ext hk_eq
-      have h_bid_eq : v (σ ⟨k, hk_lt_n⟩) = v (σ hσ.max_pos) := by
+      have h_bid_eq : b (σ ⟨k, hk_lt_n⟩) = b (σ hσ.max_pos) := by
+        rw [hfin_eq]
+      have h_w_eq : w (σ ⟨k, hk_lt_n⟩) = w (σ hσ.max_pos) := by
         rw [hfin_eq]
       have h_accept :
-          (auction n M).price ((List.ofFn (v ∘ σ)).take k) ≤ v (σ ⟨k, hk_lt_n⟩) := by
+          (auction n M).price ((List.ofFn (b ∘ σ)).take k) ≤ b (σ ⟨k, hk_lt_n⟩) := by
         rw [h_price, h_bid_eq]
         linarith [hσ.v_second_lt_max]
       rw [SingleItemAuction.welfareFrom_cons_accept _ _ _ _ _ h_accept]
-      exact h_bid_eq
+      exact h_w_eq
   | succ d ih =>
       intro k hk
       have hk_lt_max : k < hσ.max_pos.val := by omega
       have hk_lt_n : k < n := lt_of_lt_of_le hk_lt_max hσ.max_pos.isLt.le
       have hk_succ_le : (k + 1) + d = hσ.max_pos.val := by omega
-      -- Split bids.drop k = bids[k] :: bids.drop (k+1)
+      -- Split pairs.drop k = (w,b)[k] :: pairs.drop (k+1)
       have hdrop_cons :
-          (List.ofFn (v ∘ σ)).drop k = v (σ ⟨k, hk_lt_n⟩) ::
-            (List.ofFn (v ∘ σ)).drop (k + 1) := by
-        have hlen : k < (List.ofFn (v ∘ σ)).length := by
+          (List.ofFn (fun i : Fin n => (w (σ i), b (σ i)))).drop k
+            = (w (σ ⟨k, hk_lt_n⟩), b (σ ⟨k, hk_lt_n⟩)) ::
+              (List.ofFn (fun i : Fin n => (w (σ i), b (σ i)))).drop (k + 1) := by
+        have hlen : k < (List.ofFn (fun i : Fin n => (w (σ i), b (σ i)))).length := by
           rw [List.length_ofFn]; exact hk_lt_n
         rw [List.drop_eq_getElem_cons hlen]
         congr 1
-        exact bid_at v σ k hk_lt_n
+        exact pair_at k hk_lt_n
       rw [hdrop_cons]
-      simp only [List.map_cons]
       -- Show the current bid is rejected.
       have hk_ne_max : (⟨k, hk_lt_n⟩ : Fin n) ≠ hσ.max_pos := by
         intro h
         have : k = hσ.max_pos.val := congrArg Fin.val h
         omega
       have h_bid_le_T :
-          v (σ ⟨k, hk_lt_n⟩) ≤ v (σ hσ.second_pos) := by
+          b (σ ⟨k, hk_lt_n⟩) ≤ b (σ hσ.second_pos) := by
         apply hσ.v_is_second
         intro h
         exact hk_ne_max (σ.injective h)
-      have h_reject : ¬ (auction n M).price ((List.ofFn (v ∘ σ)).take k) ≤
-                      v (σ ⟨k, hk_lt_n⟩) := by
+      have h_reject : ¬ (auction n M).price ((List.ofFn (b ∘ σ)).take k) ≤
+                      b (σ ⟨k, hk_lt_n⟩) := by
         by_cases hphase1 : k < n / 2
-        · have hphase1_len : ((List.ofFn (v ∘ σ)).take k).length < n / 2 := by
+        · have hphase1_len : ((List.ofFn (b ∘ σ)).take k).length < n / 2 := by
             rw [List.length_take, List.length_ofFn]; omega
           rw [auction_price_phase1 M _ hphase1_len]
-          have h_bid_le_M : v (σ ⟨k, hk_lt_n⟩) ≤ M := hv_le _
+          have h_bid_le_M : b (σ ⟨k, hk_lt_n⟩) ≤ M := hb_le _
           linarith
         · push Not at hphase1
-          have h_phase2_len : ¬ ((List.ofFn (v ∘ σ)).take k).length < n / 2 := by
+          have h_phase2_len : ¬ ((List.ofFn (b ∘ σ)).take k).length < n / 2 := by
             rw [List.length_take, List.length_ofFn]; omega
           rw [auction_price_phase2 M _ h_phase2_len]
           -- price = (take k).foldr max 0. We need to show this > bid.
           -- Since k ≥ n/2 > second_pos.val, we have second_pos.val < k,
-          -- so T = v(σ second_pos) is in (take k), so T ≤ max.
+          -- so T = b(σ second_pos) is in (take k), so T ≤ max.
           have h_sec_lt_k : hσ.second_pos.val < k := by
             have := hσ.second_in_first_half
             omega
           have hT_le_max :
-              v (σ hσ.second_pos) ≤ ((List.ofFn (v ∘ σ)).take k).foldr max 0 :=
-            T_le_foldr_max_take v σ hσ k h_sec_lt_k (le_of_lt hk_lt_n)
+              b (σ hσ.second_pos) ≤ ((List.ofFn (b ∘ σ)).take k).foldr max 0 :=
+            T_le_foldr_max_take b σ hσ k h_sec_lt_k (le_of_lt hk_lt_n)
           -- And bid < T strictly (since k ≠ max_pos and k ≠ second_pos)
           have hk_ne_sec : (⟨k, hk_lt_n⟩ : Fin n) ≠ hσ.second_pos := by
             intro h
             have : k = hσ.second_pos.val := congrArg Fin.val h
             omega
-          have h_bid_lt_T : v (σ ⟨k, hk_lt_n⟩) < v (σ hσ.second_pos) := by
+          have h_bid_lt_T : b (σ ⟨k, hk_lt_n⟩) < b (σ hσ.second_pos) := by
             apply lt_of_le_of_ne h_bid_le_T
             intro h
-            have hσ_eq : σ ⟨k, hk_lt_n⟩ = σ hσ.second_pos := hv_inj h
-            have : (⟨k, hk_lt_n⟩ : Fin n) = hσ.second_pos := σ.injective hσ_eq
+            have hσ_eq : b (σ ⟨k, hk_lt_n⟩) = b (σ hσ.second_pos) := h
+            have : (⟨k, hk_lt_n⟩ : Fin n) = hσ.second_pos :=
+              σ.injective (hb_inj hσ_eq)
             exact hk_ne_sec this
           linarith
       rw [SingleItemAuction.welfareFrom_cons_reject _ _ _ _ _ h_reject]
       -- Now history = take k ++ [bid] = take (k+1). Apply IH.
       have htake_succ :
-          (List.ofFn (v ∘ σ)).take k ++ [v (σ ⟨k, hk_lt_n⟩)] =
-          (List.ofFn (v ∘ σ)).take (k + 1) := by
-        have hlen : k < (List.ofFn (v ∘ σ)).length := by
+          (List.ofFn (b ∘ σ)).take k ++ [b (σ ⟨k, hk_lt_n⟩)] =
+          (List.ofFn (b ∘ σ)).take (k + 1) := by
+        have hlen : k < (List.ofFn (b ∘ σ)).length := by
           rw [List.length_ofFn]; exact hk_lt_n
         rw [List.take_add_one, List.getElem?_eq_getElem hlen,
-            bid_at v σ k hk_lt_n]
+            bid_at b σ k hk_lt_n]
         rfl
       rw [htake_succ]
       exact ih (k + 1) hk_succ_le
 
+/-- **Generalised key lemma.** Under the favourable event *of the bid
+profile `b`*, the secretary auction allocates the item to the
+bid-argmax bidder `σ max_pos`, yielding welfare equal to that bidder's
+*valuation* `w (σ max_pos)` — even when `w` and `b` differ. The original
+lemma is the diagonal `w = b = v`; the tie-break surrogate instance
+(`b = surrogate v`, `w = v`) drives the non-injective competitive
+bound. -/
+lemma welfare_eq_argmax_of_favorable
+    {n : ℕ} (hn : 2 ≤ n) (M : F) (w b : Fin n → F)
+    (hb_inj : Function.Injective b)
+    (hb_nn : ∀ i, 0 ≤ b i)
+    (hb_le : ∀ i, b i ≤ M)
+    {σ : Equiv.Perm (Fin n)} (hσ : Favorable b σ) :
+    (auction n M).welfare (w ∘ σ) (b ∘ σ) = w (σ hσ.max_pos) := by
+  -- Apply the recursive core at `k = 0`, `d = max_pos.val`.
+  unfold SingleItemAuction.welfare
+  have hpair : (fun i : Fin n => ((w ∘ σ) i, (b ∘ σ) i))
+            = (fun i : Fin n => (w (σ i), b (σ i))) := rfl
+  rw [hpair]
+  -- welfareFrom [] = welfareFrom ((bids).take 0) ((pairs).drop 0)
+  have htake0 : (List.ofFn (b ∘ σ)).take 0 = [] := List.take_zero
+  have hdrop0 : (List.ofFn (fun i : Fin n => (w (σ i), b (σ i)))).drop 0
+              = List.ofFn (fun i : Fin n => (w (σ i), b (σ i))) := List.drop_zero
+  rw [show ([] : List F) = (List.ofFn (b ∘ σ)).take 0 from htake0.symm,
+      ← hdrop0]
+  exact welfareFrom_aux M w b σ hb_inj hb_nn hb_le hσ hn hσ.max_pos.val 0
+    (by omega)
+
 /-- **Key combinatorial lemma.** Under the favourable event the
 secretary auction allocates the item to the argmax bidder, yielding
-welfare equal to the maximum valuation.
-
-Proof outline:
-1. First phase (positions `< n/2`): every bidder is rejected by
-   `welfareFrom_phase1` (price `M + 1` strictly above every bid).
-2. After the first phase the history contains the first `n/2` bids of
-   `v ∘ σ`. Because the favourable event places `σ max_pos` in the
-   second half, the maximum first-phase bid equals `v (σ second_pos)`.
-3. Second phase: the threshold stays equal to `v (σ second_pos)` since
-   any further rejected bid is strictly smaller.
-4. The first second-phase bidder clearing the threshold is `σ max_pos`,
-   so welfare is `v (σ max_pos)`, which equals `maxV v`. -/
+welfare equal to the maximum valuation. The diagonal (`w = b = v`)
+instance of `welfare_eq_argmax_of_favorable`. -/
 lemma welfare_eq_max_of_favorable
     {n : ℕ} (hn : 2 ≤ n) (M : F) (v : Fin n → F)
     (hv_inj : Function.Injective v)
@@ -1003,20 +1044,7 @@ lemma welfare_eq_max_of_favorable
       exact hσ.v_is_max j
     · exact le_maxV _ v (σ hσ.max_pos)
   rw [hmaxV_eq]
-  -- Apply the recursive core at `k = 0`, `d = max_pos.val`.
-  unfold SingleItemAuction.welfare
-  have hmap : List.ofFn (fun i : Fin n => ((v ∘ σ) i, (v ∘ σ) i))
-            = (List.ofFn (v ∘ σ)).map (fun b => (b, b)) := by
-    rw [List.map_ofFn]; rfl
-  rw [hmap]
-  -- welfareFrom [] = welfareFrom (take 0) ((drop 0).map …)
-  have htake0 : (List.ofFn (v ∘ σ)).take 0 = [] := List.take_zero
-  have hdrop0 : (List.ofFn (v ∘ σ)).drop 0 = List.ofFn (v ∘ σ) := List.drop_zero
-  rw [show ([] : List F) = (List.ofFn (v ∘ σ)).take 0 from htake0.symm]
-  rw [show (List.ofFn (v ∘ σ)).map (fun b => (b, b))
-        = ((List.ofFn (v ∘ σ)).drop 0).map (fun b => (b, b)) from by rw [hdrop0]]
-  exact welfareFrom_aux M v σ hv_inj hv_nn hv_le hσ hn hσ.max_pos.val 0
-    (by omega)
+  exact welfare_eq_argmax_of_favorable hn M v v hv_inj hv_nn hv_le hσ
 
 /-- The set of permutations satisfying the favourable event. -/
 noncomputable def favorableSet
@@ -1347,6 +1375,210 @@ lemma favorableSet_card_ge {n : ℕ} (hn : 2 ≤ n)
       _ = 4 * ((n - n / 2) * (n / 2) * (n - 2).factorial) := by ring
       _ ≤ 4 * (favorableSet v).card := Nat.mul_le_mul_left _ hlow
   exact_mod_cast hnat
+
+/-! #### Tie-breaking surrogate
+
+To remove the injectivity hypothesis we replace the real-valued bids by a
+*rank surrogate* that breaks value ties by bidder index. The surrogate is
+injective and refines `v`'s order, so the favourable-event counting and
+welfare characterisation (which need an injective bid profile) apply
+verbatim, while on the favourable event the captured bidder is a true
+`v`-argmax. -/
+
+/-- The strict tie-broken order on bidders: `v i < v j`, or equal values
+with a smaller index. This is the lexicographic order on `(v ·, ·)`,
+written out to avoid `Prod.Lex` typeclass plumbing. -/
+private def slt {n : ℕ} (v : Fin n → F) (i j : Fin n) : Prop :=
+  v i < v j ∨ (v i = v j ∧ i.val < j.val)
+
+instance decidableSlt {n : ℕ} (v : Fin n → F) (i j : Fin n) :
+    Decidable (slt v i j) := by
+  unfold slt; infer_instance
+
+private lemma slt_irrefl {n : ℕ} (v : Fin n → F) (i : Fin n) : ¬ slt v i i := by
+  rintro (h | ⟨_, h⟩) <;> exact lt_irrefl _ h
+
+private lemma slt_trans {n : ℕ} (v : Fin n → F) {i j k : Fin n}
+    (hij : slt v i j) (hjk : slt v j k) : slt v i k := by
+  rcases hij with h1 | ⟨h1, h1'⟩ <;> rcases hjk with h2 | ⟨h2, h2'⟩
+  · exact Or.inl (lt_trans h1 h2)
+  · exact Or.inl (h2 ▸ h1)
+  · exact Or.inl (h1 ▸ h2)
+  · exact Or.inr ⟨h1.trans h2, lt_trans h1' h2'⟩
+
+/-- Tie-broken order is total: any two distinct bidders are comparable. -/
+private lemma slt_total {n : ℕ} (v : Fin n → F) (i j : Fin n) :
+    slt v i j ∨ i = j ∨ slt v j i := by
+  rcases lt_trichotomy (v i) (v j) with h | h | h
+  · exact Or.inl (Or.inl h)
+  · rcases lt_trichotomy i.val j.val with h' | h' | h'
+    · exact Or.inl (Or.inr ⟨h, h'⟩)
+    · exact Or.inr (Or.inl (Fin.ext h'))
+    · exact Or.inr (Or.inr (Or.inr ⟨h.symm, h'⟩))
+  · exact Or.inr (Or.inr (Or.inl h))
+
+/-- `slt` implies `≤` on values: a smaller tie-broken key has no larger value. -/
+private lemma slt_le_v {n : ℕ} (v : Fin n → F) {i j : Fin n}
+    (h : slt v i j) : v i ≤ v j := by
+  rcases h with h | ⟨h, _⟩
+  · exact le_of_lt h
+  · exact le_of_eq h
+
+/-- The rank surrogate: number of bidders strictly below `i` in the
+tie-broken order, cast into `F`. Ranks are `0, …, n-1`. -/
+noncomputable def surrogate {n : ℕ} (v : Fin n → F) (i : Fin n) : F :=
+  ((Finset.univ.filter (fun j => slt v j i)).card : F)
+
+/-- `surrogate` is strictly monotone for the tie-broken order. -/
+private lemma surrogate_lt_of_slt {n : ℕ} (v : Fin n → F) {i j : Fin n}
+    (h : slt v i j) : surrogate v i < surrogate v j := by
+  unfold surrogate
+  have hsub : Finset.univ.filter (fun k => slt v k i)
+      ⊆ Finset.univ.filter (fun k => slt v k j) := by
+    intro k hk
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk ⊢
+    exact slt_trans v hk h
+  have hi_mem : i ∈ Finset.univ.filter (fun k => slt v k j) := by
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]; exact h
+  have hi_not : i ∉ Finset.univ.filter (fun k => slt v k i) := by
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]; exact slt_irrefl v i
+  have hcard : (Finset.univ.filter (fun k => slt v k i)).card
+      < (Finset.univ.filter (fun k => slt v k j)).card :=
+    Finset.card_lt_card (Finset.ssubset_iff_of_subset hsub |>.2 ⟨i, hi_mem, hi_not⟩)
+  exact_mod_cast hcard
+
+/-- The surrogate refines `v`: `surrogate v i ≤ surrogate v j → v i ≤ v j`. -/
+private lemma v_le_of_surrogate_le {n : ℕ} (v : Fin n → F) {i j : Fin n}
+    (h : surrogate v i ≤ surrogate v j) : v i ≤ v j := by
+  rcases slt_total v i j with hlt | heq | hgt
+  · exact slt_le_v v hlt
+  · rw [heq]
+  · exact absurd (surrogate_lt_of_slt v hgt) (not_lt.2 h)
+
+/-- The surrogate is injective. -/
+lemma surrogate_injective {n : ℕ} (v : Fin n → F) :
+    Function.Injective (surrogate v) := by
+  intro i j h
+  rcases slt_total v i j with hlt | heq | hgt
+  · exact absurd h.ge (not_le.2 (surrogate_lt_of_slt v hlt))
+  · exact heq
+  · exact absurd h.le (not_le.2 (surrogate_lt_of_slt v hgt))
+
+/-- The surrogate is nonnegative. -/
+lemma surrogate_nonneg {n : ℕ} (v : Fin n → F) (i : Fin n) :
+    0 ≤ surrogate v i := by
+  unfold surrogate; exact Nat.cast_nonneg _
+
+/-- Every surrogate value is strictly below `(n : F)`, hence the auction
+run with bound `M' = (n : F)` rejects every phase-1 bidder. -/
+lemma surrogate_lt_n {n : ℕ} (v : Fin n → F) (i : Fin n) :
+    surrogate v i < (n : F) := by
+  unfold surrogate
+  have hsub : Finset.univ.filter (fun j => slt v j i) ⊆ Finset.univ.erase i := by
+    intro k hk
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk
+    rw [Finset.mem_erase]
+    exact ⟨fun hki => slt_irrefl v i (hki ▸ hk), Finset.mem_univ _⟩
+  have hcard : (Finset.univ.filter (fun j => slt v j i)).card ≤ n - 1 := by
+    calc (Finset.univ.filter (fun j => slt v j i)).card
+        ≤ (Finset.univ.erase i).card := Finset.card_le_card hsub
+      _ = n - 1 := by
+            rw [Finset.card_erase_of_mem (Finset.mem_univ _), Finset.card_univ,
+              Fintype.card_fin]
+  have hn1 : (n : ℕ) ≥ 1 := Nat.lt_of_le_of_lt (Nat.zero_le i.val) i.isLt
+  have : ((Finset.univ.filter (fun j => slt v j i)).card : F) ≤ ((n - 1 : ℕ) : F) := by
+    exact_mod_cast hcard
+  have hcast : ((n - 1 : ℕ) : F) < (n : F) := by
+    have : ((n - 1 : ℕ) : F) = (n : F) - 1 := by
+      rw [Nat.cast_sub hn1, Nat.cast_one]
+    rw [this]; linarith
+  linarith
+
+/-- On the favourable event of the *surrogate* bid profile, the captured
+bidder has the maximum `v`-valuation: `v (σ max_pos) = maxV v`. -/
+private lemma v_argmax_of_surrogate_favorable
+    {n : ℕ} (hn : 2 ≤ n) (v : Fin n → F)
+    {σ : Equiv.Perm (Fin n)} (hσ : Favorable (surrogate v) σ) :
+    v (σ hσ.max_pos) = maxV (show 1 ≤ n by omega) v := by
+  apply le_antisymm
+  · exact le_maxV _ v (σ hσ.max_pos)
+  · -- pick a true v-argmax `a`; surrogate ranks it ≤ σ max_pos, so v a ≤ v(σ max_pos)
+    apply Finset.sup'_le
+    intro j _
+    have hsurr_le : surrogate v j ≤ surrogate v (σ hσ.max_pos) := hσ.v_is_max j
+    exact v_le_of_surrogate_le v hsurr_le
+
+/-- **Problem 2.1 (c′): a 1/4-competitive online auction for *all*
+nonnegative valuations (ties allowed).**
+
+For every `n ≥ 2`, every nonnegative valuation profile `v` (no
+injectivity assumption), the secretary auction run on the tie-broken
+rank surrogate with bound `M' = (n : F)` achieves expected welfare at
+least `(1/4) · max v`, where the expectation averages over arrival
+permutations.
+
+The bids submitted are the surrogate ranks `surrogate v ∘ σ`; the
+welfare credited is the true valuation `v ∘ σ` of the winning bidder.
+This is the route-A tie-break: comparing by `(value, index)` makes the
+effective order strict, so the favourable-event count and welfare
+characterisation carry over from the injective case. -/
+theorem competitive_of_nonneg
+    {n : ℕ} (hn : 2 ≤ n) (v : Fin n → F)
+    (hv_nn : ∀ i, 0 ≤ v i) :
+    (1 / 4 : F) * maxV (by omega) v ≤
+      (∑ σ : Equiv.Perm (Fin n),
+        (auction n (n : F)).welfare (v ∘ σ) (surrogate v ∘ σ)) /
+          (n.factorial : F) := by
+  classical
+  -- Surrogate facts.
+  set b := surrogate v with hb_def
+  have hb_inj : Function.Injective b := surrogate_injective v
+  have hb_nn : ∀ i, 0 ≤ b i := surrogate_nonneg v
+  have hb_le : ∀ i, b i ≤ (n : F) := fun i => le_of_lt (surrogate_lt_n v i)
+  -- Set up: MAX = maxV v, nonnegative from nonneg valuations.
+  set MAX := maxV (show 1 ≤ n by omega) v with hMAX_def
+  have hMAX_nn : 0 ≤ MAX :=
+    le_trans (hv_nn ⟨0, by omega⟩) (le_maxV _ v _)
+  -- Welfare is nonneg pointwise (valuations are nonneg).
+  have hwelfare_nn :
+      ∀ σ : Equiv.Perm (Fin n), 0 ≤ (auction n (n : F)).welfare (v ∘ σ) (b ∘ σ) :=
+    fun σ => SingleItemAuction.welfare_nonneg (auction n (n : F)) (v ∘ σ) (b ∘ σ)
+                (fun i => hv_nn _)
+  -- Welfare equals MAX on the surrogate's favourable set.
+  have hwelfare_FS :
+      ∀ σ ∈ favorableSet b, (auction n (n : F)).welfare (v ∘ σ) (b ∘ σ) = MAX := by
+    intro σ hσ
+    obtain ⟨fav⟩ : Nonempty (Favorable b σ) := (Finset.mem_filter.mp hσ).2
+    rw [welfare_eq_argmax_of_favorable hn (n : F) v b hb_inj hb_nn hb_le fav]
+    rw [hMAX_def]
+    exact v_argmax_of_surrogate_favorable hn v fav
+  -- Step 1: Σ welfare ≥ |FS| * MAX.
+  have step1 :
+      ((favorableSet b).card : F) * MAX ≤
+      ∑ σ : Equiv.Perm (Fin n), (auction n (n : F)).welfare (v ∘ σ) (b ∘ σ) := by
+    calc ((favorableSet b).card : F) * MAX
+        = ∑ _σ ∈ favorableSet b, MAX := by
+            rw [Finset.sum_const, nsmul_eq_mul]
+      _ = ∑ σ ∈ favorableSet b, (auction n (n : F)).welfare (v ∘ σ) (b ∘ σ) :=
+            Finset.sum_congr rfl (fun σ hσ => (hwelfare_FS σ hσ).symm)
+      _ ≤ ∑ σ : Equiv.Perm (Fin n), (auction n (n : F)).welfare (v ∘ σ) (b ∘ σ) := by
+            apply Finset.sum_le_sum_of_subset_of_nonneg
+            · exact Finset.subset_univ _
+            · intros σ _ _; exact hwelfare_nn σ
+  -- Step 2: n! ≤ 4 * |FS| (favourable count, surrogate is injective).
+  have step2 : (n.factorial : F) ≤ 4 * ((favorableSet b).card : F) :=
+    favorableSet_card_ge hn b hb_inj
+  -- Combine and divide.
+  have hfact_pos : (0 : F) < (n.factorial : F) := by
+    exact_mod_cast Nat.factorial_pos n
+  rw [le_div_iff₀ hfact_pos]
+  calc (1 / 4 : F) * MAX * (n.factorial : F)
+      = MAX * ((1 / 4 : F) * (n.factorial : F)) := by ring
+    _ ≤ MAX * ((favorableSet b).card : F) := by
+          apply mul_le_mul_of_nonneg_left _ hMAX_nn
+          linarith
+    _ = ((favorableSet b).card : F) * MAX := by ring
+    _ ≤ ∑ σ : Equiv.Perm (Fin n), (auction n (n : F)).welfare (v ∘ σ) (b ∘ σ) := step1
 
 /-- **Problem 2.1 (c): a 1/4-competitive deterministic online auction
 under uniformly random arrival.**

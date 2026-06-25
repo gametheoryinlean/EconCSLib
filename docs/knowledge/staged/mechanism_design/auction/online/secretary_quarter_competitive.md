@@ -18,10 +18,13 @@ lean:
     - Online.Auction.Secretary.auction
     - Online.Auction.maxV
     - Online.Auction.Secretary.Favorable
+    - Online.Auction.Secretary.welfare_eq_argmax_of_favorable
     - Online.Auction.Secretary.welfare_eq_max_of_favorable
     - Online.Auction.Secretary.favorableSet
     - Online.Auction.Secretary.favorableSet_card_ge
     - Online.Auction.Secretary.competitive
+    - Online.Auction.Secretary.surrogate
+    - Online.Auction.Secretary.competitive_of_nonneg
 verification:
   statement: accepted
   proof: accepted
@@ -105,23 +108,59 @@ favourable set, so the permutation sum is at least
 $|\mathrm{favorableSet}\,v|\cdot\mathrm{MAX} \ge \tfrac14 n!\,\mathrm{MAX}$;
 dividing by $n!$ gives the bound.
 
-## The injectivity hypothesis is essential
+## Why the plain value-threshold needs injectivity
 
-`competitive` assumes $v$ is **injective** (distinct valuations — the
-standard secretary model), and this cannot be dropped: it is load-bearing in
-both halves. In the welfare step it is exactly what makes the pre-argmax
-bids *strictly* below the threshold, so the weak acceptance rule $p \le b$
-does not let a tied bidder clear the price early; in the counting step it
-pins the argmax and second-largest to unique positions.
+`competitive` (above) assumes $v$ is **injective**, and for the *plain
+value-threshold* rule this cannot be dropped. The obstruction is value-ties
+*at the threshold*: in the welfare step injectivity is exactly what makes the
+pre-argmax bids *strictly* below the threshold, so the weak acceptance rule
+$p \le b$ does not let a tied bidder clear the price early; in the counting
+step it pins the argmax and second-largest to unique positions.
 
-The failure without it is quantitative, not cosmetic: for the profile
-$v = (1, 0, \dots, 0)$ on $n$ bidders (a unique maximum, ties only among the
-zeros) the threshold collapses to $0$ in the second phase, so the first
-second-phase arrival — almost always a zero — clears it and wins. Welfare
-equals $1$ only when the lone high bidder lands in the first second-phase
-slot, probability $1/n$, giving expected welfare $1/n \to 0$. Hence **no**
-constant $c > 0$ survives the removal of injectivity; the guarantee degrades
-as $\Theta(1/n)$.
+The failure is quantitative, not cosmetic: for $v = (1, 0, \dots, 0)$ on $n$
+bidders (a unique maximum, ties only among the zeros) the threshold collapses
+to $0$ in the second phase, so the first second-phase arrival — almost always
+a zero — clears it and wins. Welfare equals $1$ only when the lone high
+bidder lands in the first second-phase slot, probability $1/n$, giving
+expected welfare $1/n \to 0$. So for the plain value-threshold, **no**
+constant $c > 0$ survives dropping injectivity; the guarantee degrades as
+$\Theta(1/n)$.
+
+## Removing injectivity by breaking ties on identity
+
+`competitive_of_nonneg` drops injectivity entirely, for **all** nonnegative
+$v$ (ties allowed), at the cost of one change: the auction compares bidders
+by the lexicographic key $(\text{value}, \text{index})$ instead of value
+alone. Concretely the bidders submit the **rank surrogate**
+`surrogate v` — `surrogate v i` is the number of bidders ranking strictly
+below $i$ under $(v_j, j) <_{\mathrm{lex}} (v_i, i)$, a value in
+$\{0,\dots,n-1\}$ — and the auction (run with bound $M' = n$, so the observe
+phase still rejects every rank) selects on these ranks, while the welfare
+credited is the bidder's *true* valuation `v`.
+
+Because the surrogate is **injective** (distinct ranks) and **refines** $v$
+(`surrogate v i ≤ surrogate v j → v i ≤ v j`), two things hold:
+
+- the favourable-event count `favorableSet_card_ge` applies to the surrogate
+  **verbatim** — it only ever used distinctness;
+- on the favourable event the captured bidder is the surrogate-argmax, which
+  (by refinement) is a *true* $v$-argmax, so the credited welfare is exactly
+  $\mathrm{maxV}\,v$ (`v_argmax_of_surrogate_favorable`).
+
+The welfare core is the same induction, now stated as
+`welfare_eq_argmax_of_favorable`: it accumulates a separate valuation $w$
+while comparing the bid $b$, giving
+$\mathrm{welfare}(w\circ\sigma,\,b\circ\sigma) = w(\sigma\,\mathrm{max\_pos})$;
+the injective `welfare_eq_max_of_favorable` is its diagonal $w = b = v$. With
+$w = v$, $b = \texttt{surrogate }v$, the same assembly yields
+$\tfrac14\,\mathrm{maxV}\,v \le \tfrac1{n!}\sum_\sigma
+\mathrm{welfare}(v\circ\sigma,\,\texttt{surrogate }v\circ\sigma)$, with only
+the nonnegativity of $v$ surviving as a hypothesis.
+
+This is the standard secretary tie-breaking trick — break ties by a fixed
+identity rule to make a tied instance behave like a distinct-valued one — and
+it needs neither a "must-hire-last" forced sale (which would violate
+individual rationality) nor any extra randomness beyond the arrival order.
 
 ## Why it matters
 
