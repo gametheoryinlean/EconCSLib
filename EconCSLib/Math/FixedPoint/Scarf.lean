@@ -1517,43 +1517,16 @@ omit [DecidableEq T] [Inhabited T] IST in
 lemma image_erase_collision_preserves [DecidableEq T] (σ : Finset T) (c : T → I)
     (x y : T) (hx_in_σ : x ∈ σ) (hy_in_σ : y ∈ σ) (hxy_ne : x ≠ y) (hcxy_eq : c x = c y) :
     (σ.erase x).image c = σ.image c ∧ (σ.erase y).image c = σ.image c := by
-  constructor
-  · ext z
-    simp only [Finset.mem_image]
-    constructor
-    · intro ⟨w, hw_in_erased, hw_eq⟩
-      have hw_in_σ : w ∈ σ := by
-        rw [Finset.mem_erase] at hw_in_erased
-        exact hw_in_erased.2
-      exact ⟨w, hw_in_σ, hw_eq⟩
-    · intro ⟨w, hw_in_σ, hw_eq⟩
-      by_cases h : w = x
-      · subst h
-        use y
-        constructor
-        · rw [Finset.mem_erase]
-          exact ⟨hxy_ne.symm, hy_in_σ⟩
-        · rw [←hcxy_eq, hw_eq]
-      · use w
-        exact ⟨Finset.mem_erase.mpr ⟨h, hw_in_σ⟩, hw_eq⟩
-  · ext z
-    simp only [Finset.mem_image]
-    constructor
-    · intro ⟨w, hw_in_erased, hw_eq⟩
-      have hw_in_σ : w ∈ σ := by
-        rw [Finset.mem_erase] at hw_in_erased
-        exact hw_in_erased.2
-      exact ⟨w, hw_in_σ, hw_eq⟩
-    · intro ⟨w, hw_in_σ, hw_eq⟩
-      by_cases h : w = y
-      · subst h
-        use x
-        constructor
-        · rw [Finset.mem_erase]
-          exact ⟨hxy_ne, hx_in_σ⟩
-        · rw [hcxy_eq, hw_eq]
-      · use w
-        exact ⟨Finset.mem_erase.mpr ⟨h, hw_in_σ⟩, hw_eq⟩
+  have h_erase_eq (a b : T) (ha : a ∈ σ) (hb : b ∈ σ) (hab : a ≠ b) (hcab : c a = c b) :
+      (σ.erase a).image c = σ.image c := by
+    ext z; simp only [Finset.mem_image]; constructor
+    · rintro ⟨w, hw, rfl⟩; rw [Finset.mem_erase] at hw; exact ⟨w, hw.2, rfl⟩
+    · rintro ⟨w, hw, rfl⟩
+      by_cases h : w = a
+      · subst h; exact ⟨b, Finset.mem_erase.mpr ⟨hab.symm, hb⟩, by rw [← hcab]⟩
+      · exact ⟨w, Finset.mem_erase.mpr ⟨h, hw⟩, rfl⟩
+  exact ⟨h_erase_eq x y hx_in_σ hy_in_σ hxy_ne hcxy_eq,
+          h_erase_eq y x hy_in_σ hx_in_σ hxy_ne.symm hcxy_eq.symm⟩
 
 
 omit [DecidableEq T] [Inhabited T] in
