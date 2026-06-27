@@ -381,15 +381,8 @@ lemma sublemma_3_1 [Fintype T] (τ : Finset T) (D : Finset I)
   · intro h_dom
     have h_card : D.card = τ.card + 1 := h_door.2
     have h_image_card : D.card = (D.image (mini h_nonempty)).card + 1 := by
-      have h_dominant : IST.isDominant τ D := h_door.1
-      have h_image_sub : D.image (mini h_nonempty) ⊆ τ := by
-        intro x hx
-        simp at hx
-        obtain ⟨j, _, hj_eq⟩ := hx
-        rw [←hj_eq, mini]
-        exact @Finset.min'_mem _ (IST j) τ h_nonempty
       have h_image_eq : D.image (mini h_nonempty) = τ := by
-        convert (keylemma_of_dominant h_dominant h_nonempty).symm
+        convert (keylemma_of_dominant h_door.1 h_nonempty).symm
       rw [h_card, h_image_eq]
     obtain ⟨a, b, ha_mem, hb_mem, h_eq_mini, h_ne, _⟩ := injOn_sdiff D (mini h_nonempty) h_image_card
     use a, b, ha_mem, hb_mem, h_ne, h_eq_mini
@@ -426,9 +419,7 @@ lemma sublemma_3_1 [Fintype T] (τ : Finset T) (D : Finset I)
         congr; ext; simp [h_dom_image]
       have h_tau_eq_erase : τ.card = (D.erase i).card := by
         rw [Finset.card_erase_of_mem hi, h_door.2]; simp
-      rw [h_tau_eq_erase] at h_tau_eq_image
-      rw [h_tau_eq_image] at h_image_lt
-      exact not_lt.mpr (le_refl _) h_image_lt
+      linarith
   · rintro ⟨a, b, ha_mem, hb_mem, h_ne, h_eq_mini, h_i_case, h_Mi_empty⟩
     intro y
     unfold M_set at h_Mi_empty
