@@ -1207,17 +1207,13 @@ variable {c σ C}
 
 omit [Inhabited T] [DecidableEq T] in
 lemma not_colorful_of_TypedNC (h1 : isTypedNC c i σ C) : ¬ IST.isColorful c σ C := by
-  intro h
-  unfold isTypedNC at h1
-  unfold isColorful at h
-  have h_diff := h1.2
+  rcases h1 with ⟨_, h_diff⟩
+  rintro ⟨_, h_img⟩
   have h_ne : σ.image c ≠ C := by
-    intro h_eq
-    rw [←h_eq, Finset.sdiff_self] at h_diff
-    have h_singleton_nonempty : ({i} : Finset I).Nonempty := Finset.singleton_nonempty i
-    rw [←h_diff] at h_singleton_nonempty
-    exact Finset.not_nonempty_empty h_singleton_nonempty
-  exact h_ne h.2
+    intro h_eq; rw [← h_eq, Finset.sdiff_self] at h_diff
+    have hne : ({i} : Finset I).Nonempty := Finset.singleton_nonempty i
+    rw [← h_diff] at hne; exact Finset.not_nonempty_empty hne
+  exact h_ne h_img
 
 omit [Inhabited T] [DecidableEq T] in
 lemma NC_of_TNC (h1 : isTypedNC c i σ C) : isNearlyColorful c σ C := by
@@ -1400,8 +1396,6 @@ lemma card_of_NCcell (h : isNearlyColorful c σ D) : #σ = #(image c σ)  ∨  #
 
 omit [Inhabited T] [DecidableEq T] in
 lemma image_subset_of_NCdoor (h1 : isNearlyColorful c σ C) (h2 : isDoor σ C) : image c σ ⊆ C := by
-  unfold isNearlyColorful at h1
-  unfold isDoor at h2
   rcases h1 with ⟨h_cell, h_nc_card⟩
   rcases h2 with ⟨_, h_door_card⟩
   let img := image c σ
