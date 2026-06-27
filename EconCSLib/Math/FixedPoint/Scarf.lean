@@ -1296,18 +1296,17 @@ lemma NC_or_C_of_door (h1 : isTypedNC c i τ D) (h2 : isDoorof τ D σ C) : isTy
     intro y hy
     simp only [Finset.mem_sdiff] at hy ⊢
     obtain ⟨y_in_C, y_notin_img_sigma⟩ := hy
-    constructor
-    · cases h2
-      · rename_i h_D_eq; rw [h_D_eq]; exact y_in_C
-      · rename_i h_D_eq; rw [h_D_eq]; exact Finset.mem_insert_of_mem y_in_C
-    · cases h2 with
-      | idoor h0 hdoor x h_x_notin h_sigma_eq h_D_eq =>
-        rw [← h_sigma_eq, Finset.image_insert] at y_notin_img_sigma
-        simp only [Finset.mem_insert, not_or] at y_notin_img_sigma
-        exact y_notin_img_sigma.2
-      | odoor h0 hdoor j h_j_notin h_sigma_eq h_D_eq =>
-        rw [← h_sigma_eq] at y_notin_img_sigma
-        exact y_notin_img_sigma
+    have hy_in_D : y ∈ D := by
+      cases h2 with
+      | idoor _ _ _ _ _ h_D_eq => rw [h_D_eq]; exact y_in_C
+      | odoor _ _ _ _ _ h_D_eq => rw [h_D_eq]; exact Finset.mem_insert_of_mem y_in_C
+    refine ⟨hy_in_D, ?_⟩
+    cases h2 with
+    | idoor _ _ _ _ h_sigma_eq _ =>
+      rw [← h_sigma_eq, Finset.image_insert] at y_notin_img_sigma
+      simp only [Finset.mem_insert, not_or] at y_notin_img_sigma; exact y_notin_img_sigma.2
+    | odoor _ _ _ _ h_sigma_eq _ =>
+      rw [← h_sigma_eq] at y_notin_img_sigma; exact y_notin_img_sigma
 
   have step2_D_card : (D \ (τ.image c)).card = 1 := by
     have D_sdiff_eq_i : D \ (τ.image c) = {i} := by
