@@ -452,11 +452,8 @@ lemma sublemma_3_2 [Fintype T] (τ : Finset T) (D : Finset I) (x : T)
         exact Finset.mem_insert_self x τ
       exact Finset.mem_image.mp h_x_in_image
     obtain ⟨i, hi_mem, hi_eq⟩ := h_x_is_min
-    have h_is_room : isRoom (insert x τ) D := by
-      unfold isRoom
-      constructor
-      · exact h_dominant
-      · rw [Finset.card_insert_of_notMem h_not_mem, h_door.2]
+    have h_is_room : isRoom (insert x τ) D :=
+      ⟨h_dominant, by rw [Finset.card_insert_of_notMem h_not_mem, h_door.2]⟩
     have h_inj_insert : Set.InjOn (mini h_insert_nonempty) (D : Set I) := by
       apply Finset.injOn_of_card_image_eq
       rw [h_min_eq_image, h_is_room.2]
@@ -1244,14 +1241,11 @@ lemma Finset.eq_of_mem_of_card_one {X : Type*} [DecidableEq X] {s : Finset X} {a
 
 omit [Inhabited T] [DecidableEq T] in
 lemma room_of_colorful (h : IST.isColorful c σ C) : IST.isRoom σ C := by
-  unfold isRoom
-  unfold isColorful at h
-  constructor
-  · exact h.1
-  · have h1 : C.card = (σ.image c).card := by rw [h.2]
-    have h2 : (σ.image c).card ≤ σ.card := Finset.card_image_le
-    have h3 : σ.card ≤ C.card := card_le_of_domiant h.1
-    linarith
+  rcases h with ⟨hc, hi⟩; refine ⟨hc, ?_⟩
+  have h1 : C.card = (σ.image c).card := by rw [hi]
+  have h2 : (σ.image c).card ≤ σ.card := Finset.card_image_le
+  have h3 : σ.card ≤ C.card := card_le_of_domiant hc
+  linarith
 
 
 
