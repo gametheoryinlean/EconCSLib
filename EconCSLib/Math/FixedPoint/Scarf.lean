@@ -1349,14 +1349,7 @@ lemma NC_or_C_of_door (h1 : isTypedNC c i τ D) (h2 : isDoorof τ D σ C) : isTy
         rw [← D_sdiff_eq_i]
         exact step1_subset
 
-      have C_sdiff_eq_i : C \ σ.image c = {i} :=
-        Finset.eq_of_subset_of_card_le h_subset_singleton (by rw [h_card_one, Finset.card_singleton])
-
-      have h_i_notin_img : i ∉ σ.image c := by
-        have h_i_in_sdiff : i ∈ C \ σ.image c := by rw [C_sdiff_eq_i]; simp
-        exact (Finset.mem_sdiff.mp h_i_in_sdiff).2
-
-      exact C_sdiff_eq_i
+      exact Finset.eq_of_subset_of_card_le h_subset_singleton (by rw [h_card_one, Finset.card_singleton])
 
 omit [Inhabited T] in
 lemma NCtype_of_door (h1 : isTypedNC c i τ D) (_ : isDoorof τ D σ C) (_ : isTypedNC c i σ C) : isTypedNC c i τ D := h1
