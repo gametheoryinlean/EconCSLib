@@ -49,11 +49,11 @@ posted price.
   for **distinct** valuations (Problem 2.1(c)). Fully proved via the welfare
   characterisation under the favourable event and the exact favourable count.
 * `Secretary.competitive_of_nonneg` — the same `(1/4) · max v` guarantee for
-  **all** nonnegative valuations (ties allowed) and every `n ≥ 1`: bidders are
-  compared by the tie-broken rank `Secretary.surrogate v` (lexicographic
-  `(value, index)`), which makes the order strict so the favourable count and
-  welfare argument carry over from the injective case, with no
-  `must-hire-last` forced sale.
+  **all** nonneg valuations (ties allowed) and every `n ≥ 1`, provided the
+  auction compares bidders by an injective ranking that refines the value order
+  (`b i ≤ b j → v i ≤ v j`). The ranking encodes a total order on bidders
+  compatible with their valuations; `Secretary.surrogate v` (lexicographic
+  `(value, index)`) is a canonical such ranking.
 -/
 
 -- The section variables (`A`, `Field`/`LinearOrder`/`IsStrictOrderedRing F`)
@@ -868,7 +868,7 @@ processing the auction from a history equal to the first `k` *bids* yields
 welfare = `w (σ max_pos)`. Proved by induction on `d = max_pos.val − k`.
 
 The original (`w = b = v`) instance recovers `welfare_eq_max_of_favorable`
-for distinct valuations; the surrogate-bid instance powers the
+for distinct valuations; using a separate `b` that refines `v` powers the
 non-injective `competitive_of_nonneg`. -/
 private theorem welfareFrom_aux
     {n : ℕ} (M : F) (w b : Fin n → F) (σ : Equiv.Perm (Fin n))
@@ -1006,9 +1006,9 @@ private theorem welfareFrom_aux
 profile `b`*, the secretary auction allocates the item to the
 bid-argmax bidder `σ max_pos`, yielding welfare equal to that bidder's
 *valuation* `w (σ max_pos)` — even when `w` and `b` differ. The original
-lemma is the diagonal `w = b = v`; the tie-break surrogate instance
-(`b = surrogate v`, `w = v`) drives the non-injective competitive
-bound. -/
+lemma is the diagonal `w = b = v`; using a separate `b` that refines
+`v` (e.g. `b = surrogate v`, `w = v`) drives the non-injective
+competitive bound. -/
 lemma welfare_eq_argmax_of_favorable
     {n : ℕ} (hn : 2 ≤ n) (M : F) (w b : Fin n → F)
     (hb_inj : Function.Injective b)
@@ -1453,7 +1453,7 @@ private lemma surrogate_lt_of_slt {n : ℕ} (v : Fin n → F) {i j : Fin n}
   exact_mod_cast hcard
 
 /-- The surrogate refines `v`: `surrogate v i ≤ surrogate v j → v i ≤ v j`. -/
-private lemma v_le_of_surrogate_le {n : ℕ} (v : Fin n → F) {i j : Fin n}
+lemma surrogate_refines {n : ℕ} (v : Fin n → F) {i j : Fin n}
     (h : surrogate v i ≤ surrogate v j) : v i ≤ v j := by
   rcases slt_total v i j with hlt | heq | hgt
   · exact slt_le_v v hlt
@@ -1499,50 +1499,38 @@ lemma surrogate_lt_n {n : ℕ} (v : Fin n → F) (i : Fin n) :
     rw [this]; linarith
   linarith
 
-/-- On the favourable event of the *surrogate* bid profile, the captured
-bidder has the maximum `v`-valuation: `v (σ max_pos) = maxV v`. -/
-private lemma v_argmax_of_surrogate_favorable
-    {n : ℕ} (hn : 2 ≤ n) (v : Fin n → F)
-    {σ : Equiv.Perm (Fin n)} (hσ : Favorable (surrogate v) σ) :
+/-- On a favourable event for a bid profile `b` that refines `v`
+(`b i ≤ b j → v i ≤ v j`), the captured bidder has the maximum
+`v`-valuation: `v (σ max_pos) = maxV v`. -/
+private lemma v_argmax_of_favorable_refinement
+    {n : ℕ} (_hn : 2 ≤ n) (v b : Fin n → F)
+    (hb_refines : ∀ i j, b i ≤ b j → v i ≤ v j)
+    {σ : Equiv.Perm (Fin n)} (hσ : Favorable b σ) :
     v (σ hσ.max_pos) = maxV (show 1 ≤ n by omega) v := by
   apply le_antisymm
   · exact le_maxV _ v (σ hσ.max_pos)
-  · -- pick a true v-argmax `a`; surrogate ranks it ≤ σ max_pos, so v a ≤ v(σ max_pos)
-    apply Finset.sup'_le
+  · apply Finset.sup'_le
     intro j _
-    have hsurr_le : surrogate v j ≤ surrogate v (σ hσ.max_pos) := hσ.v_is_max j
-    exact v_le_of_surrogate_le v hsurr_le
+    exact hb_refines j (σ hσ.max_pos) (hσ.v_is_max j)
 
-/-- **Problem 2.1 (c′): a 1/4-competitive online auction for *all*
-nonnegative valuations (ties allowed).**
+/-- **Problem 2.1 (c′) core: 1/4-competitive for `n ≥ 2` with any
+compatible bid ranking.**
 
-For every `n ≥ 2`, every nonnegative valuation profile `v` (no
-injectivity assumption), the secretary auction run on the tie-broken
-rank surrogate with bound `M' = (n : F)` achieves expected welfare at
-least `(1/4) · max v`, where the expectation averages over arrival
-permutations.
-
-The bids submitted are the surrogate ranks `surrogate v ∘ σ`; the
-welfare credited is the true valuation `v ∘ σ` of the winning bidder.
-This is the route-A tie-break: comparing by `(value, index)` makes the
-effective order strict, so the favourable-event count and welfare
-characterisation carry over from the injective case. The `n ≥ 2` core;
-`competitive_of_nonneg` packages it together with the trivial `n = 1`
-case. -/
+The secretary auction with bid profile `b` and bound `M = n` achieves
+expected welfare `≥ (1/4) · max v`, provided `b` is injective, nonneg,
+bounded by `n`, and refines `v`'s order. -/
 private lemma competitive_of_nonneg_ge_two
-    {n : ℕ} (hn : 2 ≤ n) (v : Fin n → F)
-    (hv_nn : ∀ i, 0 ≤ v i) :
+    {n : ℕ} (hn : 2 ≤ n) (v b : Fin n → F)
+    (hv_nn : ∀ i, 0 ≤ v i)
+    (hb_inj : Function.Injective b)
+    (hb_nn : ∀ i, 0 ≤ b i)
+    (hb_le : ∀ i, b i ≤ (n : F))
+    (hb_refines : ∀ i j, b i ≤ b j → v i ≤ v j) :
     (1 / 4 : F) * maxV (by omega) v ≤
       (∑ σ : Equiv.Perm (Fin n),
-        (auction n (n : F)).welfare (v ∘ σ) (surrogate v ∘ σ)) /
+        (auction n (n : F)).welfare (v ∘ σ) (b ∘ σ)) /
           (n.factorial : F) := by
   classical
-  -- Surrogate facts.
-  set b := surrogate v with hb_def
-  have hb_inj : Function.Injective b := surrogate_injective v
-  have hb_nn : ∀ i, 0 ≤ b i := surrogate_nonneg v
-  have hb_le : ∀ i, b i ≤ (n : F) := fun i => le_of_lt (surrogate_lt_n v i)
-  -- Set up: MAX = maxV v, nonnegative from nonneg valuations.
   set MAX := maxV (show 1 ≤ n by omega) v with hMAX_def
   have hMAX_nn : 0 ≤ MAX :=
     le_trans (hv_nn ⟨0, by omega⟩) (le_maxV _ v _)
@@ -1558,7 +1546,7 @@ private lemma competitive_of_nonneg_ge_two
     obtain ⟨fav⟩ : Nonempty (Favorable b σ) := (Finset.mem_filter.mp hσ).2
     rw [welfare_eq_argmax_of_favorable hn (n : F) v b hb_inj hb_nn hb_le fav]
     rw [hMAX_def]
-    exact v_argmax_of_surrogate_favorable hn v fav
+    exact v_argmax_of_favorable_refinement hn v b hb_refines fav
   -- Step 1: Σ welfare ≥ |FS| * MAX.
   have step1 :
       ((favorableSet b).card : F) * MAX ≤
@@ -1572,7 +1560,7 @@ private lemma competitive_of_nonneg_ge_two
             apply Finset.sum_le_sum_of_subset_of_nonneg
             · exact Finset.subset_univ _
             · intros σ _ _; exact hwelfare_nn σ
-  -- Step 2: n! ≤ 4 * |FS| (favourable count, surrogate is injective).
+  -- Step 2: n! ≤ 4 * |FS| (favourable count, b is injective).
   have step2 : (n.factorial : F) ≤ 4 * ((favorableSet b).card : F) :=
     favorableSet_card_ge hn b hb_inj
   -- Combine and divide.
@@ -1587,46 +1575,45 @@ private lemma competitive_of_nonneg_ge_two
     _ = ((favorableSet b).card : F) * MAX := by ring
     _ ≤ ∑ σ : Equiv.Perm (Fin n), (auction n (n : F)).welfare (v ∘ σ) (b ∘ σ) := step1
 
-/-- **Problem 2.1 (c′): the 1/4 guarantee for all nonnegative `v`, down to a
-single bidder.** The `n = 1` case is trivial — the lone bidder always clears
-the zero opening price, so welfare `= max v` — and `n ≥ 2` is the core
-`competitive_of_nonneg_ge_two`. No injectivity, only `0 ≤ v`. -/
+/-- **Problem 2.1 (c′): the 1/4 guarantee for all nonneg `v` with a
+compatible tiebreak, down to a single bidder.**
+
+For any nonneg valuation profile `v` and any bid profile `b` that is
+injective, nonneg, bounded by the number of bidders, and *refines*
+`v`'s order (`b i ≤ b j → v i ≤ v j`), the secretary auction
+`Secretary.auction n n` achieves expected welfare `≥ (1/4) · max v`.
+
+The bid profile `b` encodes a total order on bidders compatible with
+their valuations — e.g. the lexicographic `(value, index)` ranking
+given by `Secretary.surrogate v`. The theorem is agnostic to *which*
+compatible order is used. -/
 theorem competitive_of_nonneg
-    {n : ℕ} (hn : 1 ≤ n) (v : Fin n → F)
-    (hv_nn : ∀ i, 0 ≤ v i) :
+    {n : ℕ} (hn : 1 ≤ n) (v b : Fin n → F)
+    (hv_nn : ∀ i, 0 ≤ v i)
+    (hb_inj : Function.Injective b)
+    (hb_nn : ∀ i, 0 ≤ b i)
+    (hb_lt : ∀ i, b i < (n : F))
+    (hb_refines : ∀ i j, b i ≤ b j → v i ≤ v j) :
     (1 / 4 : F) * maxV hn v ≤
       (∑ σ : Equiv.Perm (Fin n),
-        (auction n (n : F)).welfare (v ∘ σ) (surrogate v ∘ σ)) /
+        (auction n (n : F)).welfare (v ∘ σ) (b ∘ σ)) /
           (n.factorial : F) := by
   rcases eq_or_lt_of_le hn with rfl | h2
-  · -- n = 1: the single bidder clears price 0 (its surrogate rank is 0).
+  · -- n = 1: the single bidder clears the zero opening price.
     simp only [Nat.cast_one]
-    have hsurr0 : surrogate v (0 : Fin 1) = 0 := by
-      have hc : (Finset.univ.filter (fun j => slt v j (0 : Fin 1))).card = 0 := by
-        rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
-        intro j _
-        rw [Subsingleton.elim j (0 : Fin 1)]
-        exact slt_irrefl v 0
-      unfold surrogate
-      rw [hc, Nat.cast_zero]
-    have hprice0 : (auction 1 (1 : F)).price [] = 0 := by
-      simp [Secretary.auction]
-    have hcond : (auction 1 (1 : F)).price [] ≤ surrogate v 0 := by
-      rw [hprice0, hsurr0]
-    have hwf : (auction 1 (1 : F)).welfare v (surrogate v) = v 0 := by
+    have hprice0 : (auction 1 (1 : F)).price [] = 0 := by simp [Secretary.auction]
+    have hcond : (auction 1 (1 : F)).price [] ≤ b 0 := by rw [hprice0]; exact hb_nn 0
+    have hwf : (auction 1 (1 : F)).welfare v b = v 0 := by
       simp only [SingleItemAuction.welfare, List.ofFn_succ, List.ofFn_zero]
       rw [SingleItemAuction.welfareFrom_cons_accept _ _ _ _ _ hcond]
     have hmax : maxV hn v = v 0 := by
       apply le_antisymm
-      · apply Finset.sup'_le
-        intro j _
-        rw [Subsingleton.elim j (0 : Fin 1)]
+      · apply Finset.sup'_le; intro j _; rw [Subsingleton.elim j (0 : Fin 1)]
       · exact le_maxV _ v 0
     have hsum : (∑ σ : Equiv.Perm (Fin 1),
-          (auction 1 (1 : F)).welfare (v ∘ σ) (surrogate v ∘ σ)) = v 0 := by
+          (auction 1 (1 : F)).welfare (v ∘ σ) (b ∘ σ)) = v 0 := by
       have huniv : (Finset.univ : Finset (Equiv.Perm (Fin 1))) = {1} := by
-        ext σ
-        simp only [Finset.mem_univ, Finset.mem_singleton, true_iff]
+        ext σ; simp only [Finset.mem_univ, Finset.mem_singleton, true_iff]
         exact Subsingleton.elim σ 1
       rw [huniv, Finset.sum_singleton]
       simp only [Equiv.Perm.coe_one, Function.comp_id]
@@ -1634,7 +1621,8 @@ theorem competitive_of_nonneg
     have hf1 : (Nat.factorial 1 : F) = 1 := by norm_num
     rw [hsum, hmax, hf1, div_one]
     linarith [hv_nn (0 : Fin 1)]
-  · exact competitive_of_nonneg_ge_two h2 v hv_nn
+  · exact competitive_of_nonneg_ge_two h2 v b hv_nn hb_inj hb_nn
+      (fun i => le_of_lt (hb_lt i)) hb_refines
 
 /-- **Problem 2.1 (c): a 1/4-competitive deterministic online auction
 under uniformly random arrival.**
