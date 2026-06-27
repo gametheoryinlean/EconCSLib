@@ -325,13 +325,10 @@ lemma outsidedoor_singleton (i : I) : IST.isOutsideDoor Finset.empty {i} := by
 
 --variable (τ D) in
 omit [Inhabited T] [DecidableEq T] [DecidableEq I] in
-lemma outsidedoor_is_singleton (h : IST.isOutsideDoor τ  D) :  τ = Finset.empty ∧  ∃ i, D = {i} := by
-  obtain ⟨h1, h2⟩ := h
-  subst h2
-  obtain ⟨_,h3⟩ := h1
-  replace h4 : D.card = 1 := by
-    simp_all
-    rfl
+lemma outsidedoor_is_singleton (h : IST.isOutsideDoor τ D) : τ = Finset.empty ∧ ∃ i, D = {i} := by
+  obtain ⟨h1, hτ⟩ := h; subst hτ
+  obtain ⟨_, hcard⟩ := h1
+  have h4 : D.card = 1 := by simpa using hcard
   exact ⟨rfl, Finset.card_eq_one.1 h4⟩
 
 
