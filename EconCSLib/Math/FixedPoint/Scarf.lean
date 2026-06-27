@@ -416,21 +416,13 @@ lemma sublemma_3_1 [Fintype T] (τ : Finset T) (D : Finset I)
       have h_tau_eq_erase : τ.card = (D.erase i).card := by
         rw [Finset.card_erase_of_mem hi, h_door.2]; simp
       linarith
-  · rintro ⟨a, b, ha_mem, hb_mem, h_ne, h_eq_mini, h_i_case, h_Mi_empty⟩
+  · rintro ⟨a, b, ha_mem, hb_mem, h_ne, h_eq_mini, _h_i_case, h_Mi_empty⟩
     intro y
-    unfold M_set at h_Mi_empty
-    simp only [Set.mem_setOf_eq, Set.eq_empty_iff_forall_notMem] at h_Mi_empty
-    specialize h_Mi_empty y
-    push_neg at h_Mi_empty
-    obtain ⟨k, hk_mem, hk_ne_i, hk_not_lt⟩ := h_Mi_empty
-    use k
-    constructor
-    · exact Finset.mem_erase.mpr ⟨hk_ne_i, hk_mem⟩
-    · intro x hx
-      letI : LinearOrder T := IST k
-      have h_y_le_mini : y ≤[k] mini h_nonempty k := hk_not_lt
-      have h_mini_le_x : mini h_nonempty k ≤[k] x := Finset.min'_le τ x hx
-      exact @le_trans _ (IST k).toPreorder _ _ _ h_y_le_mini h_mini_le_x
+    have hy_not : y ∉ M_set τ D i h_nonempty := by rw [h_Mi_empty]; simp
+    simp only [M_set, Set.mem_setOf_eq, not_forall, exists_prop, not_lt] at hy_not
+    obtain ⟨k, hk_mem, hk_ne_i, h_y_le⟩ := hy_not
+    letI := IST k
+    exact ⟨k, Finset.mem_erase.mpr ⟨hk_ne_i, hk_mem⟩, fun x hx => h_y_le.trans (Finset.min'_le τ x hx)⟩
 
 /-Sublemma 3.2-/
 omit [Inhabited T] in
