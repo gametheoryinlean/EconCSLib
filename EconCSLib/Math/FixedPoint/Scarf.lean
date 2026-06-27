@@ -78,9 +78,8 @@ lemma injOn_sdiff (s : Finset X) (f : X → Y) (h : s.card = (Finset.image f s).
     by_contra h1
     linarith [Finset.card_image_of_injOn h1]
   obtain ⟨a, b, as, bs, h1, h2⟩ := of_card_domain_eq_card_image_succ s f h
-  have absub : {a, b} ⊆ s :=  Finset.insert_subset as (Finset.singleton_subset_iff.mpr bs)
-  use a, b
-  repeat apply And.intro;assumption
+  have absub : {a, b} ⊆ s := Finset.insert_subset as (Finset.singleton_subset_iff.mpr bs)
+  refine ⟨a, b, as, bs, h1, h2, ?_⟩
   rw [←Finset.coe_sdiff]
   apply Finset.injOn_of_card_image_eq
   rw [Finset.card_sdiff, Finset.inter_eq_left.mpr absub]
@@ -180,30 +179,23 @@ def isDominant  :=
   ∀ y, ∃ i ∈ C, ∀ x ∈ σ,  y ≤[i] x
 
 variable {σ C} in
-lemma Nonempty_of_Dominant (h : IST.isDominant σ C) : C.Nonempty := by
-  obtain ⟨j,hj⟩ := h default
-  exact ⟨j, hj.1⟩
+lemma Nonempty_of_Dominant (h : IST.isDominant σ C) : C.Nonempty :=
+  let ⟨j, hj⟩ := h default; ⟨j, hj.1⟩
 
 /- Lemma 1 -/
 omit [Inhabited T] in
 lemma Dominant_of_subset (σ τ : Finset T) (C : Finset I) :
-  τ ⊆ σ → isDominant σ C  → isDominant τ C := by
-    intro h1 h2
-    intro y
-    obtain ⟨j,hj⟩:= h2 y
-    use j,hj.1
-    intro x hx
-    exact hj.2 x (h1 hx)
+  τ ⊆ σ → isDominant σ C → isDominant τ C := by
+  intro h1 h2 y
+  obtain ⟨j, hj⟩ := h2 y
+  exact ⟨j, hj.1, fun x hx => hj.2 x (h1 hx)⟩
 
 omit [Inhabited T] in
-lemma Dominant_of_supset (σ : Finset T) (C D: Finset I) :
-  C ⊆ D → isDominant σ C  → isDominant σ D := by
-    intro h1 h2
-    intro y
-    obtain ⟨j,hj⟩:= h2 y
-    use j,(h1 hj.1)
-    intro x hx
-    exact hj.2 x hx
+lemma Dominant_of_supset (σ : Finset T) (C D : Finset I) :
+  C ⊆ D → isDominant σ C → isDominant σ D := by
+  intro h1 h2 y
+  obtain ⟨j, hj⟩ := h2 y
+  exact ⟨j, h1 hj.1, fun x hx => hj.2 x hx⟩
 
 abbrev mini {σ : Finset T} (h2 : σ.Nonempty) (i : I) : T := @Finset.min' _ (IST i) _ h2
 
@@ -229,22 +221,14 @@ lemma keylemma_of_dominant {σ : Finset T} {C: Finset I} (h1 : IST.isDominant σ
       simp [mini,<-ha,Finset.min'_mem]
 
 omit [Inhabited T] in
-lemma card_le_of_domiant {σ : Finset T} {C: Finset I} (h1 : IST.isDominant σ C) : σ.card  ≤  C.card  := by
+lemma card_le_of_domiant {σ : Finset T} {C : Finset I} (h1 : IST.isDominant σ C) : σ.card ≤ C.card := by
   by_cases h2 : σ.Nonempty
-  · rw [keylemma_of_dominant h1 h2]
-    apply Finset.card_image_le
-  · rw [not_nonempty_iff_eq_empty] at h2
-    simp only [h2, card_empty, zero_le]
+  · rw [keylemma_of_dominant h1 h2]; exact Finset.card_image_le
+  · rw [not_nonempty_iff_eq_empty] at h2; simp [h2]
 
 omit [Inhabited T] in
 lemma empty_Dominant (h : D.Nonempty) : IST.isDominant Finset.empty D := by
-  intro y
-  obtain ⟨j,hj⟩ := h
-  use j
-  constructor
-  · exact hj
-  · intro x hx
-    contradiction
+  intro y; obtain ⟨j, hj⟩ := h; use j, hj; intro x hx; contradiction
 
 /-- Alias for `isDominant σ C`: the cell predicate for the pair `(σ, C)`. -/
 abbrev isCell  := isDominant σ C
@@ -277,13 +261,11 @@ inductive isDoorof (τ : Finset T) (D : Finset I) (σ : Finset T) (C : Finset I)
 
 omit [Inhabited T] in
 lemma isCell_of_door (h1 : isDoorof τ D σ C) : IST.isCell τ D := by
-  cases h1
-  · rename_i h0 _ j h1 h3 h4
-    rw [h4]
-    exact IST.Dominant_of_subset _ _ C (by simp [<-h3]) h0
-  · rename_i h0 _ j h1 h2' h3
-    rw [h2', h3]
-    exact IST.Dominant_of_supset _ _ _ (Finset.subset_insert j C) h0
+  cases h1 with
+  | idoor h0 _ _ _ h_insert h_D_eq =>
+    rw [h_D_eq]; exact IST.Dominant_of_subset _ _ C (by simp [← h_insert]) h0
+  | odoor h0 _ j _ h_tau_eq h_D_eq =>
+    rw [h_tau_eq, h_D_eq]; exact IST.Dominant_of_supset _ _ _ (Finset.subset_insert j C) h0
 
 variable {σ C} in
 omit [Inhabited T] in
