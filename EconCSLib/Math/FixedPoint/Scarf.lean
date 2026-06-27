@@ -1273,8 +1273,6 @@ lemma NC_of_outsidedoor (h : isOutsideDoor σ C) : isNearlyColorful c σ C  := b
 omit [Inhabited T] in
 lemma NC_or_C_of_door (h1 : isTypedNC c i τ D) (h2 : isDoorof τ D σ C) : isTypedNC c i σ C ∨ isColorful c σ C := by
   unfold isTypedNC at h1 ⊢
-  unfold isColorful
-  have h1_cell := h1.left
   have h1_eq := h1.right
 
   have h_sigma_cell : isCell σ C := by
