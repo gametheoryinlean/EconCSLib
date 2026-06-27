@@ -757,24 +757,18 @@ lemma idoor_determines_element [Fintype T] (τ : Finset T) (D : Finset I)
     (hx_not_mem : x ∉ τ) :
     x = m_element τ D a h_nonempty h_Ma_nonempty ∨
     x = m_element τ D b h_nonempty h_Mb_nonempty := by
-  have h_dom : IST.isDominant (insert x τ) D := h_room.1
   have h_exists_max : ∃ i ∈ ({a, b} : Finset I), (M_set τ D i h_nonempty).Nonempty ∧
-      is_maximal_in_M_set τ D i h_nonempty x := by
-    apply (sublemma_3_2 τ D x h_door h_nonempty hx_not_mem a b ha_mem hb_mem hab h_eq_mini).mp
-    exact h_dom
+      is_maximal_in_M_set τ D i h_nonempty x :=
+    (sublemma_3_2 τ D x h_door h_nonempty hx_not_mem a b ha_mem hb_mem hab h_eq_mini).mp h_room.1
   obtain ⟨i, hi_mem, hi_nonempty, hi_max⟩ := h_exists_max
   have h_x_eq_mi : x = m_element τ D i h_nonempty hi_nonempty :=
     maximal_element_unique τ D i h_nonempty hi_nonempty x hi_max
   cases Finset.mem_insert.mp hi_mem with
   | inl hi_eq_a =>
-    left
-    subst hi_eq_a
-    exact h_x_eq_mi
+    subst hi_eq_a; left; exact h_x_eq_mi
   | inr hi_eq_b =>
-    right
-    have heq : i = b := Finset.mem_singleton.mp hi_eq_b
-    subst heq
-    exact h_x_eq_mi
+    have hi_eq : i = b := Finset.mem_singleton.mp hi_eq_b
+    subst hi_eq; right; exact h_x_eq_mi
 
 /- Lemma 3-/
 omit [Inhabited T] in
