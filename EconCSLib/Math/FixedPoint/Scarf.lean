@@ -728,21 +728,12 @@ lemma odoor_index_in_pair [Fintype T] (τ : Finset T) (D : Finset I) (C : Finset
     (_hj_not_mem : j ∉ C) (hc_eq : D = insert j C) :
     j ∈ ({a, b} : Finset I) := by
   by_contra h_not_in
-  simp only [Finset.mem_insert, Finset.mem_singleton] at h_not_in
-  push_neg at h_not_in
-  obtain ⟨hj_ne_a, hj_ne_b⟩ := h_not_in
-  have ha_in_C : a ∈ C := by
-    have ha_in_D : a ∈ D := ha_mem
-    rw [hc_eq] at ha_in_D
-    cases Finset.mem_insert.mp ha_in_D with
-    | inl h_eq => exact absurd h_eq (Ne.symm hj_ne_a)
-    | inr h_mem => exact h_mem
-  have hb_in_C : b ∈ C := by
-    have hb_in_D : b ∈ D := hb_mem
-    rw [hc_eq] at hb_in_D
-    cases Finset.mem_insert.mp hb_in_D with
-    | inl h_eq => exact absurd h_eq (Ne.symm hj_ne_b)
-    | inr h_mem => exact h_mem
+  have hj_ne (x : I) (hx : x ∈ ({a, b} : Finset I)) : j ≠ x := by
+    intro heq; apply h_not_in; rw [heq]; exact hx
+  have mem_C (x : I) (hx : x ∈ D) : j ≠ x → x ∈ C := by
+    rw [hc_eq, Finset.mem_insert] at hx; exact fun h => hx.resolve_left h.symm
+  have ha_in_C : a ∈ C := mem_C a ha_mem (hj_ne a (by simp))
+  have hb_in_C : b ∈ C := mem_C b hb_mem (hj_ne b (by simp))
   have h_inj_C : Set.InjOn (mini h_nonempty) (C : Set I) := by
     apply Finset.injOn_of_card_image_eq
     have h_tau_eq_C_image : τ = C.image (mini h_nonempty) := by
