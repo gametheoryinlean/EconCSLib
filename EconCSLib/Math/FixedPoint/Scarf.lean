@@ -401,17 +401,13 @@ lemma sublemma_3_1 [Fintype T] (τ : Finset T) (D : Finset I)
       have h_a_in_erase : a ∈ D.erase i := Finset.mem_erase.mpr ⟨h_i_ne_a.symm, ha_mem⟩
       have h_b_in_erase : b ∈ D.erase i := Finset.mem_erase.mpr ⟨h_i_ne_b.symm, hb_mem⟩
 
-      have h_not_inj : ¬Set.InjOn (mini h_nonempty) (D.erase i : Set I) := by
-        intro h_inj
-        exact h_ne (h_inj h_a_in_erase h_b_in_erase h_eq_mini)
+      have h_not_inj : ¬Set.InjOn (mini h_nonempty) (D.erase i : Set I) :=
+        fun h_inj => h_ne (h_inj h_a_in_erase h_b_in_erase h_eq_mini)
 
       have h_image_lt : ((D.erase i).image (mini h_nonempty)).card < (D.erase i).card := by
         by_contra h_not_lt
-        push_neg at h_not_lt
-        have h_eq : ((D.erase i).image (mini h_nonempty)).card = (D.erase i).card :=
-          le_antisymm Finset.card_image_le h_not_lt
         have h_inj : Set.InjOn (mini h_nonempty) (D.erase i : Set I) :=
-          Finset.injOn_of_card_image_eq h_eq
+          Finset.injOn_of_card_image_eq (le_antisymm Finset.card_image_le (by push_neg at h_not_lt; exact h_not_lt))
         exact h_not_inj h_inj
       exfalso
       have h_dom_image := keylemma_of_dominant h_dom h_nonempty
