@@ -2367,10 +2367,9 @@ lemma fiber_size_internal_door (c : T → I) (i : I) (y : Finset T × Finset I)
     let s := filter (fun x => ¬ isOutsideDoor x.1.1 x.1.2) (dbcountingset c i)
     let f := fun (x : (Finset T × Finset I) × Finset T × Finset I) => x.1
     (filter (fun a => f a = y) s).card = 2 := by
+  intro s f
   obtain ⟨σ₁, σ₂, C₁, C₂, h_ne, h_room₁, h_room₂, h_door₁, h_door₂, h_unique⟩ :=
     internal_door_two_rooms y.1 y.2 hy_internal
-  let s := filter (fun x => ¬ isOutsideDoor x.1.1 x.1.2) (dbcountingset c i)
-  let f := fun (x : (Finset T × Finset I) × Finset T × Finset I) => x.1
   let elem1 : (Finset T × Finset I) × Finset T × Finset I := (y, (σ₁, C₁))
   let elem2 : (Finset T × Finset I) × Finset T × Finset I := (y, (σ₂, C₂))
   have elem1_in_s : elem1 ∈ s := by
