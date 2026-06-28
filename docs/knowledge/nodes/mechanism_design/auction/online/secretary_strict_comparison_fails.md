@@ -86,27 +86,27 @@ $p < v \lor (p = v \land \mathit{bar} \le b)$.
 
 Setting `bar _ := ↑⊥` (identity bottom) instead of `⊤` recovers weak
 comparison $p \le v$, under which all bidders meeting the threshold are
-accepted. With weak comparison and the profile above, both permutations
-give welfare $= M = \max v$, and the $1/4$ bound holds.
+accepted. With weak comparison and the equal-value profile above, both
+permutations give welfare $= M = \max v$, so this particular failure is
+avoided.
 
-However, weak comparison creates a different problem for the **proof**:
-when multiple bidders have the same value as the threshold, any of them
-might clear the threshold before the argmax bidder, and
-`welfare_eq_max_of_favorable` fails because welfare can be a non-argmax
-value. The proof requires showing that on the favourable event, welfare
-equals $\max v$, which needs the auction to select the *right* bidder
-among ties — exactly what the lex rule with a well-chosen `bar` achieves.
+However, weak comparison is **also not constant-competitive**: on the
+needle profile $v = (M, 0, \ldots, 0)$, the threshold drops to $0$ and
+weak comparison accepts the first phase-2 arrival unconditionally (since
+$0 \le 0$), giving expected welfare only $(1/n) \cdot M$
+([[mechanism_design.auction.online.secretary_weak_comparison_needle]]).
+The lex rule with a well-chosen `bar` resolves both failure modes.
 
 ## Summary
 
-| Acceptance rule           | `bar` setting         | Competitive? | Proof?          |
-|---------------------------|-----------------------|--------------|-----------------|
-| $p < v$ (strict only)     | `bar _ := ⊤`         | **No** (this counterexample) | — |
-| $p \le v$ (weak only)     | `bar _ := ↑⊥`        | Yes (conjecture) | Breaks without `hv_inj` |
-| $p < v \lor (p = v \land \mathit{bar} \le b)$ (lex) | `bar h := ↑(\mathrm{maxPairFold}\,h).2$ | **Yes** | Works with `hg_inj` |
+| Acceptance rule           | `bar` setting         | Competitive? |
+|---------------------------|-----------------------|--------------|
+| $p < v$ (strict only)     | `bar _ := ⊤`         | **No** — welfare $= 0$ always (this counterexample) |
+| $p \le v$ (weak only)     | `bar _ := ↑⊥`        | **No** — welfare $= M/n$ on needle ([[mechanism_design.auction.online.secretary_weak_comparison_needle]]) |
+| lex (proper `bar`)        | `bar h := ↑(\mathrm{maxPairFold}\,h).2$ | **Yes** — welfare $\ge M/4$ ([[mechanism_design.auction.online.secretary_quarter_competitive]]) |
 
-The lex acceptance rule is the design that makes both the theorem and
-its proof go through with the natural hypothesis of identity injectivity.
+The lex acceptance rule is the unique design among these three that
+achieves a constant competitive ratio with identity injectivity alone.
 
 ## References
 

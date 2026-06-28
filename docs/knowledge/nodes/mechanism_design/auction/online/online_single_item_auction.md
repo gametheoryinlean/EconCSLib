@@ -144,13 +144,19 @@ test $M < M$ rejects every remaining bidder, giving welfare $= 0$ on
 ([[mechanism_design.auction.online.secretary_strict_comparison_fails]]).
 
 An alternative using weak comparison $p \le v_i$ (set `bar _ := \uparrow\bot`)
-avoids this particular failure, but creates a proof obstacle: when
-multiple bidders share the threshold value, any of them might clear the
-price before the argmax bidder, and the clean
-`welfare_eq_max_of_favorable` argument breaks. The lex rule with a
-well-chosen `bar` (set to the observed lex-max identity) navigates
-between these two pitfalls — accepting the right bidder among ties while
-rejecting the wrong ones.
+avoids the $v = (M, M)$ failure, but is **also not constant-competitive**.
+On the needle profile $v = (M, 0, \ldots, 0)$ with $n$ bidders, the
+threshold drops to $0$ after observing only haystack bidders; weak
+comparison then accepts the **first** phase-2 arrival (since $0 \le 0$),
+regardless of whether it is the needle. The needle is first in phase 2
+with probability $1/n$, so expected welfare is $(1/n) \cdot M$ — not a
+constant fraction of $\max v$
+([[mechanism_design.auction.online.secretary_weak_comparison_needle]]).
+
+The lex rule with a well-chosen `bar` (set to the observed lex-max
+identity) navigates between the two pitfalls: it rejects haystack
+bidders whose identities fall below the bar, while still accepting the
+needle whose value strictly exceeds the threshold.
 
 ### Why two type parameters?
 
