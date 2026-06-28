@@ -1,8 +1,8 @@
 ---
 id: mechanism_design.auction.online.secretary_weak_comparison_needle
 title: Weak Value Comparison Degrades to 1/n on the Needle Profile
-kind: counterexample
-status: partly_proved
+kind: example
+status: proved
 primary_topic: mechanism_design
 topics:
   - mechanism_design
@@ -21,7 +21,7 @@ lean:
     - Online.Auction.WeakComparison.welfare_eq_zero_needle_last
 verification:
   statement: accepted
-  proof: partly_proved
+  proof: accepted
   alignment: aligned
 tags:
   - auction

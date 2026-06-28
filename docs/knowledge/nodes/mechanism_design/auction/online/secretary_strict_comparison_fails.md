@@ -1,7 +1,7 @@
 ---
 id: mechanism_design.auction.online.secretary_strict_comparison_fails
 title: Strict Value Comparison Breaks the Secretary Guarantee
-kind: counterexample
+kind: example
 status: proved
 primary_topic: mechanism_design
 topics:
