@@ -15,6 +15,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Nat.Factorial.Basic
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
+import Mathlib.Data.Prod.Lex
 
 /-!
 # Online Single-Item (Posted-Price) Auction
@@ -22,16 +23,16 @@ import Mathlib.Tactic.Ring
 The **online single-item auction** sells one indivisible good to bidders
 who arrive one at a time. At each step the system receives two pieces of
 information: the bidder's **identity** `b : B` and their **value** `v : F`.
-The auctioneer posts a take-it-or-leave-it price in `WithTop F` — the
-price `⊤` rejects unconditionally (used in the secretary auction's observe
-phase), and `↑p` accepts a bidder whose value meets `p`.
+The auctioneer posts a take-it-or-leave-it price in `WithTop F` and an
+identity bar in `WithTop B`. Acceptance is **lexicographic**: first
+compare value against price, then identity against bar.
 
 The pricing rule sees the full history of rejected `(identity, value)` pairs;
 the "no future" constraint of online algorithms is built into the type.
 
 ## Main definitions
 
-* `SingleItemAuction B F` — a pricing rule `List (B × F) → WithTop F`.
+* `SingleItemAuction B F` — a pricing rule with identity tie-breaking.
 * `welfare` — social welfare under a given arrival sequence.
 * `utility` — quasi-linear utility of a specific bidder.
 * `Secretary.auction` — the secretary (sample-then-threshold) pricing rule.
@@ -42,7 +43,7 @@ the "no future" constraint of online algorithms is built into the type.
 * `welfare_can_be_zero` — any auction with opening price `> 0` can be forced
   to welfare `0` (Problem 2.1(b)).
 * `Secretary.competitive` — the secretary rule is 1/4-competitive under
-  uniformly random arrival for distinct valuations (Problem 2.1(c)).
+  uniformly random arrival for injective identities (Problem 2.1(c)).
 -/
 
 set_option linter.unusedSectionVars false
@@ -63,13 +64,15 @@ inductive AuctionState (B F : Type*) where
   | unsold (history : List (B × F))
   | sold (winner : ℕ) (price : F)
 
-/-- An online single-item auction is a *pricing rule*: given the history
-of rejected `(identity, value)` pairs, it posts the next price in
-`WithTop F`. The price `⊤` rejects unconditionally; `↑p` accepts when
-`p ≤ value`. -/
+/-- An online single-item auction is a *pricing rule* with identity
+tie-breaking. Given the history of rejected `(identity, value)` pairs,
+it posts a value threshold `price` in `WithTop F` and an identity
+threshold `bar` in `WithTop B`. Acceptance is lexicographic: first
+compare value against `price`, then identity against `bar`. -/
 @[ext]
 structure SingleItemAuction (B F : Type*) where
   price : List (B × F) → WithTop F
+  bar : List (B × F) → WithTop B
 
 /-- Maximum of a valuation profile over `Fin n`. -/
 noncomputable def maxV {n : ℕ} [LinearOrder F] (hn : 1 ≤ n) (v : Fin n → F) : F :=
@@ -81,19 +84,23 @@ lemma le_maxV {n : ℕ} [LinearOrder F] (hn : 1 ≤ n) (v : Fin n → F) (i : Fi
 
 namespace SingleItemAuction
 
-variable [LinearOrder F] (A : SingleItemAuction B F)
+variable [LinearOrder F] [LinearOrder B] (A : SingleItemAuction B F)
 
 /-- The auction as an `OnlineAlgorithm`. Each step receives an
 `Option (B × F)` input — `some (bi, vi)` for a genuine bidder,
-`none` for end-of-input. Output on sale is the posted price. -/
+`none` for end-of-input. Output on sale is the posted price.
+Acceptance is lexicographic: accept when value strictly exceeds
+price, or value equals price and identity clears the bar. -/
 def online : OnlineAlgorithm (B × F) (AuctionState B F) F where
   init := .unsold []
   step
     | .unsold h, some (bi, vi) =>
         match A.price h with
         | none   => (.unsold (h ++ [(bi, vi)]), none)
-        | some p => if p ≤ vi then (.sold h.length p, some p)
-                    else (.unsold (h ++ [(bi, vi)]), none)
+        | some p =>
+            if (p : F) < vi ∨ (p = vi ∧ A.bar h ≤ (↑bi : WithTop B))
+            then (.sold h.length p, some p)
+            else (.unsold (h ++ [(bi, vi)]), none)
     | .unsold h, none => (.unsold h, none)
     | .sold w p, _    => (.sold w p, none)
 
@@ -105,40 +112,45 @@ def run (inputs : List (B × F)) : Option F :=
 
 /-- Welfare helper: process bidders from index `k` onward with
 accumulated rejection history `h`. Returns the value of the first
-bidder whose value clears the posted price, or `0`. -/
-private def welfareAux [Zero F]
+bidder whose value clears the posted price (lexicographically), or `0`. -/
+def welfareAux [Zero F]
     (price : List (B × F) → WithTop F)
+    (bar : List (B × F) → WithTop B)
     {n : ℕ} (f : Fin n → B × F) (h : List (B × F)) (k : ℕ) : F :=
   if hk : k < n then
     let entry := f ⟨k, hk⟩
-    if price h ≤ (entry.2 : WithTop F) then entry.2
-    else welfareAux price f (h ++ [entry]) (k + 1)
+    if (price h : WithTop F) < ↑entry.2 ∨
+       (price h = ↑entry.2 ∧ bar h ≤ (↑entry.1 : WithTop B))
+    then entry.2
+    else welfareAux price bar f (h ++ [entry]) (k + 1)
   else 0
 termination_by n - k
 
 /-- Social welfare: the value of the winning bidder (or `0`) under
 arrival sequence `f : Fin n → B × F`. -/
 def welfare [Zero F] {n : ℕ} (f : Fin n → B × F) : F :=
-  welfareAux A.price f [] 0
+  welfareAux A.price A.bar f [] 0
 
 @[simp] lemma welfareAux_done [Zero F] {n : ℕ}
     (f : Fin n → B × F) (h : List (B × F)) (k : ℕ) (hk : ¬ k < n) :
-    welfareAux A.price f h k = 0 := by
+    welfareAux A.price A.bar f h k = 0 := by
   rw [welfareAux, dif_neg hk]
 
 lemma welfareAux_accept [Zero F] {n : ℕ}
     (f : Fin n → B × F) (h : List (B × F)) (k : ℕ) (hk : k < n)
-    (hacc : A.price h ≤ ((f ⟨k, hk⟩).2 : WithTop F)) :
-    welfareAux A.price f h k = (f ⟨k, hk⟩).2 := by
+    (hacc : (A.price h : WithTop F) < ↑(f ⟨k, hk⟩).2 ∨
+            (A.price h = ↑(f ⟨k, hk⟩).2 ∧ A.bar h ≤ (↑(f ⟨k, hk⟩).1 : WithTop B))) :
+    welfareAux A.price A.bar f h k = (f ⟨k, hk⟩).2 := by
   rw [welfareAux, dif_pos hk]
   simp only
   rw [if_pos hacc]
 
 lemma welfareAux_reject [Zero F] {n : ℕ}
     (f : Fin n → B × F) (h : List (B × F)) (k : ℕ) (hk : k < n)
-    (hrej : ¬ A.price h ≤ ((f ⟨k, hk⟩).2 : WithTop F)) :
-    welfareAux A.price f h k =
-      welfareAux A.price f (h ++ [f ⟨k, hk⟩]) (k + 1) := by
+    (hrej : ¬ ((A.price h : WithTop F) < ↑(f ⟨k, hk⟩).2 ∨
+               (A.price h = ↑(f ⟨k, hk⟩).2 ∧ A.bar h ≤ (↑(f ⟨k, hk⟩).1 : WithTop B)))) :
+    welfareAux A.price A.bar f h k =
+      welfareAux A.price A.bar f (h ++ [f ⟨k, hk⟩]) (k + 1) := by
   rw [welfareAux, dif_pos hk]
   simp only
   rw [if_neg hrej]
@@ -146,11 +158,17 @@ lemma welfareAux_reject [Zero F] {n : ℕ}
 lemma welfareAux_nonneg [Zero F] {n : ℕ}
     (f : Fin n → B × F) (hf : ∀ i, 0 ≤ (f i).2)
     (h : List (B × F)) (k : ℕ) :
-    0 ≤ welfareAux A.price f h k := by
+    0 ≤ welfareAux A.price A.bar f h k := by
   by_cases hk : k < n
-  · by_cases hacc : A.price h ≤ ((f ⟨k, hk⟩).2 : WithTop F)
+  · have hacc_or :
+        ((A.price h : WithTop F) < ↑(f ⟨k, hk⟩).2 ∨
+         (A.price h = ↑(f ⟨k, hk⟩).2 ∧ A.bar h ≤ (↑(f ⟨k, hk⟩).1 : WithTop B))) ∨
+        ¬ ((A.price h : WithTop F) < ↑(f ⟨k, hk⟩).2 ∨
+           (A.price h = ↑(f ⟨k, hk⟩).2 ∧ A.bar h ≤ (↑(f ⟨k, hk⟩).1 : WithTop B))) :=
+      em _
+    rcases hacc_or with hacc | hrej
     · rw [A.welfareAux_accept f h k hk hacc]; exact hf ⟨k, hk⟩
-    · rw [A.welfareAux_reject f h k hk hacc]
+    · rw [A.welfareAux_reject f h k hk hrej]
       exact welfareAux_nonneg f hf _ (k + 1)
   · simp [A.welfareAux_done f h k hk]
 termination_by n - k
@@ -172,7 +190,10 @@ def utility [Zero F] [Sub F] {n : ℕ} (f : Fin n → B × F) (v : Fin n → F) 
   | .unsold h =>
       match A.price h with
       | none   => 0
-      | some p => if p ≤ (f i).2 then v i - p else 0
+      | some p =>
+          if (p : F) < (f i).2 ∨ (p = (f i).2 ∧ A.bar h ≤ ((f i).1 : WithTop B))
+          then v i - p
+          else 0
   | .sold _ _ => 0
 
 /-! #### (a) DSIC: truthful bidding is weakly dominant -/
@@ -193,18 +214,25 @@ lemma stateBeforeStep_update_self {n : ℕ}
   unfold stateBeforeStep
   rw [hfun]
 
-/-- At a fixed price, truthful bidding weakly dominates any other bid. -/
-private lemma local_dsic [Ring F] [IsStrictOrderedRing F] (p v bid : F) :
-    (if p ≤ bid then v - p else 0) ≤
-    (if p ≤ v then v - p else 0) := by
-  by_cases hpv : p ≤ v
+/-- At a fixed price, with a fixed tie-breaking condition, truthful
+bidding weakly dominates any other bid. -/
+private lemma local_dsic [Ring F] [IsStrictOrderedRing F]
+    (p v bid : F) (tie_ok : Prop) [Decidable tie_ok] :
+    (if (p < bid ∨ (p = bid ∧ tie_ok)) then v - p else 0) ≤
+    (if (p < v ∨ (p = v ∧ tie_ok)) then v - p else 0) := by
+  by_cases hpv : p < v ∨ (p = v ∧ tie_ok)
   · rw [if_pos hpv]
-    by_cases hpb : p ≤ bid
+    by_cases hpb : p < bid ∨ (p = bid ∧ tie_ok)
     · rw [if_pos hpb]
-    · rw [if_neg hpb]; exact sub_nonneg.mpr hpv
+    · rw [if_neg hpb]
+      rcases hpv with hlt | ⟨heq, _⟩
+      · exact sub_nonneg.mpr hlt.le
+      · rw [heq, sub_self]
   · rw [if_neg hpv]
-    by_cases hpb : p ≤ bid
-    · rw [if_pos hpb]; exact sub_nonpos.mpr (not_le.mp hpv).le
+    by_cases hpb : p < bid ∨ (p = bid ∧ tie_ok)
+    · rw [if_pos hpb]
+      have hvp : v ≤ p := not_lt.mp (fun h => hpv (Or.inl h))
+      exact sub_nonpos.mpr hvp
     · rw [if_neg hpb]
 
 /-- **Problem 2.1 (a): the online single-item auction is DSIC.**
@@ -216,11 +244,12 @@ their utility. -/
 theorem dsic [Ring F] [IsStrictOrderedRing F] {n : ℕ}
     (f : Fin n → B × F) (v : Fin n → F) (i : Fin n) :
     A.utility f v i ≤ A.utility (update f i ((f i).1, v i)) v i := by
-  simp only [utility, stateBeforeStep_update_self, update_self]
+  simp only [utility, A.stateBeforeStep_update_self, update_self]
   split
   · split
     · exact le_refl _
-    · next p _ => exact local_dsic p (v i) (f i).2
+    · next p _ =>
+        exact local_dsic p (v i) (f i).2 (A.bar _ ≤ ((f i).1 : WithTop B))
   · exact le_refl _
 
 /-! ### (b) No constant competitive ratio against adversarial input -/
@@ -230,12 +259,14 @@ onward is `0`. -/
 private lemma welfareAux_all_zero [Zero F] {n : ℕ}
     (f : Fin n → B × F) (h : List (B × F)) (k : ℕ)
     (hzero : ∀ j : Fin n, k ≤ j.val → (f j).2 = 0) :
-    welfareAux A.price f h k = 0 := by
+    welfareAux A.price A.bar f h k = 0 := by
   if hk : k < n then
     rw [welfareAux, dif_pos hk]
     simp only
     have hv : (f ⟨k, hk⟩).2 = 0 := hzero ⟨k, hk⟩ le_rfl
-    by_cases hacc : A.price h ≤ ((f ⟨k, hk⟩).2 : WithTop F)
+    by_cases hacc :
+        (A.price h : WithTop F) < ↑(f ⟨k, hk⟩).2 ∨
+        (A.price h = ↑(f ⟨k, hk⟩).2 ∧ A.bar h ≤ (↑(f ⟨k, hk⟩).1 : WithTop B))
     · rw [if_pos hacc, hv]
     · rw [if_neg hacc]
       exact welfareAux_all_zero f (h ++ [f ⟨k, hk⟩]) (k + 1) fun j hj => by
@@ -255,8 +286,12 @@ theorem welfare_can_be_zero [Inhabited B] [Field F] [IsStrictOrderedRing F]
   rcases hp : A.price [] with _ | p
   · -- A.price [] = ⊤: bidder 0 has value 1 (rejected), rest 0
     let f : Fin n → B × F := fun i => (default, if i.val = 0 then 1 else 0)
-    have hrej : ¬ A.price [] ≤ ((f ⟨0, h0n⟩).2 : WithTop F) := by
-      rw [hp]; exact not_le.mpr (WithTop.coe_lt_top _)
+    have hrej : ¬ ((A.price [] : WithTop F) < ↑(f ⟨0, h0n⟩).2 ∨
+        (A.price [] = ↑(f ⟨0, h0n⟩).2 ∧ A.bar [] ≤ (↑(f ⟨0, h0n⟩).1 : WithTop B))) := by
+      rw [hp]
+      rintro (hlt | ⟨heq, _⟩)
+      · exact not_lt.mpr le_top hlt
+      · exact absurd heq.symm (WithTop.coe_ne_top)
     refine ⟨f, ?_, ?_⟩
     · exact lt_of_lt_of_le one_pos (le_maxV hn (fun i => (f i).2) ⟨0, h0n⟩)
     · unfold welfare
@@ -267,9 +302,14 @@ theorem welfare_can_be_zero [Inhabited B] [Field F] [IsStrictOrderedRing F]
   · -- A.price [] = ↑p with 0 < p: bidder 0 has value p/2 (rejected), rest 0
     have hp0 : (0 : F) < p := by rw [hp] at hpos; exact WithTop.coe_lt_coe.mp hpos
     let f : Fin n → B × F := fun i => (default, if i.val = 0 then p / 2 else 0)
-    have hrej : ¬ A.price [] ≤ ((f ⟨0, h0n⟩).2 : WithTop F) := by
-      rw [hp]; show ¬ (↑p : WithTop F) ≤ ↑(p / 2)
-      rw [WithTop.coe_le_coe]; exact not_le.mpr (div_lt_self hp0 one_lt_two)
+    have hval_lt : p / 2 < p := div_lt_self hp0 one_lt_two
+    have hf0v : (f ⟨0, h0n⟩).2 = p / 2 := by simp [f]
+    have hrej : ¬ ((A.price [] : WithTop F) < ↑(f ⟨0, h0n⟩).2 ∨
+        (A.price [] = ↑(f ⟨0, h0n⟩).2 ∧ A.bar [] ≤ (↑(f ⟨0, h0n⟩).1 : WithTop B))) := by
+      rw [hp, hf0v]
+      rintro (hlt | ⟨heq, _⟩)
+      · exact absurd (WithTop.coe_lt_coe.mp hlt) (not_lt.mpr hval_lt.le)
+      · exact absurd (WithTop.coe_injective heq) (ne_of_gt hval_lt)
     refine ⟨f, ?_, ?_⟩
     · exact lt_of_lt_of_le (div_pos hp0 two_pos) (le_maxV hn (fun i => (f i).2) ⟨0, h0n⟩)
     · unfold welfare
@@ -296,34 +336,48 @@ end SingleItemAuction
 namespace Secretary
 
 section AuctionDef
-variable {B F : Type*} [LinearOrder F] [Zero F]
+variable {B F : Type*} [LinearOrder F] [LinearOrder B] [Zero F] [OrderBot B]
+
+/-- The lex-max of `(value, identity)` pairs in the rejection history,
+starting from `(0, ⊥)`. -/
+def maxPairFold (h : List (B × F)) : F × B :=
+  h.foldl (fun (acc : F × B) (p : B × F) =>
+    if acc.1 < p.2 ∨ (acc.1 = p.2 ∧ acc.2 ≤ p.1) then (p.2, p.1) else acc) (0, ⊥)
 
 /-- The secretary (sample-then-threshold) pricing rule. The first
 `⌊n/2⌋` arrivals face price `⊤` (rejected unconditionally); thereafter
-the price is the maximum *value* seen so far. No bound `M` is needed:
-`⊤` replaces the old `M + 1` observe-phase barrier. -/
+the price and bar are the lex-max `(value, identity)` seen so far. -/
 def auction (n : ℕ) : SingleItemAuction B F where
   price h :=
     if h.length < n / 2 then ⊤
-    else ↑(h.foldl (fun acc (p : B × F) => max acc p.2) 0)
+    else ↑(maxPairFold h).1
+  bar h :=
+    if h.length < n / 2 then ⊤
+    else ↑(maxPairFold h).2
 
 end AuctionDef
 
 /-! ### Competitive ratio (Problem 2.1(c)) -/
 
-variable {B F : Type*} [LinearOrder F] [Field F] [IsStrictOrderedRing F]
+variable {B F : Type*} [LinearOrder F] [LinearOrder B] [Field F] [IsStrictOrderedRing F]
+  [OrderBot B]
 
 open SingleItemAuction
 
-/-- The favourable event: under permutation `σ`, the argmax bidder
-arrives in the second half (position ≥ `n/2`) while the second-largest
-bidder arrives in the first half (position `< n/2`). -/
-structure Favorable {n : ℕ} (v : Fin n → F) (σ : Equiv.Perm (Fin n)) where
+/-- The favourable event: under permutation `σ`, the lex-argmax bidder
+(in the `(v, g)` lex order) arrives in the second half (position ≥ `n/2`)
+while the lex-second bidder arrives in the first half (position `< n/2`). -/
+structure Favorable {n : ℕ} (g : Fin n → B) (v : Fin n → F)
+    (σ : Equiv.Perm (Fin n)) where
   max_pos : Fin n
   second_pos : Fin n
   v_is_max : ∀ j, v j ≤ v (σ max_pos)
-  v_is_second : ∀ j, j ≠ σ max_pos → v j ≤ v (σ second_pos)
-  v_second_lt_max : v (σ second_pos) < v (σ max_pos)
+  g_is_max_among_ties : ∀ j, v j = v (σ max_pos) → g j ≤ g (σ max_pos)
+  lex_is_second : ∀ j, j ≠ σ max_pos →
+    v j < v (σ second_pos) ∨ (v j = v (σ second_pos) ∧ g j ≤ g (σ second_pos))
+  lex_second_lt_max :
+    v (σ second_pos) < v (σ max_pos) ∨
+    (v (σ second_pos) = v (σ max_pos) ∧ g (σ second_pos) < g (σ max_pos))
   max_in_second_half : n / 2 ≤ max_pos.val
   second_in_first_half : second_pos.val < n / 2
 
@@ -333,31 +387,55 @@ lemma welfare_nonneg {n : ℕ} (g : Fin n → B) (v : Fin n → F)
     0 ≤ (auction n).welfare (fun i => (g i, v i)) :=
   (auction n).welfareAux_nonneg _ (fun i => hv_nn i) [] 0
 
+lemma maxPairFold_append_singleton
+    (h : List (B × F)) (entry : B × F) :
+    maxPairFold (h ++ [entry]) =
+      let acc := maxPairFold h
+      if acc.1 < entry.2 ∨ (acc.1 = entry.2 ∧ acc.2 ≤ entry.1)
+      then (entry.2, entry.1) else acc := by
+  simp only [maxPairFold, List.foldl_append, List.foldl_cons, List.foldl_nil]
+
 private theorem welfareAux_favorable
     {n : ℕ} (hn : 2 ≤ n) (g : Fin n → B) (v : Fin n → F)
-    (hv_inj : Function.Injective v) (hv_nn : ∀ i, 0 ≤ v i)
-    {σ : Equiv.Perm (Fin n)} (hσ : Favorable v σ)
+    (hg_inj : Function.Injective g) (hv_nn : ∀ i, 0 ≤ v i)
+    {σ : Equiv.Perm (Fin n)} (hσ : Favorable g v σ)
     (k : ℕ) (hk : k ≤ hσ.max_pos.val)
     (h : List (B × F)) (hlen : h.length = k)
-    (hfold_ub : h.foldl (fun acc (p : B × F) => max acc p.2) 0 ≤ v (σ hσ.second_pos))
+    (hfold_ub :
+      (maxPairFold h).1 < v (σ hσ.second_pos) ∨
+      ((maxPairFold h).1 = v (σ hσ.second_pos) ∧
+       (maxPairFold h).2 ≤ g (σ hσ.second_pos)))
     (hfold_lb : hσ.second_pos.val < k →
-      v (σ hσ.second_pos) ≤ h.foldl (fun acc (p : B × F) => max acc p.2) 0) :
-    welfareAux (auction n).price (fun i => (g (σ i), v (σ i))) h k =
+      v (σ hσ.second_pos) < (maxPairFold h).1 ∨
+      (v (σ hσ.second_pos) = (maxPairFold h).1 ∧
+       g (σ hσ.second_pos) ≤ (maxPairFold h).2)) :
+    welfareAux (auction n).price (auction n).bar
+      (fun i => (g (σ i), v (σ i))) h k =
       v (σ hσ.max_pos) := by
   set f : Fin n → B × F := fun i => (g (σ i), v (σ i))
   have hk_lt_n : k < n := lt_of_le_of_lt hk hσ.max_pos.isLt
-  have h_price_unfold : (auction n).price h =
-      if h.length < n / 2 then (⊤ : WithTop F)
-      else ↑(h.foldl (fun acc (p : B × F) => max acc p.2) 0) := rfl
+  have hp : (auction n).price h =
+      if h.length < n / 2 then ⊤ else ↑(maxPairFold h).1 := rfl
+  have hb : (auction n).bar h =
+      if h.length < n / 2 then ⊤ else ↑(maxPairFold h).2 := rfl
   by_cases hk_eq : k = hσ.max_pos.val
   · -- *** ACCEPTANCE at k = max_pos ***
     have hfin_eq : (⟨k, hk_lt_n⟩ : Fin n) = hσ.max_pos := Fin.ext hk_eq
     have h_phase2 : ¬ h.length < n / 2 := by
       rw [hlen]; exact not_lt.mpr (hk_eq ▸ hσ.max_in_second_half)
-    have h_accept : (auction n).price h ≤ ((f ⟨k, hk_lt_n⟩).2 : WithTop F) := by
-      rw [h_price_unfold, if_neg h_phase2, show (f ⟨k, hk_lt_n⟩).2 = v (σ ⟨k, hk_lt_n⟩) from rfl,
-          hfin_eq, WithTop.coe_le_coe]
-      exact le_trans hfold_ub (le_of_lt hσ.v_second_lt_max)
+    have h_accept : ((auction n).price h : WithTop F) < ↑(f ⟨k, hk_lt_n⟩).2 ∨
+        ((auction n).price h = ↑(f ⟨k, hk_lt_n⟩).2 ∧
+         (auction n).bar h ≤ (↑(f ⟨k, hk_lt_n⟩).1 : WithTop B)) := by
+      simp only [hp, hb, if_neg h_phase2, WithTop.coe_lt_coe, WithTop.coe_inj, WithTop.coe_le_coe]
+      simp only [f, hfin_eq]
+      rcases hσ.lex_second_lt_max with hvlt | ⟨hveq, hglt⟩
+      · left
+        rcases hfold_ub with hflt | ⟨hfeq, _⟩
+        · exact lt_trans hflt hvlt
+        · rw [hfeq]; exact hvlt
+      · rcases hfold_ub with hflt | ⟨hfeq, hfle⟩
+        · left; rw [← hveq]; exact hflt
+        · right; exact ⟨by rw [hfeq, hveq], le_trans hfle hglt.le⟩
     rw [(auction n).welfareAux_accept f h k hk_lt_n h_accept]
     exact congr_arg (v ∘ σ) hfin_eq
   · -- *** REJECTION at k < max_pos ***
@@ -365,36 +443,107 @@ private theorem welfareAux_favorable
     have hfin_ne : (⟨k, hk_lt_n⟩ : Fin n) ≠ hσ.max_pos :=
       fun heq => hk_eq (congrArg Fin.val heq)
     have hσk_ne : σ ⟨k, hk_lt_n⟩ ≠ σ hσ.max_pos := σ.injective.ne hfin_ne
-    have hv_k_le : v (σ ⟨k, hk_lt_n⟩) ≤ v (σ hσ.second_pos) := hσ.v_is_second _ hσk_ne
-    have h_reject : ¬ (auction n).price h ≤ ((f ⟨k, hk_lt_n⟩).2 : WithTop F) := by
-      rw [h_price_unfold, show (f ⟨k, hk_lt_n⟩).2 = v (σ ⟨k, hk_lt_n⟩) from rfl]
+    have hlex_k_le_sec := hσ.lex_is_second _ hσk_ne
+    have h_reject : ¬ (((auction n).price h : WithTop F) < ↑(f ⟨k, hk_lt_n⟩).2 ∨
+        ((auction n).price h = ↑(f ⟨k, hk_lt_n⟩).2 ∧
+         (auction n).bar h ≤ (↑(f ⟨k, hk_lt_n⟩).1 : WithTop B))) := by
+      rw [hp, hb]
       by_cases h_obs : h.length < n / 2
-      · rw [if_pos h_obs]; exact WithTop.not_top_le_coe _
-      · rw [if_neg h_obs, WithTop.coe_le_coe, not_le]
-        have hsv := hσ.second_in_first_half
-        have h_sec_lt : hσ.second_pos.val < k := by omega
+      · rw [if_pos h_obs, if_pos h_obs]
+        rintro (hlt | ⟨heq, _⟩)
+        · exact not_lt.mpr le_top hlt
+        · exact absurd heq.symm (WithTop.coe_ne_top)
+      · rw [if_neg h_obs, if_neg h_obs]
+        have h_sec_lt_k : hσ.second_pos.val < k := by
+          have := hσ.second_in_first_half; omega
+        have h_fold_ge_sec := hfold_lb h_sec_lt_k
         have hk_ne_sec : k ≠ hσ.second_pos.val := by omega
         have hfin_ne_sec : (⟨k, hk_lt_n⟩ : Fin n) ≠ hσ.second_pos :=
           fun heq => hk_ne_sec (congrArg Fin.val heq)
-        calc h.foldl (fun acc (p : B × F) => max acc p.2) 0
-            ≥ v (σ hσ.second_pos) := hfold_lb h_sec_lt
-          _ > v (σ ⟨k, hk_lt_n⟩) :=
-            lt_of_le_of_ne hv_k_le (hv_inj.ne (σ.injective.ne hfin_ne_sec))
+        have hσk_ne_sec : σ ⟨k, hk_lt_n⟩ ≠ σ hσ.second_pos := σ.injective.ne hfin_ne_sec
+        have hg_ne_sec : g (σ ⟨k, hk_lt_n⟩) ≠ g (σ hσ.second_pos) := hg_inj.ne hσk_ne_sec
+        have hlex_k_strict : v (σ ⟨k, hk_lt_n⟩) < v (σ hσ.second_pos) ∨
+            (v (σ ⟨k, hk_lt_n⟩) = v (σ hσ.second_pos) ∧
+             g (σ ⟨k, hk_lt_n⟩) < g (σ hσ.second_pos)) := by
+          rcases hlex_k_le_sec with hvlt | ⟨hveq, hgle⟩
+          · exact Or.inl hvlt
+          · exact Or.inr ⟨hveq, lt_of_le_of_ne hgle hg_ne_sec⟩
+        show ¬ ((↑(maxPairFold h).1 : WithTop F) < ↑(f ⟨k, hk_lt_n⟩).2 ∨
+          ((↑(maxPairFold h).1 : WithTop F) = ↑(f ⟨k, hk_lt_n⟩).2 ∧
+           (↑(maxPairFold h).2 : WithTop B) ≤ ↑(f ⟨k, hk_lt_n⟩).1))
+        simp only [f, WithTop.coe_lt_coe, WithTop.coe_inj, WithTop.coe_le_coe]
+        rintro (hlt | ⟨heq, hle⟩)
+        · rcases h_fold_ge_sec with hfvgt | ⟨hfveq, _⟩ <;>
+            rcases hlex_k_strict with hvlt | ⟨hveq, _⟩ <;> linarith
+        · rcases hlex_k_strict with hvlt | ⟨hveq, hglt⟩
+          · rcases h_fold_ge_sec with hfvgt | ⟨hfveq, _⟩ <;> linarith
+          · rcases h_fold_ge_sec with hfvgt | ⟨hfveq, hfgle⟩
+            · linarith
+            · exact absurd (lt_of_lt_of_le hglt (le_trans hfgle hle)) (lt_irrefl _)
     rw [(auction n).welfareAux_reject f h k hk_lt_n h_reject]
-    have h_new_fold : (h ++ [f ⟨k, hk_lt_n⟩]).foldl
-        (fun acc (p : B × F) => max acc p.2) 0 =
-        max (h.foldl (fun acc (p : B × F) => max acc p.2) 0)
-            (v (σ ⟨k, hk_lt_n⟩)) := by
-      simp only [List.foldl_append, List.foldl_cons, List.foldl_nil]
-      rfl
-    exact welfareAux_favorable hn g v hv_inj hv_nn hσ (k + 1) (by omega)
+    exact welfareAux_favorable hn g v hg_inj hv_nn hσ (k + 1) (by omega)
       (h ++ [f ⟨k, hk_lt_n⟩]) (by simp [hlen])
-      (by rw [h_new_fold]; exact max_le hfold_ub hv_k_le)
-      (by intro h_sec; rw [h_new_fold]
+      (by -- Upper bound on new fold
+          have hmpa := maxPairFold_append_singleton h (f ⟨k, hk_lt_n⟩)
+          by_cases hcond : (maxPairFold h).1 < (f ⟨k, hk_lt_n⟩).2 ∨
+              ((maxPairFold h).1 = (f ⟨k, hk_lt_n⟩).2 ∧
+               (maxPairFold h).2 ≤ (f ⟨k, hk_lt_n⟩).1)
+          · rw [hmpa, if_pos hcond]
+            show (f ⟨k, hk_lt_n⟩).2 < v (σ hσ.second_pos) ∨
+              ((f ⟨k, hk_lt_n⟩).2 = v (σ hσ.second_pos) ∧
+               (f ⟨k, hk_lt_n⟩).1 ≤ g (σ hσ.second_pos))
+            exact hlex_k_le_sec
+          · rw [hmpa, if_neg hcond]; exact hfold_ub)
+      (by -- Lower bound on new fold
+          intro h_sec
+          have hmpa := maxPairFold_append_singleton h (f ⟨k, hk_lt_n⟩)
           rcases Nat.lt_succ_iff_lt_or_eq.mp h_sec with h_lt | h_eq
-          · exact le_max_of_le_left (hfold_lb h_lt)
-          · have : (⟨k, hk_lt_n⟩ : Fin n) = hσ.second_pos := Fin.ext h_eq.symm
-            rw [this]; exact le_max_right _ _)
+          · have h_old_lb := hfold_lb h_lt
+            have hk_ne_sec : k ≠ hσ.second_pos.val := by omega
+            have hfin_ne_sec : (⟨k, hk_lt_n⟩ : Fin n) ≠ hσ.second_pos :=
+              fun heq => hk_ne_sec (congrArg Fin.val heq)
+            have hσk_ne_sec : σ ⟨k, hk_lt_n⟩ ≠ σ hσ.second_pos := σ.injective.ne hfin_ne_sec
+            have hg_ne : g (σ ⟨k, hk_lt_n⟩) ≠ g (σ hσ.second_pos) := hg_inj.ne hσk_ne_sec
+            have hentry_strict : v (σ ⟨k, hk_lt_n⟩) < v (σ hσ.second_pos) ∨
+                (v (σ ⟨k, hk_lt_n⟩) = v (σ hσ.second_pos) ∧
+                 g (σ ⟨k, hk_lt_n⟩) < g (σ hσ.second_pos)) := by
+              rcases hlex_k_le_sec with hvlt | ⟨hveq, hgle⟩
+              · exact Or.inl hvlt
+              · exact Or.inr ⟨hveq, lt_of_le_of_ne hgle hg_ne⟩
+            have h_if_false : ¬ ((maxPairFold h).1 < (f ⟨k, hk_lt_n⟩).2 ∨
+                ((maxPairFold h).1 = (f ⟨k, hk_lt_n⟩).2 ∧
+                 (maxPairFold h).2 ≤ (f ⟨k, hk_lt_n⟩).1)) := by
+              show ¬ ((maxPairFold h).1 < v (σ ⟨k, hk_lt_n⟩) ∨
+                ((maxPairFold h).1 = v (σ ⟨k, hk_lt_n⟩) ∧
+                 (maxPairFold h).2 ≤ g (σ ⟨k, hk_lt_n⟩)))
+              rintro (hflt | ⟨hfeq, hfle⟩)
+              · rcases h_old_lb with hsvlt | ⟨hsveq, _⟩ <;>
+                  rcases hentry_strict with hvlt | ⟨hveq, _⟩ <;> linarith
+              · rcases hentry_strict with hvlt | ⟨hveq, hglt⟩
+                · rcases h_old_lb with hsvlt | ⟨hsveq, _⟩ <;> linarith
+                · rcases h_old_lb with hsvlt | ⟨hsveq, hsgle⟩
+                  · linarith
+                  · exact absurd (lt_of_lt_of_le hglt (le_trans hsgle hfle)) (lt_irrefl _)
+            rw [hmpa, if_neg h_if_false]
+            exact h_old_lb
+          · have hfin_sec : (⟨k, hk_lt_n⟩ : Fin n) = hσ.second_pos := Fin.ext h_eq.symm
+            by_cases hcond : (maxPairFold h).1 < (f ⟨k, hk_lt_n⟩).2 ∨
+                ((maxPairFold h).1 = (f ⟨k, hk_lt_n⟩).2 ∧
+                 (maxPairFold h).2 ≤ (f ⟨k, hk_lt_n⟩).1)
+            · rw [hmpa, if_pos hcond]
+              simp only [f, hfin_sec]
+              exact Or.inr ⟨trivial, le_refl _⟩
+            · rw [hmpa, if_neg hcond]
+              simp only [f, hfin_sec] at hcond
+              have hvle : v (σ hσ.second_pos) ≤ (maxPairFold h).1 :=
+                not_lt.mp (fun hlt => hcond (Or.inl hlt))
+              rcases eq_or_lt_of_le hvle with heqv | hltv
+              · right; constructor
+                · exact heqv
+                · have : ¬ ((maxPairFold h).2 ≤ g (σ hσ.second_pos)) :=
+                    fun hle => hcond (Or.inr ⟨heqv.symm, hle⟩)
+                  exact (not_le.mp this).le
+              · exact Or.inl hltv)
 termination_by hσ.max_pos.val - k
 decreasing_by omega
 
@@ -402,21 +551,30 @@ decreasing_by omega
 the argmax bidder, yielding welfare = `maxV v`. -/
 lemma welfare_eq_max_of_favorable
     {n : ℕ} (hn : 2 ≤ n) (g : Fin n → B) (v : Fin n → F)
-    (hv_inj : Function.Injective v)
+    (hg_inj : Function.Injective g)
     (hv_nn : ∀ i, 0 ≤ v i)
-    {σ : Equiv.Perm (Fin n)} (hσ : Favorable v σ) :
+    {σ : Equiv.Perm (Fin n)} (hσ : Favorable g v σ) :
     (auction n).welfare (fun i => (g (σ i), v (σ i))) =
       maxV (by omega) v := by
   unfold SingleItemAuction.welfare
-  rw [welfareAux_favorable hn g v hv_inj hv_nn hσ 0 (by omega) [] rfl
-    (by simp [List.foldl]; exact hv_nn _) (by omega)]
+  have hmpe : maxPairFold ([] : List (B × F)) = ((0 : F), (⊥ : B)) := by
+    simp [maxPairFold]
+  have h_init_ub : (maxPairFold ([] : List (B × F))).1 < v (σ hσ.second_pos) ∨
+      ((maxPairFold ([] : List (B × F))).1 = v (σ hσ.second_pos) ∧
+       (maxPairFold ([] : List (B × F))).2 ≤ g (σ hσ.second_pos)) := by
+    rw [hmpe]; dsimp only
+    rcases lt_or_eq_of_le (hv_nn (σ hσ.second_pos)) with hlt | heq
+    · exact Or.inl hlt
+    · exact Or.inr ⟨heq, bot_le⟩
+  rw [welfareAux_favorable hn g v hg_inj hv_nn hσ 0 (by omega) [] rfl
+    h_init_ub (by omega)]
   exact le_antisymm (le_maxV _ v _) (Finset.sup'_le _ _ (fun j _ => hσ.v_is_max j))
 
 /-- The set of permutations satisfying the favourable event. -/
 noncomputable def favorableSet
-    {n : ℕ} (v : Fin n → F) : Finset (Equiv.Perm (Fin n)) :=
-  letI : DecidablePred (fun σ => Nonempty (Favorable v σ)) := Classical.decPred _
-  Finset.univ.filter (fun σ => Nonempty (Favorable v σ))
+    {n : ℕ} (g : Fin n → B) (v : Fin n → F) : Finset (Equiv.Perm (Fin n)) :=
+  letI : DecidablePred (fun σ => Nonempty (Favorable g v σ)) := Classical.decPred _
+  Finset.univ.filter (fun σ => Nonempty (Favorable g v σ))
 
 /-- The elementary natural-number inequality at the heart of
 `favorableSet_card_ge`: for every `n ≥ 2`,
@@ -594,118 +752,130 @@ private lemma count_Q {n : ℕ} {a c : Fin n} (hac : a ≠ c) :
 
 /-- The favourable set has at least `(n - n/2) · (n/2) · (n-2)!`
 permutations. -/
-private theorem favorableSet_card_lower {n : ℕ} (hn : 2 ≤ n) (v : Fin n → F)
-    (hv_inj : Function.Injective v) :
-    (n - n / 2) * (n / 2) * (n - 2).factorial ≤ (favorableSet v).card := by
+private theorem favorableSet_card_lower {n : ℕ} (hn : 2 ≤ n)
+    (g : Fin n → B) (v : Fin n → F)
+    (hg_inj : Function.Injective g) :
+    (n - n / 2) * (n / 2) * (n - 2).factorial ≤ (favorableSet g v).card := by
   classical
-  have hne : (Finset.univ : Finset (Fin n)).Nonempty :=
-    ⟨⟨0, by omega⟩, Finset.mem_univ _⟩
-  obtain ⟨a, -, ha⟩ := Finset.exists_max_image Finset.univ v hne
-  have ha' : ∀ j, v j ≤ v a := fun j => ha j (Finset.mem_univ _)
-  have herase : (Finset.univ.erase a).Nonempty := by
-    rw [← Finset.card_pos, Finset.card_erase_of_mem (Finset.mem_univ a),
-      Finset.card_univ, Fintype.card_fin]
-    omega
-  obtain ⟨c, hc_mem, hc⟩ := Finset.exists_max_image (Finset.univ.erase a) v herase
-  have hca : c ≠ a := (Finset.mem_erase.1 hc_mem).1
-  have hc' : ∀ j, j ≠ a → v j ≤ v c := fun j hj =>
-    hc j (Finset.mem_erase.2 ⟨hj, Finset.mem_univ _⟩)
-  have hac : a ≠ c := fun h => hca h.symm
-  have hcltA : v c < v a := by
-    refine lt_of_le_of_ne (ha' c) ?_
-    intro h
-    exact hca (hv_inj h)
-  have hchar : ∀ σ : Equiv.Perm (Fin n),
-      Nonempty (Favorable v σ) ↔ (n / 2 ≤ (σ⁻¹ a).val ∧ (σ⁻¹ c).val < n / 2) := by
-    intro σ
-    constructor
-    · rintro ⟨fav⟩
-      have hmax : σ fav.max_pos = a := by
-        apply hv_inj
-        exact le_antisymm (ha' _) (fav.v_is_max a)
-      have hsec : σ fav.second_pos = c := by
-        apply hv_inj
-        refine le_antisymm (hc' _ ?_) (fav.v_is_second c ?_)
-        · rw [hmax.symm]
-          intro h
-          have := fav.v_second_lt_max
-          rw [σ.injective h] at this
-          exact lt_irrefl _ this
-        · rw [hmax]
-          exact hca
-      have hmp : σ⁻¹ a = fav.max_pos := by
-        rw [← hmax]; exact σ.symm_apply_apply _
-      have hsp : σ⁻¹ c = fav.second_pos := by
-        rw [← hsec]; exact σ.symm_apply_apply _
-      rw [hmp, hsp]
-      exact ⟨fav.max_in_second_half, fav.second_in_first_half⟩
-    · rintro ⟨h1, h2⟩
-      refine ⟨{
-        max_pos := σ⁻¹ a
-        second_pos := σ⁻¹ c
-        v_is_max := ?_
-        v_is_second := ?_
-        v_second_lt_max := ?_
-        max_in_second_half := h1
-        second_in_first_half := h2 }⟩
-      · intro j
-        rw [show σ (σ⁻¹ a) = a from σ.apply_symm_apply a]
-        exact ha' j
-      · intro j hj
-        rw [show σ (σ⁻¹ a) = a from σ.apply_symm_apply a] at hj
-        rw [show σ (σ⁻¹ c) = c from σ.apply_symm_apply c]
-        exact hc' j hj
-      · rw [show σ (σ⁻¹ a) = a from σ.apply_symm_apply a,
-          show σ (σ⁻¹ c) = c from σ.apply_symm_apply c]
-        exact hcltA
-  have hset_eq : favorableSet v
-      = Finset.univ.filter (fun σ : Equiv.Perm (Fin n) =>
-          n / 2 ≤ (σ⁻¹ a).val ∧ (σ⁻¹ c).val < n / 2) := by
+  have hne : (Finset.univ : Finset (Fin n)).Nonempty := ⟨⟨0, by omega⟩, Finset.mem_univ _⟩
+  -- Find lex-argmax a
+  obtain ⟨a, _, ha_max⟩ := Finset.exists_max_image Finset.univ
+    (fun i => toLex (v i, g i)) hne
+  -- Find lex-second c (max among j ≠ a)
+  have hne2 : (Finset.univ.erase a : Finset (Fin n)).Nonempty := by
+    have hcard : 0 < (Finset.univ.erase a : Finset (Fin n)).card := by
+      rw [Finset.card_erase_of_mem (Finset.mem_univ a), Finset.card_univ, Fintype.card_fin]
+      omega
+    exact Finset.card_pos.mp hcard
+  obtain ⟨c, hc_mem, hc_max⟩ := Finset.exists_max_image (Finset.univ.erase a)
+    (fun i => toLex (v i, g i)) hne2
+  have hca : c ≠ a := (Finset.mem_erase.mp hc_mem).1
+  have hac : a ≠ c := hca.symm
+  -- Extract properties of a: lex-max means v j ≤ v a (and g j ≤ g a at ties)
+  have ha_lex : ∀ j, v j < v a ∨ (v j = v a ∧ g j ≤ g a) := by
+    intro j
+    have h := ha_max j (Finset.mem_univ _)
+    rw [Prod.Lex.le_iff] at h
+    simp only [ofLex_toLex] at h
+    exact h
+  have ha_v_max : ∀ j, v j ≤ v a := by
+    intro j; rcases ha_lex j with hlt | ⟨heq, _⟩
+    · exact le_of_lt hlt
+    · exact le_of_eq heq
+  have ha_g_max : ∀ j, v j = v a → g j ≤ g a := by
+    intro j hvj; rcases ha_lex j with hlt | ⟨_, hle⟩
+    · exact absurd hlt (not_lt.mpr hvj.ge)
+    · exact hle
+  -- Extract properties of c: lex-second among j ≠ a
+  have hc_lex_second : ∀ j, j ≠ a →
+      v j < v c ∨ (v j = v c ∧ g j ≤ g c) := by
+    intro j hj
+    have h := hc_max j (Finset.mem_erase.mpr ⟨hj, Finset.mem_univ _⟩)
+    rw [Prod.Lex.le_iff] at h
+    simp only [ofLex_toLex] at h
+    exact h
+  -- c is strictly below a in lex order
+  have hca_lt : v c < v a ∨ (v c = v a ∧ g c < g a) := by
+    have h := ha_max c (Finset.mem_univ _)
+    rw [Prod.Lex.le_iff] at h
+    simp only [ofLex_toLex] at h
+    rcases h with hlt | ⟨heq, hle⟩
+    · exact Or.inl hlt
+    · right; refine ⟨heq, lt_of_le_of_ne hle ?_⟩
+      intro hge; exact hca (hg_inj hge)
+  -- Define the candidate set via σ.symm
+  set S := Finset.univ.filter (fun σ : Equiv.Perm (Fin n) =>
+    n / 2 ≤ (σ.symm a).val ∧ (σ.symm c).val < n / 2) with hS_def
+  -- S ⊆ favorableSet
+  have hS_sub : S ⊆ favorableSet g v := by
+    intro σ hσ
+    simp only [hS_def, Finset.mem_filter, Finset.mem_univ, true_and] at hσ
     unfold favorableSet
-    ext σ
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
-    exact hchar σ
-  rw [hset_eq]
-  have hreindex : (Finset.univ.filter (fun σ : Equiv.Perm (Fin n) =>
-        n / 2 ≤ (σ⁻¹ a).val ∧ (σ⁻¹ c).val < n / 2)).card
-      = (Finset.univ.filter (fun π : Equiv.Perm (Fin n) =>
-        n / 2 ≤ (π a).val ∧ (π c).val < n / 2)).card := by
-    apply Finset.card_nbij' (fun σ => σ⁻¹) (fun π => π⁻¹)
-    · intro σ hσ
-      simp only [Finset.coe_filter, Set.mem_setOf_eq, Finset.mem_univ, true_and] at hσ ⊢
-      exact hσ
-    · intro π hπ
-      simp only [Finset.coe_filter, Set.mem_setOf_eq, Finset.mem_univ, true_and,
-        inv_inv] at hπ ⊢
-      exact hπ
-    · intro σ _; simp
-    · intro π _; simp
-  rw [hreindex, count_Q hac]
+    rw [Finset.mem_filter]
+    exact ⟨Finset.mem_univ _, ⟨{
+      max_pos := σ.symm a
+      second_pos := σ.symm c
+      v_is_max := fun j => by
+        have : σ (σ.symm a) = a := σ.apply_symm_apply a
+        rw [this]; exact ha_v_max j
+      g_is_max_among_ties := fun j hvj => by
+        have : σ (σ.symm a) = a := σ.apply_symm_apply a
+        rw [this] at hvj ⊢; exact ha_g_max j hvj
+      lex_is_second := fun j hj => by
+        have hsa : σ (σ.symm a) = a := σ.apply_symm_apply a
+        have hsc : σ (σ.symm c) = c := σ.apply_symm_apply c
+        rw [hsa] at hj; rw [hsc]; exact hc_lex_second j hj
+      lex_second_lt_max := by
+        have hsa : σ (σ.symm a) = a := σ.apply_symm_apply a
+        have hsc : σ (σ.symm c) = c := σ.apply_symm_apply c
+        rw [hsa, hsc]; exact hca_lt
+      max_in_second_half := hσ.1
+      second_in_first_half := hσ.2
+    }⟩⟩
+  -- S.card = count_Q via the bijection σ ↦ σ.symm
+  have hS_card : S.card = (n - n / 2) * (n / 2) * (n - 2).factorial := by
+    set T := Finset.univ.filter (fun π : Equiv.Perm (Fin n) =>
+      n / 2 ≤ (π a).val ∧ (π c).val < n / 2) with hT_def
+    have hST : S.card = T.card := by
+      apply Finset.card_nbij' (fun σ => σ.symm) (fun π => π.symm)
+      · intro σ hσ
+        have hσ' := (Finset.mem_filter.mp hσ).2
+        exact Finset.mem_coe.mpr (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hσ'⟩)
+      · intro π hπ
+        have hπ' := (Finset.mem_filter.mp (Finset.mem_coe.mp hπ)).2
+        refine Finset.mem_coe.mpr (Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩)
+        simp only [Equiv.symm_symm]; exact hπ'
+      · intro σ _; exact σ.symm_symm
+      · intro π _; exact π.symm_symm
+    rw [hST]
+    exact count_Q hac
+  calc (n - n / 2) * (n / 2) * (n - 2).factorial
+      = S.card := hS_card.symm
+    _ ≤ (favorableSet g v).card := Finset.card_le_card hS_sub
 
 /-- The favourable set has at least `n!/4` elements. -/
 lemma favorableSet_card_ge {n : ℕ} (hn : 2 ≤ n)
-    (v : Fin n → F) (hv_inj : Function.Injective v) :
-    (n.factorial : F) ≤ 4 * ((favorableSet v).card : F) := by
-  have hlow : (n - n / 2) * (n / 2) * (n - 2).factorial ≤ (favorableSet v).card :=
-    favorableSet_card_lower hn v hv_inj
-  have hnat : n.factorial ≤ 4 * (favorableSet v).card :=
+    (g : Fin n → B) (v : Fin n → F) (hg_inj : Function.Injective g) :
+    (n.factorial : F) ≤ 4 * ((favorableSet g v).card : F) := by
+  have hlow : (n - n / 2) * (n / 2) * (n - 2).factorial ≤ (favorableSet g v).card :=
+    favorableSet_card_lower hn g v hg_inj
+  have hnat : n.factorial ≤ 4 * (favorableSet g v).card :=
     calc n.factorial ≤ 4 * (n - n / 2) * (n / 2) * (n - 2).factorial :=
             factorial_le_four_split n hn
       _ = 4 * ((n - n / 2) * (n / 2) * (n - 2).factorial) := by ring
-      _ ≤ 4 * (favorableSet v).card := Nat.mul_le_mul_left _ hlow
+      _ ≤ 4 * (favorableSet g v).card := Nat.mul_le_mul_left _ hlow
   exact_mod_cast hnat
 
 /-- **Problem 2.1 (c).** Under uniformly random arrival, the secretary
-rule achieves expected welfare `≥ (1/4) · max v` for distinct valuations.
+rule achieves expected welfare `≥ (1/4) · max v` for injective identities.
 -/
-theorem competitive [LinearOrder B]
-    {n : ℕ} (hn : 2 ≤ n) (id : Fin n → B) (v : Fin n → F)
-    (hid : Function.Injective id)
-    (hv_inj : Function.Injective v)
+theorem competitive
+    {n : ℕ} (hn : 2 ≤ n) (g : Fin n → B) (v : Fin n → F)
+    (hg_inj : Function.Injective g)
     (hv_nn : ∀ i, 0 ≤ v i) :
     (1 / 4 : F) * maxV (by omega) v ≤
       (∑ σ : Equiv.Perm (Fin n),
-        (auction n).welfare (fun i => (id (σ i), v (σ i)))) /
+        (auction n).welfare (fun i => (g (σ i), v (σ i)))) /
           (n.factorial : F) := by
   classical
   set MAX := maxV (show 1 ≤ n by omega) v with hMAX_def
@@ -713,39 +883,39 @@ theorem competitive [LinearOrder B]
     le_trans (hv_nn ⟨0, by omega⟩) (le_maxV _ v _)
   have hwelfare_nn :
       ∀ σ : Equiv.Perm (Fin n),
-        0 ≤ (auction n).welfare (fun i => (id (σ i), v (σ i))) :=
-    fun σ => welfare_nonneg (id ∘ σ) (v ∘ σ) (fun i => hv_nn _)
+        0 ≤ (auction n).welfare (fun i => (g (σ i), v (σ i))) :=
+    fun σ => welfare_nonneg (g ∘ σ) (v ∘ σ) (fun i => hv_nn _)
   have hwelfare_FS :
-      ∀ σ ∈ favorableSet v,
-        (auction n).welfare (fun i => (id (σ i), v (σ i))) = MAX := by
+      ∀ σ ∈ favorableSet g v,
+        (auction n).welfare (fun i => (g (σ i), v (σ i))) = MAX := by
     intro σ hσ
-    obtain ⟨fav⟩ : Nonempty (Favorable v σ) := (Finset.mem_filter.mp hσ).2
-    exact welfare_eq_max_of_favorable hn id v hv_inj hv_nn fav
+    obtain ⟨fav⟩ : Nonempty (Favorable g v σ) := (Finset.mem_filter.mp hσ).2
+    exact welfare_eq_max_of_favorable hn g v hg_inj hv_nn fav
   have step1 :
-      ((favorableSet v).card : F) * MAX ≤
+      ((favorableSet g v).card : F) * MAX ≤
         ∑ σ : Equiv.Perm (Fin n),
-          (auction n).welfare (fun i => (id (σ i), v (σ i))) := by
-    calc ((favorableSet v).card : F) * MAX
-        = ∑ _σ ∈ favorableSet v, MAX := by rw [Finset.sum_const, nsmul_eq_mul]
-      _ = ∑ σ ∈ favorableSet v,
-            (auction n).welfare (fun i => (id (σ i), v (σ i))) :=
+          (auction n).welfare (fun i => (g (σ i), v (σ i))) := by
+    calc ((favorableSet g v).card : F) * MAX
+        = ∑ _σ ∈ favorableSet g v, MAX := by rw [Finset.sum_const, nsmul_eq_mul]
+      _ = ∑ σ ∈ favorableSet g v,
+            (auction n).welfare (fun i => (g (σ i), v (σ i))) :=
           Finset.sum_congr rfl (fun σ hσ => (hwelfare_FS σ hσ).symm)
       _ ≤ ∑ σ : Equiv.Perm (Fin n),
-            (auction n).welfare (fun i => (id (σ i), v (σ i))) :=
+            (auction n).welfare (fun i => (g (σ i), v (σ i))) :=
           Finset.sum_le_univ_sum_of_nonneg (fun σ => hwelfare_nn σ)
-  have step2 : (n.factorial : F) ≤ 4 * ((favorableSet v).card : F) :=
-    favorableSet_card_ge hn v hv_inj
+  have step2 : (n.factorial : F) ≤ 4 * ((favorableSet g v).card : F) :=
+    favorableSet_card_ge hn g v hg_inj
   have hfact_pos : (0 : F) < (n.factorial : F) := by positivity
   rw [le_div_iff₀ hfact_pos]
   calc (1 / 4 : F) * MAX * (n.factorial : F)
       = MAX * ((1 / 4 : F) * (n.factorial : F)) := by ring
-    _ ≤ MAX * ((favorableSet v).card : F) := by
+    _ ≤ MAX * ((favorableSet g v).card : F) := by
         apply mul_le_mul_of_nonneg_left _ hMAX_nn
         rw [div_mul_eq_mul_div, one_mul]
         exact div_le_of_le_mul₀ (by positivity) (by positivity) (by linarith)
-    _ = ((favorableSet v).card : F) * MAX := by ring
+    _ = ((favorableSet g v).card : F) * MAX := by ring
     _ ≤ ∑ σ : Equiv.Perm (Fin n),
-          (auction n).welfare (fun i => (id (σ i), v (σ i))) := step1
+          (auction n).welfare (fun i => (g (σ i), v (σ i))) := step1
 
 end Secretary
 
