@@ -135,13 +135,22 @@ identities, so:
   second-max even with value ties, and the rejection proof reduces to
   showing that pre-argmax bids are **lex-strictly** below the threshold.
 
-Without this design, the counterexample $v = (1, 1)$ with $n = 2$
-already breaks the old proof: when both bidders have the same value,
-a simple $p \le v$ rule cannot guarantee that the argmax bidder clears
-the threshold while the non-argmax bidder does not. See also the
-deterministic impossibility
-([[mechanism_design.auction.online.no_constant_competitive]]) for the
-complementary negative result.
+Without the `bar` field, the acceptance rule degenerates to strict value
+comparison $p < v_i$ (since `bar _ := ⊤` makes the tie-breaking
+disjunct vacuously false). This is **fatal** for the secretary guarantee:
+with $v = (M, M)$ and $n = 2$, the threshold equals $M$ and the strict
+test $M < M$ rejects every remaining bidder, giving welfare $= 0$ on
+**all** arrival orders — violating the $1/4$-competitive bound
+([[mechanism_design.auction.online.secretary_strict_comparison_fails]]).
+
+An alternative using weak comparison $p \le v_i$ (set `bar _ := \uparrow\bot`)
+avoids this particular failure, but creates a proof obstacle: when
+multiple bidders share the threshold value, any of them might clear the
+price before the argmax bidder, and the clean
+`welfare_eq_max_of_favorable` argument breaks. The lex rule with a
+well-chosen `bar` (set to the observed lex-max identity) navigates
+between these two pitfalls — accepting the right bidder among ties while
+rejecting the wrong ones.
 
 ### Why two type parameters?
 
