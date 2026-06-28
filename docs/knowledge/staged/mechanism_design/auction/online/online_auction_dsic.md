@@ -10,8 +10,6 @@ topics:
   - mechanism_design.auction.online
 uses:
   - mechanism_design.auction.online.single_item_auction
-  - mechanism_design.basic.dsic_predicate
-  - game_theory.strategic_game.weakly_dominant_strategy
 lean:
   modules:
     - EconCSLib.Examples.Online.SingleItemAuction
@@ -19,8 +17,6 @@ lean:
     - Online.Auction.SingleItemAuction.stateBeforeStep
     - Online.Auction.SingleItemAuction.stateBeforeStep_update_self
     - Online.Auction.SingleItemAuction.dsic
-    - Online.Auction.SingleItemAuction.mechanism
-    - Online.Auction.SingleItemAuction.mechanism_isDSIC
 verification:
   statement: accepted
   proof: accepted
@@ -73,11 +69,7 @@ $j < i$.
    i.e. exactly when the surplus $v_i - p$ is nonnegative, so it attains
    $\max(v_i - p, 0)$ — weakly better than any deviation.
 
-`dsic` states the inequality directly at the utility level;
-`mechanism_isDSIC` lifts the same fact to the generic
-`MechanismWithTransfers`-level DSIC predicate
-([[mechanism_design.basic.dsic_predicate]]) for the induced direct mechanism
-`A.mechanism n`.
+`dsic` states the inequality directly at the utility level.
 
 ## Why it matters
 

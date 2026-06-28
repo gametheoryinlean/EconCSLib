@@ -43,59 +43,66 @@ take-it-or-leave-it price that may depend **only on the bids already seen**;
 the current bidder either accepts (and the auction ends) or departs forever.
 This is the running example of Roughgarden's *Twenty Lectures*, Problem 2.1.
 
-The numeric type $F$ is any linearly ordered field; bids, posted prices,
-valuations, and utilities all live in $F$.
+The type is parameterised by two types: an identity type $B$ (for
+tie-breaking or bidder labels) and a numeric type $F$ (any linearly ordered
+field); each bidder presents a pair $(b, v) : B \times F$, and the pricing
+rule sees `List (B × F)`.
 
 ## Model
 
 A run is driven by the generic online-algorithm framework
 `Online.OnlineAlgorithm Input State Output`, whose single field
-`step : State → Input → State × Output` consumes one input and emits the
-next state together with an optional output. The "no lookahead" discipline
-is encoded in the **state**, not by an external promise: the auction state
+`step : State → Option Input → State × Option Output` consumes one input
+and emits the next state together with an optional output. The "no
+lookahead" discipline is encoded in the **state**, not by an external
+promise: the auction state
 
 $$
-\mathrm{AuctionState}\,F \;=\; \mathsf{unsold}\,(\text{history} : \mathrm{List}\,F)
+\mathrm{AuctionState}\,B\,F \;=\; \mathsf{unsold}\,(\text{history} :
+\mathrm{List}\,(B \times F))
 \;\mid\; \mathsf{sold}\,(\text{winner} : \mathbb{N})\,(\text{price} : F)
 $$
 
-carries in the `unsold` case exactly the list of previously rejected bids —
-the only thing the pricing rule is allowed to read.
+carries in the `unsold` case exactly the list of previously rejected
+$(identity, value)$ pairs — the only thing the pricing rule is allowed to
+read.
 
-A `SingleItemAuction F` is then a single datum: a pricing rule
-`price : List F → F` mapping the rejection history to the next posted price.
-Its embedding into the framework is the field-free definition
+A `SingleItemAuction B F` is then a single datum: a pricing rule
+`price : List (B × F) → WithTop F` mapping the rejection history to the
+next posted price, where `⊤` rejects unconditionally and `↑p` accepts
+when $p \le v$. Its embedding into the framework is
 
 ```
-A.online : OnlineAlgorithm F (AuctionState F) F
+A.online : OnlineAlgorithm (B × F) (AuctionState B F) F
   init := .unsold []
   step
-    | .unsold h, some b => let p := A.price h;
-                           if p ≤ b then (.sold h.length p, some p)
-                           else (.unsold (h ++ [b]), none)
+    | .unsold h, some (id, v) => match A.price h with
+                           | ⊤     => (.unsold (h ++ [(id, v)]), none)
+                           | ↑p    => if p ≤ v then (.sold h.length p, some v)
+                                      else (.unsold (h ++ [(id, v)]), none)
     | .unsold h, none   => (.unsold h, none)
     | .sold w p, _      => (.sold w p, none)
 ```
 
 The current bidder's $0$-indexed position equals `history.length`. The
-winning rule is the weak inequality $p \le b$: a bidder clears the price iff
-their bid is at least the posted price. `A.run bids` extracts the realised
-sale price (`some p` if some bidder cleared, `none` if all were rejected)
-by folding `A.online` over the bid list.
+winning rule is the weak inequality $p \le v$: a bidder clears the price
+iff their value is at least the posted price. `A.run bids` extracts the
+realised sale price (`some p` if some bidder cleared, `none` if all were
+rejected) by folding `A.online` over the bid list.
 
 ## Welfare and utility
 
 For game-theoretic statements the $n$ bidders are indexed by
-$\mathrm{Fin}\,n$, with a valuation profile $v : \mathrm{Fin}\,n \to F$ and a
-bid profile $b : \mathrm{Fin}\,n \to F$ presented in arrival order.
+$\mathrm{Fin}\,n$, with a profile $f : \mathrm{Fin}\,n \to B \times F$
+presented in arrival order.
 
-- `A.welfare v b` is the **social welfare**: the valuation $v_j$ of whichever
-  bidder $j$ first clears the posted price, or $0$ if every bidder is
-  rejected. It is defined by a direct two-argument recursion `welfareFrom`
-  over the `(vᵢ, bᵢ)` stream (carrying the rejection history separately) so
-  that small concrete profiles reduce cleanly under `simp` — this is what
+- `A.welfare f` is the **social welfare**: the value $(f\,j).2$ of
+  whichever bidder $j$ first clears the posted price, or $0$ if every
+  bidder is rejected. It is defined by a direct recursion `welfareAux`
+  over the stream (carrying the rejection history separately) so that
+  small concrete profiles reduce cleanly under `simp` — this is what
   makes the adversarial and secretary analyses tractable.
-- `A.utility v b i` is bidder $i$'s quasi-linear payoff $v_i - p$ when $i$
+- `A.utility f v i` is bidder $i$'s quasi-linear payoff $v_i - p$ when $i$
   wins at price $p$, and $0$ otherwise. It factors through the state reached
   *before* bidder $i$ is processed, isolating $i$'s local view from the
   global trajectory.
@@ -105,9 +112,12 @@ bid profile $b : \mathrm{Fin}\,n \to F$ presented in arrival order.
 Keeping the entire embedding in the one `A.online` definition means the
 auction inherits the framework's `run`, `runStatus`, and generic
 `run_cons_*` recursion lemmas directly, with no duplicated step logic. The
-two indexing conventions coexist on purpose: `List F` is the natural type
-for the *streaming* input, while $\mathrm{Fin}\,n \to F$ is the natural type
-for the *game-theoretic* layer (fixed agents, single-bidder deviations via
+two-type-parameter design `SingleItemAuction B F` enables identity-aware
+pricing (needed for tie-breaking in the secretary analysis) while keeping
+the identity type abstract. The two indexing conventions coexist on purpose:
+`List (B × F)` is the natural type for the *streaming* input, while
+$\mathrm{Fin}\,n \to B \times F$ is the natural type for the
+*game-theoretic* layer (fixed agents, single-bidder deviations via
 `Function.update`, random arrival via `Equiv.Perm (Fin n)`); the two are
 bridged by `List.ofFn`.
 

@@ -14,7 +14,6 @@ lean:
   modules:
     - EconCSLib.Examples.Online.SingleItemAuction
   declarations:
-    - Online.Auction.SingleItemAuction.welfareFrom_eq_zero
     - Online.Auction.SingleItemAuction.welfare_can_be_zero
     - Online.Auction.SingleItemAuction.no_constant_competitive_ratio
 verification:
