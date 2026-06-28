@@ -47,8 +47,7 @@ welfare at least one quarter of the maximum valuation.
 an *observe* phase (the first $\lfloor n/2\rfloor$ arrivals) and
 thereafter posts the lex-max `(value, identity)` seen so far:
 
-- `price h := if h.length < n/2 then ⊤ else ↑(maxPairFold h).1`
-- `bar h := if h.length < n/2 then ⊤ else ↑(maxPairFold h).2`
+- `threshold h := if h.length < n/2 then ⊤ else ↑(toLex (maxPairFold h))`
 
 where `maxPairFold h` folds the rejection history to find the
 lexicographic maximum of `(value, identity)` pairs, starting from
@@ -144,9 +143,11 @@ ties by comparing identities, so:
   lex-strict inequality — which only needs identity distinctness at
   value ties, not global value injectivity.
 
-This is why the `bar` field was introduced in `SingleItemAuction`: without
-it, the theorem would need the mathematically unnatural hypothesis that
-all bidders have distinct values. See the definition node
+This is why `SingleItemAuction` uses a lexicographic threshold
+`WithTop (Lex (F × B))` rather than a simple value threshold: without
+the identity component, the theorem would need the mathematically
+unnatural hypothesis that all bidders have distinct values. See the
+definition node
 ([[mechanism_design.auction.online.single_item_auction]]) for the full
 design rationale.
 

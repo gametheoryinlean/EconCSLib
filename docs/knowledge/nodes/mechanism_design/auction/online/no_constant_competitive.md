@@ -34,10 +34,10 @@ tags:
 **Theorem (`welfare_can_be_zero`, Roughgarden Problem 2.1(b)).** Any
 deterministic online single-item auction
 ([[mechanism_design.auction.online.single_item_auction]]) with a positive
-opening price can be forced to capture **zero** welfare while the optimum
-is positive.
+opening threshold can be forced to capture **zero** welfare while the
+optimum is positive.
 
-For every $A$ with $0 < A.\mathrm{price}\,[\,]$ and every $n \ge 1$,
+For every $A$ with $A.\mathrm{threshold}\,[\,] = \uparrow t \implies 0 < (\mathrm{ofLex}\,t).1$ and every $n \ge 1$,
 there exists an $n$-bidder profile $f$ with $\mathrm{maxV}\,f > 0$ and
 
 $$
@@ -50,17 +50,17 @@ profile gives $A.\mathrm{welfare}(f) = 0 < c \cdot \mathrm{maxV}\,f$.
 
 ## Proof
 
-Fix $A$ with $p_0 = A.\mathrm{price}\,[\,] > 0$. Two cases:
+Fix $A$ whose opening threshold has positive value component. Two cases:
 
-- **$p_0 = \top$.** The adversary sends bidder $0$ with value $1$ and
-  every later bidder with value $0$. Price $\top$ rejects everything, so
+- **$A.\mathrm{threshold}\,[\,] = \top$.** The adversary sends bidder $0$ with value $1$ and
+  every later bidder with value $0$. Threshold $\top$ rejects everything, so
   welfare is $0$ while $\mathrm{maxV} \ge 1 > 0$.
-- **$p_0 = \uparrow p$ with $p > 0$.** Bidder $0$ values the item at
-  $p/2$ and every later bidder values it at $0$. Bidder $0$ faces price
-  $p$ and bids $p/2 < p$, so the lex acceptance condition
-  $p < p/2 \lor (p = p/2 \land \ldots)$ fails — they are rejected. Every
-  remaining bidder has value $0$, so welfare is $0$ by the structural
-  lemma `welfareAux_all_zero`.
+- **$A.\mathrm{threshold}\,[\,] = \uparrow t$ with $(\mathrm{ofLex}\,t).1 > 0$.** Let $p = (\mathrm{ofLex}\,t).1$.
+  Bidder $0$ values the item at $p/2$ and every later bidder values it
+  at $0$. Bidder $0$ faces threshold $t$ and bids $p/2 < p$, so the
+  lex acceptance condition $t \le \mathrm{toLex}(p/2, b_0)$ fails — they
+  are rejected. Every remaining bidder has value $0$, so welfare is $0$
+  by the structural lemma `welfareAux_all_zero`.
 
 The corollary is immediate since $0 < c \cdot \mathrm{maxV}$.
 
@@ -72,11 +72,11 @@ The corollary is immediate since $0 < c \cdot \mathrm{maxV}$.
   at $\lfloor n/2 \rfloor$), so refuting competitiveness on $2$-bidder
   inputs says nothing about $3$-bidder inputs. The impossibility must —
   and does — hold for **every** $n$.
-- **Positive opening price, and $n \ge 1$ is then tight.** With
-  $A.\mathrm{price}\,[\,] \le 0$ a lone first bidder wins the item for
-  free, so a single-bidder auction would capture full welfare. Requiring a
-  positive opening price — the natural assumption for an auction — removes
-  exactly that obstruction.
+- **Positive opening threshold, and $n \ge 1$ is then tight.** With
+  a non-positive value component in the opening threshold, a lone first
+  bidder wins the item for free, so a single-bidder auction would capture
+  full welfare. Requiring a positive opening threshold — the natural
+  assumption for an auction — removes exactly that obstruction.
 
 ## Why it matters
 

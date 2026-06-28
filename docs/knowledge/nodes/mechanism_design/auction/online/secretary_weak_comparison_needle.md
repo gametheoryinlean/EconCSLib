@@ -2,7 +2,7 @@
 id: mechanism_design.auction.online.secretary_weak_comparison_needle
 title: Weak Value Comparison Degrades to 1/n on the Needle Profile
 kind: counterexample
-status: staged
+status: partly_proved
 primary_topic: mechanism_design
 topics:
   - mechanism_design
@@ -15,10 +15,13 @@ uses:
 lean:
   modules:
     - EconCSLib.Examples.Online.SingleItemAuction
-  declarations: []
+  declarations:
+    - Online.Auction.WeakComparison.auction
+    - Online.Auction.WeakComparison.maxPairFold_fst_zero
+    - Online.Auction.WeakComparison.welfare_eq_zero_needle_last
 verification:
-  statement: not_yet_formalized
-  proof: not_yet_formalized
+  statement: accepted
+  proof: partly_proved
   alignment: aligned
 tags:
   - auction
@@ -33,10 +36,12 @@ tags:
 
 **Counterexample.** If the online single-item auction
 ([[mechanism_design.auction.online.single_item_auction]]) uses weak value
-comparison $p \le v$ — equivalently, sets `bar _ := ↑⊥` so that the lex
-acceptance condition degenerates to $p \le v_i$ — then the secretary rule
-achieves expected welfare only $(1/n) \cdot \max v$ on the
-*needle profile*, which is **not** a constant competitive ratio.
+comparison $p \le v$ — equivalently, sets the threshold identity
+component to `⊥ : B` (`WeakComparison.auction`) so that the acceptance
+condition degenerates to $p \le v_i$ (since `⊥ ≤ b` holds for all `b`)
+— then the secretary rule achieves expected welfare only
+$(1/n) \cdot \max v$ on the *needle profile*, which is **not** a
+constant competitive ratio.
 
 This complements the strict-comparison counterexample
 ([[mechanism_design.auction.online.secretary_strict_comparison_fails]]),
@@ -56,12 +61,13 @@ One *needle* bidder has value $M$; the remaining $n - 1$ *haystack*
 bidders have value $0$. Define the secretary auction with weak comparison:
 
 ```
-price h := if h.length < n / 2 then ⊤ else ↑(maxPairFold h).1
-bar   _ := ↑⊥
+threshold h := if h.length < n / 2 then ⊤
+               else ↑(toLex ((maxPairFold h).1, (⊥ : B)))
 ```
 
-Since `⊥ ≤ b` holds for all `b : B`, the acceptance condition becomes
-$(p : F) < v \lor (p = v \land \mathsf{True})$, i.e. $p \le v$.
+Since the identity component is `⊥` and `⊥ ≤ b` holds for all `b : B`,
+the acceptance condition `threshold h ≤ ↑(toLex (v, b))` simplifies to
+$p \le v$.
 
 ### Case analysis over the needle's arrival position
 
@@ -108,15 +114,15 @@ achieves **no constant competitive ratio** on this profile family.
 
 ## Why lex comparison avoids this
 
-With the lex acceptance rule and `bar h := ↑(\mathrm{maxPairFold}\,h).2`,
-the secretary auction
+With the lex acceptance rule and the full threshold
+`↑(toLex (maxPairFold h))`, the secretary auction
 ([[mechanism_design.auction.online.secretary_quarter_competitive]])
 behaves differently in Case 2:
 
-- Threshold value $= 0$, bar $= g_{\max}$ (the largest identity seen in
-  phase 1).
-- A haystack bidder $j$ at position $\lfloor n/2 \rfloor$ faces the lex
-  test: $0 < 0$ is false, so we check $0 = 0 \land g_{\max} \le g_j$.
+- Threshold value $= 0$, identity component $= g_{\max}$ (the largest
+  identity seen in phase 1).
+- A haystack bidder $j$ at position $\lfloor n/2 \rfloor$ faces the
+  threshold test: `toLex (0, g_max) ≤ toLex (0, g_j)`, i.e. $g_{\max} \le g_j$.
   Since the lex-second bidder (highest-identity haystack bidder) was
   placed in phase 1 by the favourable event, $g_j < g_{\text{second}}
   \le g_{\max}$, so $g_{\max} \le g_j$ **fails**. The haystack bidder
@@ -137,20 +143,21 @@ bidder genuinely exceeding it. When the threshold is $0$ and all
 haystack values are $0$, the test $0 \le 0$ is vacuously true — the
 first phase-2 arrival wins regardless of their value.
 
-The `bar` field breaks this degeneracy: by requiring the bidder's
-identity to also clear a bar derived from the observed maximum, the
-auction filters out haystack bidders whose only "qualification" is
-matching a zero threshold. This is exactly the identity-tie-breaking
-design motivation of `SingleItemAuction`
+The identity component of the lexicographic threshold breaks this
+degeneracy: by requiring the bidder's identity to also clear a threshold
+derived from the observed maximum, the auction filters out haystack
+bidders whose only "qualification" is matching a zero value threshold.
+This is exactly the design motivation behind `SingleItemAuction`'s
+single lexicographic threshold
 ([[mechanism_design.auction.online.single_item_auction]]).
 
 ## Summary table
 
 | Acceptance rule | Needle profile welfare | Constant competitive? |
 |-----------------|----------------------|----------------------|
-| $p < v$ (strict, `bar = ⊤`) | $0$ always | **No** ([[mechanism_design.auction.online.secretary_strict_comparison_fails]]) |
-| $p \le v$ (weak, `bar = ↑⊥$) | $M/n$ in expectation | **No** (this counterexample) |
-| lex (proper `bar`) | $\ge M/4$ in expectation | **Yes** ([[mechanism_design.auction.online.secretary_quarter_competitive]]) |
+| $p < v$ (strict, identity = `⊤`) | $0$ always | **No** ([[mechanism_design.auction.online.secretary_strict_comparison_fails]]) |
+| $p \le v$ (weak, identity = `⊥`) | $M/n$ in expectation | **No** (this counterexample) |
+| lex (proper threshold) | $\ge M/4$ in expectation | **Yes** ([[mechanism_design.auction.online.secretary_quarter_competitive]]) |
 
 ## References
 

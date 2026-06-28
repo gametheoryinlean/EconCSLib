@@ -49,18 +49,18 @@ Problem 2.1.
 
 The type `SingleItemAuction B F` is parameterised by an identity type `B`
 and a numeric type `F` (any linearly ordered field). Each bidder presents
-a pair `(b, v) : B × F`, and the auction is defined by two fields:
+a pair `(b, v) : B × F`, and the auction is defined by a single field:
 
-- `price : List (B × F) → WithTop F` — a value threshold.
-- `bar : List (B × F) → WithTop B` — an identity threshold for
-  tie-breaking.
+- `threshold : List (B × F) → WithTop (Lex (F × B))` — a lexicographic
+  threshold combining value and identity.
 
-Both fields read the full history of rejected `(identity, value)` pairs.
-The price `⊤` rejects unconditionally; `↑p` accepts when the
-**lexicographic** condition holds:
+The field reads the full history of rejected `(identity, value)` pairs.
+The threshold `⊤` rejects unconditionally; `↑(toLex (p, b))` accepts
+when `threshold h ≤ ↑(toLex (v_i, b_i))`, which by `Prod.Lex.le_iff`
+gives the **lexicographic** condition:
 
 $$
-p < v_i \;\lor\; (p = v_i \;\land\; \mathit{bar}(h) \le b_i).
+p < v_i \;\lor\; (p = v_i \;\land\; b \le b_i).
 $$
 
 A run is driven by the generic online-algorithm framework
@@ -81,10 +81,10 @@ read. The embedding into the framework is `A.online`:
 
 ```
 step
-  | .unsold h, some (bi, vi) => match A.price h with
+  | .unsold h, some (bi, vi) => match A.threshold h with
                            | ⊤     => (.unsold (h ++ [(bi, vi)]), none)
-                           | ↑p    => if p < vi ∨ (p = vi ∧ A.bar h ≤ ↑bi)
-                                      then (.sold h.length p, some p)
+                           | ↑t    => if t ≤ toLex (vi, bi)
+                                      then (.sold h.length (ofLex t).1, some (ofLex t).1)
                                       else (.unsold (h ++ [(bi, vi)]), none)
   | .unsold h, none   => (.unsold h, none)
   | .sold w p, _      => (.sold w p, none)
@@ -108,24 +108,31 @@ presented in arrival order.
 
 ## Remarks
 
-### Why lexicographic acceptance with a `bar` field?
+### Why a single lexicographic threshold?
 
-A natural first design would use the simpler acceptance rule $p \le v_i$
-and require **value injectivity** (`Function.Injective v`) in the
-secretary theorem. But value injectivity is mathematically unnatural: the
-competitive-ratio guarantee is about the mechanism, not about an
-accidental distinctness hypothesis on valuations.
+A natural first design would use a simpler threshold in `WithTop F`
+(value only) and require **value injectivity** (`Function.Injective v`)
+in the secretary theorem. But value injectivity is mathematically
+unnatural: the competitive-ratio guarantee is about the mechanism, not
+about an accidental distinctness hypothesis on valuations.
 
-With the `bar` field, the secretary auction
+An earlier design used two separate fields (`price` and `bar`) to encode
+the value threshold and identity tie-breaker independently. The current
+single-field design `threshold : List (B × F) → WithTop (Lex (F × B))`
+is equivalent but cleaner: `Lex (F × B)` packages both components into
+a single lexicographic pair, and the acceptance test reduces to a single
+comparison `threshold h ≤ ↑(toLex (v_i, b_i))`.
+
+The secretary auction
 ([[mechanism_design.auction.online.secretary_quarter_competitive]])
-instead requires **identity injectivity** (`Function.Injective g`) — a
+requires **identity injectivity** (`Function.Injective g`) — a
 structural property of the bidder-labelling system, not a restriction
 on valuations. The lex acceptance rule resolves value ties by comparing
 identities, so:
 
 - **Tie-breaking is internal.** Value ties at the threshold are
-  resolved by the auction's own `bar` rule, without an external
-  tie-breaking oracle or an arbitrary selection.
+  resolved by the identity component of the threshold, without an
+  external tie-breaking oracle or an arbitrary selection.
 - **DSIC is format-independent.** The `local_dsic` lemma abstracts
   the tie-breaking condition as a `Prop` parameter `tie_ok`; truthful
   bidding is optimal regardless of how ties are broken
@@ -135,28 +142,30 @@ identities, so:
   second-max even with value ties, and the rejection proof reduces to
   showing that pre-argmax bids are **lex-strictly** below the threshold.
 
-Without the `bar` field, the acceptance rule degenerates to strict value
-comparison $p < v_i$ (since `bar _ := ⊤` makes the tie-breaking
-disjunct vacuously false). This is **fatal** for the secretary guarantee:
-with $v = (M, M)$ and $n = 2$, the threshold equals $M$ and the strict
-test $M < M$ rejects every remaining bidder, giving welfare $= 0$ on
-**all** arrival orders — violating the $1/4$-competitive bound
+Setting the identity component to `⊤ : B` (requiring `[OrderTop B]`)
+forces strict value comparison: `threshold h ≤ ↑(toLex (v, b))` with
+identity component `⊤` degenerates to `p < v` since `⊤ ≤ b` fails
+for all `b < ⊤`. This is the `StrictComparison.auction`. It is
+**fatal** for the secretary guarantee: with $v = (M, M)$ and $n = 2$,
+the threshold equals $M$ and the strict test $M < M$ rejects every
+remaining bidder, giving welfare $= 0$ on **all** arrival orders
 ([[mechanism_design.auction.online.secretary_strict_comparison_fails]]).
 
-An alternative using weak comparison $p \le v_i$ (set `bar _ := \uparrow\bot`)
-avoids the $v = (M, M)$ failure, but is **also not constant-competitive**.
-On the needle profile $v = (M, 0, \ldots, 0)$ with $n$ bidders, the
-threshold drops to $0$ after observing only haystack bidders; weak
-comparison then accepts the **first** phase-2 arrival (since $0 \le 0$),
-regardless of whether it is the needle. The needle is first in phase 2
-with probability $1/n$, so expected welfare is $(1/n) \cdot M$ — not a
+Setting the identity component to `⊥ : B` recovers weak comparison
+$p \le v_i$ (since `⊥ ≤ b` holds for all `b`). This is the
+`WeakComparison.auction`. It avoids the equal-value failure, but is
+**also not constant-competitive**: on the needle profile
+$v = (M, 0, \ldots, 0)$, the threshold drops to $0$ and weak comparison
+accepts the **first** phase-2 arrival (since $0 \le 0$), regardless of
+whether it is the needle. The needle is first in phase 2 with
+probability $1/n$, so expected welfare is $(1/n) \cdot M$ — not a
 constant fraction of $\max v$
 ([[mechanism_design.auction.online.secretary_weak_comparison_needle]]).
 
-The lex rule with a well-chosen `bar` (set to the observed lex-max
-identity) navigates between the two pitfalls: it rejects haystack
-bidders whose identities fall below the bar, while still accepting the
-needle whose value strictly exceeds the threshold.
+The secretary auction sets the identity component to the observed
+lex-max identity, navigating between the two pitfalls: it rejects
+haystack bidders whose identities fall below the threshold, while still
+accepting the needle whose value strictly exceeds the threshold.
 
 ### Why two type parameters?
 

@@ -70,7 +70,8 @@ optimisation.
    optimal. This is the `local_dsic` lemma, parametric in `tie_ok`.
 
 `dsic` combines the two steps: rewrite via `stateBeforeStep_update_self`,
-then apply `local_dsic` with `tie_ok := A.bar h ≤ ↑(f i).1`.
+then apply `local_dsic` with the appropriate tie-breaking condition
+derived from the threshold's identity component.
 
 ## Why it matters
 

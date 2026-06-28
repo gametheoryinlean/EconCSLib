@@ -23,16 +23,17 @@ import Mathlib.Data.Prod.Lex
 The **online single-item auction** sells one indivisible good to bidders
 who arrive one at a time. At each step the system receives two pieces of
 information: the bidder's **identity** `b : B` and their **value** `v : F`.
-The auctioneer posts a take-it-or-leave-it price in `WithTop F` and an
-identity bar in `WithTop B`. Acceptance is **lexicographic**: first
-compare value against price, then identity against bar.
+The auctioneer posts a lexicographic threshold in `WithTop (Lex (F × B))`.
+A bidder with value `v` and identity `b` is accepted when the threshold
+`t` satisfies `t ≤ toLex (v, b)`; when `t = ⊤` the bidder is rejected
+unconditionally.
 
-The pricing rule sees the full history of rejected `(identity, value)` pairs;
+The threshold sees the full history of rejected `(identity, value)` pairs;
 the "no future" constraint of online algorithms is built into the type.
 
 ## Main definitions
 
-* `SingleItemAuction B F` — a pricing rule with identity tie-breaking.
+* `SingleItemAuction B F` — a threshold rule for lexicographic acceptance.
 * `welfare` — social welfare under a given arrival sequence.
 * `utility` — quasi-linear utility of a specific bidder.
 * `Secretary.auction` — the secretary (sample-then-threshold) pricing rule.
@@ -40,8 +41,8 @@ the "no future" constraint of online algorithms is built into the type.
 ## Main results
 
 * `dsic` — truthful bidding is weakly dominant for every bidder (Problem 2.1(a)).
-* `welfare_can_be_zero` — any auction with opening price `> 0` can be forced
-  to welfare `0` (Problem 2.1(b)).
+* `welfare_can_be_zero` — any auction with positive opening threshold can be
+  forced to welfare `0` (Problem 2.1(b)).
 * `Secretary.competitive` — the secretary rule is 1/4-competitive under
   uniformly random arrival for injective identities (Problem 2.1(c)).
 -/
@@ -64,15 +65,13 @@ inductive AuctionState (B F : Type*) where
   | unsold (history : List (B × F))
   | sold (winner : ℕ) (price : F)
 
-/-- An online single-item auction is a *pricing rule* with identity
-tie-breaking. Given the history of rejected `(identity, value)` pairs,
-it posts a value threshold `price` in `WithTop F` and an identity
-threshold `bar` in `WithTop B`. Acceptance is lexicographic: first
-compare value against `price`, then identity against `bar`. -/
+/-- An online single-item auction is a *threshold rule*. Given the history
+of rejected `(identity, value)` pairs, it posts a lexicographic threshold
+in `WithTop (Lex (F × B))`. The threshold `⊤` rejects unconditionally;
+`↑(toLex (p, b))` accepts when `p < v_i ∨ (p = v_i ∧ b ≤ b_i)`. -/
 @[ext]
 structure SingleItemAuction (B F : Type*) where
-  price : List (B × F) → WithTop F
-  bar : List (B × F) → WithTop B
+  threshold : List (B × F) → WithTop (Lex (F × B))
 
 /-- Maximum of a valuation profile over `Fin n`. -/
 noncomputable def maxV {n : ℕ} [LinearOrder F] (hn : 1 ≤ n) (v : Fin n → F) : F :=
@@ -89,17 +88,17 @@ variable [LinearOrder F] [LinearOrder B] (A : SingleItemAuction B F)
 /-- The auction as an `OnlineAlgorithm`. Each step receives an
 `Option (B × F)` input — `some (bi, vi)` for a genuine bidder,
 `none` for end-of-input. Output on sale is the posted price.
-Acceptance is lexicographic: accept when value strictly exceeds
-price, or value equals price and identity clears the bar. -/
+Acceptance is lexicographic: accept when the threshold `t` satisfies
+`t ≤ toLex (v_i, b_i)`. -/
 def online : OnlineAlgorithm (B × F) (AuctionState B F) F where
   init := .unsold []
   step
     | .unsold h, some (bi, vi) =>
-        match A.price h with
+        match A.threshold h with
         | none   => (.unsold (h ++ [(bi, vi)]), none)
-        | some p =>
-            if (p : F) < vi ∨ (p = vi ∧ A.bar h ≤ (↑bi : WithTop B))
-            then (.sold h.length p, some p)
+        | some t =>
+            if t ≤ toLex (vi, bi)
+            then (.sold h.length (ofLex t).1, some (ofLex t).1)
             else (.unsold (h ++ [(bi, vi)]), none)
     | .unsold h, none => (.unsold h, none)
     | .sold w p, _    => (.sold w p, none)
@@ -112,45 +111,44 @@ def run (inputs : List (B × F)) : Option F :=
 
 /-- Welfare helper: process bidders from index `k` onward with
 accumulated rejection history `h`. Returns the value of the first
-bidder whose value clears the posted price (lexicographically), or `0`. -/
+bidder whose `(value, identity)` pair clears the threshold
+(lexicographically), or `0`. -/
 def welfareAux [Zero F]
-    (price : List (B × F) → WithTop F)
-    (bar : List (B × F) → WithTop B)
+    (threshold : List (B × F) → WithTop (Lex (F × B)))
     {n : ℕ} (f : Fin n → B × F) (h : List (B × F)) (k : ℕ) : F :=
   if hk : k < n then
     let entry := f ⟨k, hk⟩
-    if (price h : WithTop F) < ↑entry.2 ∨
-       (price h = ↑entry.2 ∧ bar h ≤ (↑entry.1 : WithTop B))
+    if (threshold h : WithTop (Lex (F × B))) ≤ ↑(toLex (entry.2, entry.1))
     then entry.2
-    else welfareAux price bar f (h ++ [entry]) (k + 1)
+    else welfareAux threshold f (h ++ [entry]) (k + 1)
   else 0
 termination_by n - k
 
 /-- Social welfare: the value of the winning bidder (or `0`) under
 arrival sequence `f : Fin n → B × F`. -/
 def welfare [Zero F] {n : ℕ} (f : Fin n → B × F) : F :=
-  welfareAux A.price A.bar f [] 0
+  welfareAux A.threshold f [] 0
 
 @[simp] lemma welfareAux_done [Zero F] {n : ℕ}
     (f : Fin n → B × F) (h : List (B × F)) (k : ℕ) (hk : ¬ k < n) :
-    welfareAux A.price A.bar f h k = 0 := by
+    welfareAux A.threshold f h k = 0 := by
   rw [welfareAux, dif_neg hk]
 
 lemma welfareAux_accept [Zero F] {n : ℕ}
     (f : Fin n → B × F) (h : List (B × F)) (k : ℕ) (hk : k < n)
-    (hacc : (A.price h : WithTop F) < ↑(f ⟨k, hk⟩).2 ∨
-            (A.price h = ↑(f ⟨k, hk⟩).2 ∧ A.bar h ≤ (↑(f ⟨k, hk⟩).1 : WithTop B))) :
-    welfareAux A.price A.bar f h k = (f ⟨k, hk⟩).2 := by
+    (hacc : (A.threshold h : WithTop (Lex (F × B))) ≤
+            ↑(toLex ((f ⟨k, hk⟩).2, (f ⟨k, hk⟩).1))) :
+    welfareAux A.threshold f h k = (f ⟨k, hk⟩).2 := by
   rw [welfareAux, dif_pos hk]
   simp only
   rw [if_pos hacc]
 
 lemma welfareAux_reject [Zero F] {n : ℕ}
     (f : Fin n → B × F) (h : List (B × F)) (k : ℕ) (hk : k < n)
-    (hrej : ¬ ((A.price h : WithTop F) < ↑(f ⟨k, hk⟩).2 ∨
-               (A.price h = ↑(f ⟨k, hk⟩).2 ∧ A.bar h ≤ (↑(f ⟨k, hk⟩).1 : WithTop B)))) :
-    welfareAux A.price A.bar f h k =
-      welfareAux A.price A.bar f (h ++ [f ⟨k, hk⟩]) (k + 1) := by
+    (hrej : ¬ ((A.threshold h : WithTop (Lex (F × B))) ≤
+               ↑(toLex ((f ⟨k, hk⟩).2, (f ⟨k, hk⟩).1)))) :
+    welfareAux A.threshold f h k =
+      welfareAux A.threshold f (h ++ [f ⟨k, hk⟩]) (k + 1) := by
   rw [welfareAux, dif_pos hk]
   simp only
   rw [if_neg hrej]
@@ -158,13 +156,13 @@ lemma welfareAux_reject [Zero F] {n : ℕ}
 lemma welfareAux_nonneg [Zero F] {n : ℕ}
     (f : Fin n → B × F) (hf : ∀ i, 0 ≤ (f i).2)
     (h : List (B × F)) (k : ℕ) :
-    0 ≤ welfareAux A.price A.bar f h k := by
+    0 ≤ welfareAux A.threshold f h k := by
   by_cases hk : k < n
   · have hacc_or :
-        ((A.price h : WithTop F) < ↑(f ⟨k, hk⟩).2 ∨
-         (A.price h = ↑(f ⟨k, hk⟩).2 ∧ A.bar h ≤ (↑(f ⟨k, hk⟩).1 : WithTop B))) ∨
-        ¬ ((A.price h : WithTop F) < ↑(f ⟨k, hk⟩).2 ∨
-           (A.price h = ↑(f ⟨k, hk⟩).2 ∧ A.bar h ≤ (↑(f ⟨k, hk⟩).1 : WithTop B))) :=
+        ((A.threshold h : WithTop (Lex (F × B))) ≤
+         ↑(toLex ((f ⟨k, hk⟩).2, (f ⟨k, hk⟩).1))) ∨
+        ¬ ((A.threshold h : WithTop (Lex (F × B))) ≤
+           ↑(toLex ((f ⟨k, hk⟩).2, (f ⟨k, hk⟩).1))) :=
       em _
     rcases hacc_or with hacc | hrej
     · rw [A.welfareAux_accept f h k hk hacc]; exact hf ⟨k, hk⟩
@@ -188,11 +186,11 @@ def utility [Zero F] [Sub F] {n : ℕ} (f : Fin n → B × F) (v : Fin n → F) 
     F :=
   match A.stateBeforeStep f i with
   | .unsold h =>
-      match A.price h with
+      match A.threshold h with
       | none   => 0
-      | some p =>
-          if (p : F) < (f i).2 ∨ (p = (f i).2 ∧ A.bar h ≤ ((f i).1 : WithTop B))
-          then v i - p
+      | some t =>
+          if (ofLex t).1 < (f i).2 ∨ ((ofLex t).1 = (f i).2 ∧ (ofLex t).2 ≤ (f i).1)
+          then v i - (ofLex t).1
           else 0
   | .sold _ _ => 0
 
@@ -248,8 +246,8 @@ theorem dsic [Ring F] [IsStrictOrderedRing F] {n : ℕ}
   split
   · split
     · exact le_refl _
-    · next p _ =>
-        exact local_dsic p (v i) (f i).2 (A.bar _ ≤ ((f i).1 : WithTop B))
+    · next t _ =>
+        exact local_dsic (ofLex t).1 (v i) (f i).2 ((ofLex t).2 ≤ (f i).1)
   · exact le_refl _
 
 /-! ### (b) No constant competitive ratio against adversarial input -/
@@ -259,14 +257,14 @@ onward is `0`. -/
 private lemma welfareAux_all_zero [Zero F] {n : ℕ}
     (f : Fin n → B × F) (h : List (B × F)) (k : ℕ)
     (hzero : ∀ j : Fin n, k ≤ j.val → (f j).2 = 0) :
-    welfareAux A.price A.bar f h k = 0 := by
+    welfareAux A.threshold f h k = 0 := by
   if hk : k < n then
     rw [welfareAux, dif_pos hk]
     simp only
     have hv : (f ⟨k, hk⟩).2 = 0 := hzero ⟨k, hk⟩ le_rfl
     by_cases hacc :
-        (A.price h : WithTop F) < ↑(f ⟨k, hk⟩).2 ∨
-        (A.price h = ↑(f ⟨k, hk⟩).2 ∧ A.bar h ≤ (↑(f ⟨k, hk⟩).1 : WithTop B))
+        (A.threshold h : WithTop (Lex (F × B))) ≤
+        ↑(toLex ((f ⟨k, hk⟩).2, (f ⟨k, hk⟩).1))
     · rw [if_pos hacc, hv]
     · rw [if_neg hacc]
       exact welfareAux_all_zero f (h ++ [f ⟨k, hk⟩]) (k + 1) fun j hj => by
@@ -275,23 +273,21 @@ private lemma welfareAux_all_zero [Zero F] {n : ℕ}
     rw [welfareAux, dif_neg hk]
 termination_by n - k
 
-/-- **Problem 2.1 (b).** Any auction whose opening price is positive
-(in `WithTop F`) can be forced to welfare `0` while `max v > 0`. -/
+/-- **Problem 2.1 (b).** Any auction whose opening threshold has positive
+value component can be forced to welfare `0` while `max v > 0`. -/
 theorem welfare_can_be_zero [Inhabited B] [Field F] [IsStrictOrderedRing F]
     (hn : 1 ≤ n)
-    (hpos : (0 : WithTop F) < A.price []) :
+    (hpos : ∀ (t : Lex (F × B)), A.threshold [] = ↑t → (0 : F) < (ofLex t).1) :
     ∃ f : Fin n → B × F,
       (0 : F) < maxV hn (fun i => (f i).2) ∧ A.welfare f = 0 := by
   have h0n : (0 : ℕ) < n := by omega
-  rcases hp : A.price [] with _ | p
-  · -- A.price [] = ⊤: bidder 0 has value 1 (rejected), rest 0
+  rcases ht : A.threshold [] with _ | t
+  · -- threshold = ⊤: bidder 0 has value 1 (rejected), rest 0
     let f : Fin n → B × F := fun i => (default, if i.val = 0 then 1 else 0)
-    have hrej : ¬ ((A.price [] : WithTop F) < ↑(f ⟨0, h0n⟩).2 ∨
-        (A.price [] = ↑(f ⟨0, h0n⟩).2 ∧ A.bar [] ≤ (↑(f ⟨0, h0n⟩).1 : WithTop B))) := by
-      rw [hp]
-      rintro (hlt | ⟨heq, _⟩)
-      · exact not_lt.mpr le_top hlt
-      · exact absurd heq.symm (WithTop.coe_ne_top)
+    have hrej : ¬ ((A.threshold [] : WithTop (Lex (F × B))) ≤
+        ↑(toLex ((f ⟨0, h0n⟩).2, (f ⟨0, h0n⟩).1))) := by
+      rw [ht]
+      exact not_le.mpr (WithTop.coe_lt_top _)
     refine ⟨f, ?_, ?_⟩
     · exact lt_of_lt_of_le one_pos (le_maxV hn (fun i => (f i).2) ⟨0, h0n⟩)
     · unfold welfare
@@ -299,17 +295,23 @@ theorem welfare_can_be_zero [Inhabited B] [Field F] [IsStrictOrderedRing F]
       exact A.welfareAux_all_zero f _ 1 fun j hj => by
         show (if (j : Fin n).val = 0 then (1 : F) else 0) = 0
         exact if_neg (by omega)
-  · -- A.price [] = ↑p with 0 < p: bidder 0 has value p/2 (rejected), rest 0
-    have hp0 : (0 : F) < p := by rw [hp] at hpos; exact WithTop.coe_lt_coe.mp hpos
+  · -- threshold = ↑t with 0 < (ofLex t).1
+    have hp0 : (0 : F) < (ofLex t).1 := hpos t ht
+    set p := (ofLex t).1 with hp_def
     let f : Fin n → B × F := fun i => (default, if i.val = 0 then p / 2 else 0)
     have hval_lt : p / 2 < p := div_lt_self hp0 one_lt_two
     have hf0v : (f ⟨0, h0n⟩).2 = p / 2 := by simp [f]
-    have hrej : ¬ ((A.price [] : WithTop F) < ↑(f ⟨0, h0n⟩).2 ∨
-        (A.price [] = ↑(f ⟨0, h0n⟩).2 ∧ A.bar [] ≤ (↑(f ⟨0, h0n⟩).1 : WithTop B))) := by
-      rw [hp, hf0v]
-      rintro (hlt | ⟨heq, _⟩)
-      · exact absurd (WithTop.coe_lt_coe.mp hlt) (not_lt.mpr hval_lt.le)
-      · exact absurd (WithTop.coe_injective heq) (ne_of_gt hval_lt)
+    have hrej : ¬ ((A.threshold [] : WithTop (Lex (F × B))) ≤
+        ↑(toLex ((f ⟨0, h0n⟩).2, (f ⟨0, h0n⟩).1))) := by
+      rw [ht, hf0v]
+      change ¬ ((↑t : WithTop (Lex (F × B))) ≤ _)
+      intro hle
+      rw [WithTop.coe_le_coe] at hle
+      have : t = toLex ((ofLex t).1, (ofLex t).2) := rfl
+      rw [this, Prod.Lex.le_iff] at hle
+      rcases hle with hlt | ⟨heq, _⟩
+      · exact absurd hlt (not_lt.mpr hval_lt.le)
+      · exact absurd heq (ne_of_gt hval_lt)
     refine ⟨f, ?_, ?_⟩
     · exact lt_of_lt_of_le (div_pos hp0 two_pos) (le_maxV hn (fun i => (f i).2) ⟨0, h0n⟩)
     · unfold welfare
@@ -319,10 +321,10 @@ theorem welfare_can_be_zero [Inhabited B] [Field F] [IsStrictOrderedRing F]
         exact if_neg (by omega)
 
 /-- **Corollary.** No deterministic online auction with positive opening
-price achieves a constant competitive ratio. -/
+threshold achieves a constant competitive ratio. -/
 theorem no_constant_competitive_ratio [Inhabited B] [Field F] [IsStrictOrderedRing F]
-    (hn : 1 ≤ n) (hpos : (0 : WithTop F) < A.price []) (c : F)
-    (hc : 0 < c) :
+    (hn : 1 ≤ n) (hpos : ∀ (t : Lex (F × B)), A.threshold [] = ↑t → (0 : F) < (ofLex t).1)
+    (c : F) (hc : 0 < c) :
     ∃ f : Fin n → B × F,
       (0 : F) < maxV hn (fun i => (f i).2) ∧
       A.welfare f < c * maxV hn (fun i => (f i).2) := by
@@ -345,15 +347,12 @@ def maxPairFold (h : List (B × F)) : F × B :=
     if acc.1 < p.2 ∨ (acc.1 = p.2 ∧ acc.2 ≤ p.1) then (p.2, p.1) else acc) (0, ⊥)
 
 /-- The secretary (sample-then-threshold) pricing rule. The first
-`⌊n/2⌋` arrivals face price `⊤` (rejected unconditionally); thereafter
-the price and bar are the lex-max `(value, identity)` seen so far. -/
+`⌊n/2⌋` arrivals face threshold `⊤` (rejected unconditionally); thereafter
+the threshold is the lex-max `(value, identity)` seen so far. -/
 def auction (n : ℕ) : SingleItemAuction B F where
-  price h :=
+  threshold h :=
     if h.length < n / 2 then ⊤
-    else ↑(maxPairFold h).1
-  bar h :=
-    if h.length < n / 2 then ⊤
-    else ↑(maxPairFold h).2
+    else ↑(toLex (maxPairFold h))
 
 end AuctionDef
 
@@ -409,25 +408,23 @@ private theorem welfareAux_favorable
       v (σ hσ.second_pos) < (maxPairFold h).1 ∨
       (v (σ hσ.second_pos) = (maxPairFold h).1 ∧
        g (σ hσ.second_pos) ≤ (maxPairFold h).2)) :
-    welfareAux (auction n).price (auction n).bar
+    welfareAux (auction n).threshold
       (fun i => (g (σ i), v (σ i))) h k =
       v (σ hσ.max_pos) := by
   set f : Fin n → B × F := fun i => (g (σ i), v (σ i))
   have hk_lt_n : k < n := lt_of_le_of_lt hk hσ.max_pos.isLt
-  have hp : (auction n).price h =
-      if h.length < n / 2 then ⊤ else ↑(maxPairFold h).1 := rfl
-  have hb : (auction n).bar h =
-      if h.length < n / 2 then ⊤ else ↑(maxPairFold h).2 := rfl
+  have ht : (auction n).threshold h =
+      if h.length < n / 2 then ⊤ else ↑(toLex (maxPairFold h)) := rfl
   by_cases hk_eq : k = hσ.max_pos.val
   · -- *** ACCEPTANCE at k = max_pos ***
     have hfin_eq : (⟨k, hk_lt_n⟩ : Fin n) = hσ.max_pos := Fin.ext hk_eq
     have h_phase2 : ¬ h.length < n / 2 := by
       rw [hlen]; exact not_lt.mpr (hk_eq ▸ hσ.max_in_second_half)
-    have h_accept : ((auction n).price h : WithTop F) < ↑(f ⟨k, hk_lt_n⟩).2 ∨
-        ((auction n).price h = ↑(f ⟨k, hk_lt_n⟩).2 ∧
-         (auction n).bar h ≤ (↑(f ⟨k, hk_lt_n⟩).1 : WithTop B)) := by
-      simp only [hp, hb, if_neg h_phase2, WithTop.coe_lt_coe, WithTop.coe_inj, WithTop.coe_le_coe]
-      simp only [f, hfin_eq]
+    have h_accept : ((auction n).threshold h : WithTop (Lex (F × B))) ≤
+        ↑(toLex ((f ⟨k, hk_lt_n⟩).2, (f ⟨k, hk_lt_n⟩).1)) := by
+      rw [ht, if_neg h_phase2, WithTop.coe_le_coe]
+      rw [Prod.Lex.le_iff]
+      simp only [f, hfin_eq, ofLex_toLex]
       rcases hσ.lex_second_lt_max with hvlt | ⟨hveq, hglt⟩
       · left
         rcases hfold_ub with hflt | ⟨hfeq, _⟩
@@ -444,16 +441,13 @@ private theorem welfareAux_favorable
       fun heq => hk_eq (congrArg Fin.val heq)
     have hσk_ne : σ ⟨k, hk_lt_n⟩ ≠ σ hσ.max_pos := σ.injective.ne hfin_ne
     have hlex_k_le_sec := hσ.lex_is_second _ hσk_ne
-    have h_reject : ¬ (((auction n).price h : WithTop F) < ↑(f ⟨k, hk_lt_n⟩).2 ∨
-        ((auction n).price h = ↑(f ⟨k, hk_lt_n⟩).2 ∧
-         (auction n).bar h ≤ (↑(f ⟨k, hk_lt_n⟩).1 : WithTop B))) := by
-      rw [hp, hb]
+    have h_reject : ¬ (((auction n).threshold h : WithTop (Lex (F × B))) ≤
+        ↑(toLex ((f ⟨k, hk_lt_n⟩).2, (f ⟨k, hk_lt_n⟩).1))) := by
+      rw [ht]
       by_cases h_obs : h.length < n / 2
-      · rw [if_pos h_obs, if_pos h_obs]
-        rintro (hlt | ⟨heq, _⟩)
-        · exact not_lt.mpr le_top hlt
-        · exact absurd heq.symm (WithTop.coe_ne_top)
-      · rw [if_neg h_obs, if_neg h_obs]
+      · rw [if_pos h_obs]
+        exact not_le.mpr (WithTop.coe_lt_top _)
+      · rw [if_neg h_obs]
         have h_sec_lt_k : hσ.second_pos.val < k := by
           have := hσ.second_in_first_half; omega
         have h_fold_ge_sec := hfold_lb h_sec_lt_k
@@ -468,11 +462,10 @@ private theorem welfareAux_favorable
           rcases hlex_k_le_sec with hvlt | ⟨hveq, hgle⟩
           · exact Or.inl hvlt
           · exact Or.inr ⟨hveq, lt_of_le_of_ne hgle hg_ne_sec⟩
-        show ¬ ((↑(maxPairFold h).1 : WithTop F) < ↑(f ⟨k, hk_lt_n⟩).2 ∨
-          ((↑(maxPairFold h).1 : WithTop F) = ↑(f ⟨k, hk_lt_n⟩).2 ∧
-           (↑(maxPairFold h).2 : WithTop B) ≤ ↑(f ⟨k, hk_lt_n⟩).1))
-        simp only [f, WithTop.coe_lt_coe, WithTop.coe_inj, WithTop.coe_le_coe]
-        rintro (hlt | ⟨heq, hle⟩)
+        intro hle
+        rw [WithTop.coe_le_coe, Prod.Lex.le_iff] at hle
+        simp only [f, ofLex_toLex] at hle
+        rcases hle with hlt | ⟨heq, hle⟩
         · rcases h_fold_ge_sec with hfvgt | ⟨hfveq, _⟩ <;>
             rcases hlex_k_strict with hvlt | ⟨hveq, _⟩ <;> linarith
         · rcases hlex_k_strict with hvlt | ⟨hveq, hglt⟩
@@ -918,5 +911,145 @@ theorem competitive
           (auction n).welfare (fun i => (g (σ i), v (σ i))) := step1
 
 end Secretary
+
+/-! ## Counterexample: Strict value comparison breaks the secretary guarantee -/
+
+namespace StrictComparison
+
+variable {B F : Type*} [LinearOrder F] [LinearOrder B] [Zero F] [OrderBot B] [OrderTop B]
+
+open SingleItemAuction Secretary
+
+/-- Secretary auction with strict value comparison only. The identity
+component of the threshold is `⊤ : B`, so acceptance degenerates to
+the strict inequality `p < v` (the tie-breaking disjunct `⊤ ≤ b` fails
+for every `b < ⊤`). -/
+def auction (n : ℕ) : SingleItemAuction B F where
+  threshold h :=
+    if h.length < n / 2 then ⊤
+    else ↑(toLex ((maxPairFold h).1, (⊤ : B)))
+
+variable [Field F] [IsStrictOrderedRing F]
+
+/-- With `n = 2`, equal values `M > 0`, and identities strictly below `⊤`,
+the strict-comparison secretary auction achieves welfare `= 0` on every
+arrival sequence. Since `max v = M > 0`, this violates the `1/4`-competitive
+bound. -/
+theorem welfare_eq_zero
+    (f : Fin 2 → B × F) (M : F) (hM : 0 < M)
+    (hv : ∀ i, (f i).2 = M) (hg : ∀ i, (f i).1 < (⊤ : B)) :
+    (auction 2 : SingleItemAuction B F).welfare f = 0 := by
+  unfold SingleItemAuction.welfare
+  -- k = 0: observe phase, threshold = ⊤, rejected
+  have hrej0 : ¬ (((auction 2 : SingleItemAuction B F).threshold ([] : List (B × F)) :
+      WithTop (Lex (F × B))) ≤
+      ↑(toLex ((f ⟨0, by omega⟩).2, (f ⟨0, by omega⟩).1))) := by
+    simp only [auction, List.length_nil]
+    exact not_le.mpr (WithTop.coe_lt_top _)
+  rw [welfareAux_reject _ f [] 0 (by omega) hrej0]
+  -- k = 1: threshold has value M and identity ⊤; rejected since M < M fails and ⊤ ≤ g fails
+  have hthr1 : (auction 2 : SingleItemAuction B F).threshold [f ⟨0, by omega⟩] =
+      ↑(toLex ((maxPairFold [f ⟨0, by omega⟩]).1, (⊤ : B))) := by
+    simp [auction]
+  have hrej1 : ¬ (((auction 2 : SingleItemAuction B F).threshold
+      ([] ++ [f ⟨0, by omega⟩]) : WithTop (Lex (F × B))) ≤
+      ↑(toLex ((f ⟨1, by omega⟩).2, (f ⟨1, by omega⟩).1))) := by
+    simp only [List.nil_append]
+    rw [hthr1]
+    intro hle
+    rw [WithTop.coe_le_coe, Prod.Lex.le_iff] at hle
+    simp only [ofLex_toLex] at hle
+    rcases hle with hlt | ⟨_, hle⟩
+    · have hmpf : (maxPairFold [f ⟨0, by omega⟩]).1 = M := by
+        simp only [maxPairFold, List.foldl_cons, List.foldl_nil]
+        have : (0 : F) < (f ⟨0, by omega⟩).2 := by rw [hv]; exact hM
+        rw [if_pos (Or.inl this)]
+        exact hv _
+      rw [hmpf, hv] at hlt
+      exact lt_irrefl M hlt
+    · exact absurd hle (not_le.mpr (hg _))
+  rw [welfareAux_reject _ f ([] ++ [f ⟨0, by omega⟩]) 1 (by omega) hrej1]
+  exact welfareAux_done _ f _ 2 (by omega)
+
+end StrictComparison
+
+/-! ## Counterexample: Weak value comparison degrades to 1/n on the needle profile -/
+
+namespace WeakComparison
+
+variable {B F : Type*} [LinearOrder F] [LinearOrder B] [Zero F] [OrderBot B]
+
+open SingleItemAuction Secretary
+
+/-- Secretary auction with weak value comparison: identity threshold = `⊥`,
+so acceptance degenerates to the weak inequality `p ≤ v`. -/
+def auction (n : ℕ) : SingleItemAuction B F where
+  threshold h :=
+    if h.length < n / 2 then ⊤
+    else ↑(toLex ((maxPairFold h).1, (⊥ : B)))
+
+/-- When all values in the history are `0`, the value component of
+`maxPairFold` remains `0`. -/
+lemma maxPairFold_fst_zero (h : List (B × F))
+    (hzero : ∀ p ∈ h, p.2 = (0 : F)) :
+    (maxPairFold h).1 = 0 := by
+  suffices ∀ (b : B),
+      (h.foldl (fun (acc : F × B) (p : B × F) =>
+        if acc.1 < p.2 ∨ (acc.1 = p.2 ∧ acc.2 ≤ p.1) then (p.2, p.1) else acc)
+        ((0 : F), b)).1 = 0 from
+    this ⊥
+  intro b
+  induction h generalizing b with
+  | nil => rfl
+  | cons a t ih =>
+    simp only [List.foldl_cons]
+    have ha : a.2 = (0 : F) := hzero a (by simp)
+    have ht : ∀ p ∈ t, p.2 = (0 : F) := fun p hp => hzero p (by simp [hp])
+    by_cases hcond : (0 : F) < a.2 ∨ ((0 : F) = a.2 ∧ b ≤ a.1)
+    · rw [if_pos hcond, ha]
+      exact ih ht a.1
+    · rw [if_neg hcond]
+      exact ih ht b
+
+variable [Field F] [IsStrictOrderedRing F]
+
+/-- With `n = 3` and the needle profile (one bidder has value `M`, the
+others value `0`), if the needle arrives last, the weak auction accepts a
+haystack bidder (value `0`) and welfare `= 0`, while `max v = M > 0`. -/
+theorem welfare_eq_zero_needle_last
+    (g : Fin 3 → B) (M : F) (_hM : 0 < M) :
+    let f : Fin 3 → B × F := fun i => (g i, if i.val = 2 then M else 0)
+    (WeakComparison.auction 3 : SingleItemAuction B F).welfare f = 0 := by
+  intro f
+  unfold SingleItemAuction.welfare
+  -- k = 0: observe phase (0 < 1 = 3/2), threshold = ⊤, rejected
+  have hf0 : f ⟨0, by omega⟩ = (g 0, (0 : F)) := by simp [f]
+  have hf1 : f ⟨1, by omega⟩ = (g 1, (0 : F)) := by simp [f]
+  have hrej0 : ¬ (((WeakComparison.auction 3 : SingleItemAuction B F).threshold
+      ([] : List (B × F)) : WithTop (Lex (F × B))) ≤
+      ↑(toLex ((f ⟨0, by omega⟩).2, (f ⟨0, by omega⟩).1))) := by
+    simp only [WeakComparison.auction, List.length_nil]
+    exact not_le.mpr (WithTop.coe_lt_top _)
+  rw [welfareAux_reject _ f [] 0 (by omega) hrej0]
+  -- k = 1: threshold = ↑(toLex (0, ⊥)); bidder 1 (value 0) is accepted
+  -- since toLex (0, ⊥) ≤ toLex (0, g 1) holds by bot_le
+  have hthr1 : (WeakComparison.auction 3 : SingleItemAuction B F).threshold [f ⟨0, by omega⟩] =
+      ↑(toLex ((maxPairFold [f ⟨0, by omega⟩]).1, (⊥ : B))) := by
+    simp [WeakComparison.auction]
+  have hacc1 : ((WeakComparison.auction 3 : SingleItemAuction B F).threshold
+      ([] ++ [f ⟨0, by omega⟩]) : WithTop (Lex (F × B))) ≤
+      ↑(toLex ((f ⟨1, by omega⟩).2, (f ⟨1, by omega⟩).1)) := by
+    simp only [List.nil_append]
+    rw [hthr1, hf0]
+    have hmpf : (maxPairFold [(g 0, (0 : F))]).1 = 0 :=
+      maxPairFold_fst_zero _ (fun p hp => by simp_all)
+    rw [hmpf, hf1]
+    rw [WithTop.coe_le_coe, Prod.Lex.le_iff]
+    exact Or.inr ⟨rfl, bot_le⟩
+  rw [welfareAux_accept _ f ([] ++ [f ⟨0, by omega⟩]) 1 (by omega) hacc1]
+  -- welfare = (f 1).2 = 0
+  simp [f]
+
+end WeakComparison
 
 end Online.Auction
