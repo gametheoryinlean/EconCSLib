@@ -31,89 +31,89 @@ tags:
 
 # Strict Value Comparison Breaks the Secretary Guarantee
 
-**Counterexample.** If the online single-item auction
-([[mechanism_design.auction.online.single_item_auction]]) uses strict
-value comparison only — equivalently, sets the threshold identity
-component to `⊤ : B` (`StrictComparison.auction`) so that the acceptance
-condition `threshold h ≤ ↑(toLex (v, b))` degenerates to `p < v`
-(since `⊤ ≤ b` fails for all `b < ⊤`) — then the secretary rule is
-**not** $1/4$-competitive, even for $n = 2$ and injective identities.
+**Counterexample.** If the secretary auction uses strict value
+comparison $p < v$ as the acceptance rule (ignoring identities
+entirely), it is **not** $1/4$-competitive — even for $n = 2$ bidders
+with injective identities.
 
 ## Construction
 
-Fix any $M > 0$ and set $n = 2$, $v = (M, M)$ (two bidders with identical
-value). Define the secretary auction with strict comparison (identity component `⊤`):
+Fix $M > 0$ and set $n = 2$ with $v_0 = v_1 = M$ (two bidders with
+identical value). The secretary rule observes the first bidder and sets
+threshold value $p = M$.
 
-```
-threshold h := if h.length < 1 then ⊤
-               else ↑(toLex ((maxPairFold h).1, (⊤ : B)))
-```
+### Welfare is zero on every arrival order
 
-### Welfare on every permutation is zero
+- **Bidder $0$ arrives first.** Observed and rejected (observe phase).
+  Threshold becomes $p = M$. Bidder $1$ arrives with value $M$; strict
+  test $M < M$ is **false**. Rejected. Welfare $= 0$.
 
-There are two arrival orders.
+- **Bidder $1$ arrives first.** Observed and rejected. Threshold becomes
+  $p = M$. Bidder $0$ arrives with value $M$; $M < M$ is **false**.
+  Rejected. Welfare $= 0$.
 
-- **$\sigma = \mathrm{id}$:** Bidder $0$ arrives first (observe phase,
-  price $\top$, rejected). Threshold becomes $M$. Bidder $1$ arrives
-  second with value $M$; strict comparison $M < M$ fails, so bidder $1$
-  is rejected. Welfare $= 0$.
-
-- **$\sigma = (0\;1)$:** Bidder $1$ arrives first (observe phase,
-  rejected). Threshold becomes $M$. Bidder $0$ arrives with value $M$;
-  $M < M$ fails, rejected. Welfare $= 0$.
-
-### The bound is violated
+### The competitive bound is violated
 
 $$
 \frac{1}{2!}\sum_{\sigma} \mathrm{welfare}(\sigma) = 0
-\;<\; \frac{1}{4} \cdot M = \frac{1}{4}\cdot\max_i v_i.
+\;<\; \frac{1}{4} \cdot M = \frac{1}{4} \cdot \max_i v_i.
 $$
 
 ## Why it fails
 
-Strict value comparison cannot distinguish between the observed bidder
-and a later bidder with the **same** value. In the secretary skeleton,
-the threshold is set to the maximum observed value; any later bidder
-whose value equals this maximum must be accepted (they are "as good as
-the best seen so far"), but strict comparison rejects them.
+Strict comparison cannot distinguish the observed bidder from a later
+bidder with the **same** value. In the secretary skeleton, the threshold
+is set to the maximum observed value. Any later bidder whose value
+*equals* this maximum should be accepted — they are "as good as the best
+seen so far" — but strict comparison $p < v$ rejects them at the tie.
 
-The lexicographic threshold
-([[mechanism_design.auction.online.single_item_auction]]) resolves this:
-in the secretary auction, the threshold identity component is set to the
-identity of the lex-max observed bidder, so a later bidder with the same
-value but a *higher* identity clears the threshold and is accepted. This
-is exactly the acceptance condition
-`threshold h ≤ ↑(toLex (v, b))`.
+## How lexicographic tie-breaking fixes this
 
-## Comparison with weak value comparison
+The lexicographic acceptance rule
+([[mechanism_design.auction.online.single_item_auction]]) tests
+$p < v_i \lor (p = v_i \land \bar{b} \le b_i)$, where $\bar{b}$ is the
+identity of the lex-max observed bidder. At the value tie $p = v_i = M$,
+acceptance falls to the identity comparison $\bar{b} \le b_i$. If the
+arriving bidder has a higher identity than the threshold, they clear —
+breaking the $M < M$ deadlock.
 
-Setting the threshold identity component to `⊥ : B` instead of `⊤`
-(`WeakComparison.auction`) recovers weak comparison $p \le v$, under
-which all bidders meeting the threshold are accepted. With weak
-comparison and the equal-value profile above, both permutations give
-welfare $= M = \max v$, so this particular failure is avoided.
+## Comparison with weak comparison
 
-However, weak comparison is **also not constant-competitive**: on the
-needle profile $v = (M, 0, \ldots, 0)$, the threshold drops to $0$ and
-weak comparison accepts the first phase-2 arrival unconditionally (since
-$0 \le 0$), giving expected welfare only $(1/n) \cdot M$
+Replacing strict comparison with weak comparison $p \le v$ (accept all
+ties) avoids this failure: with $v_0 = v_1 = M$, both arrival orders
+give welfare $M$.
+
+However, weak comparison has its own failure mode on the needle profile
+$v = (M, 0, \ldots, 0)$: the threshold drops to $0$ and the test
+$0 \le 0$ accepts the first phase-2 arrival regardless of value, giving
+expected welfare only $(1/n) \cdot M$
 ([[mechanism_design.auction.online.secretary_weak_comparison_needle]]).
-The secretary auction, which sets the identity component to the observed
-lex-max identity, resolves both failure modes.
 
 ## Summary
 
-| Acceptance rule           | Threshold identity component | Competitive? |
-|---------------------------|------------------------------|--------------|
-| $p < v$ (strict only)     | `⊤ : B` (`StrictComparison.auction`) | **No** — welfare $= 0$ always (this counterexample) |
-| $p \le v$ (weak only)     | `⊥ : B` (`WeakComparison.auction`) | **No** — welfare $= M/n$ on needle ([[mechanism_design.auction.online.secretary_weak_comparison_needle]]) |
-| lex (proper threshold)    | `(maxPairFold h).2` | **Yes** — welfare $\ge M/4$ ([[mechanism_design.auction.online.secretary_quarter_competitive]]) |
+| Acceptance rule | Equal-value welfare | Needle welfare | Competitive? |
+|-----------------|--------------------:|---------------:|:------------:|
+| $p < v$ (strict) | $0$ always | — | **No** (this) |
+| $p \le v$ (weak) | $M$ | $M/n$ | **No** |
+| lex | $M$ | $\ge M/4$ | **Yes** |
 
-The lex acceptance rule is the unique design among these three that
-achieves a constant competitive ratio with identity injectivity alone.
+The lexicographic rule is the only one among these three that achieves a
+constant competitive ratio
+([[mechanism_design.auction.online.secretary_quarter_competitive]]).
+
+## Remarks
+
+### Lean formalization
+
+Strict comparison is modelled by `StrictComparison.auction`, which sets
+the identity component of the threshold to $\top$ — since $\top \le b$
+fails for all $b < \top$, the acceptance condition degenerates to
+$p < v$. The theorem `welfare_eq_zero` proves welfare $= 0$ for
+$n = 2$, constant values, and any identities below $\top$.
 
 ## References
 
 - [Roughgarden 2016, Lecture 2, Problem 2.1(c)] Tim Roughgarden, *Twenty
   Lectures on Algorithmic Game Theory*, Cambridge University Press.
-  Secretary analysis of the online auction (stated for distinct values).
+  Secretary analysis (stated for distinct values, which avoids this
+  failure).
