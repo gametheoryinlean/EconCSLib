@@ -127,7 +127,7 @@ theorem ExtractsGameTree.node_head_reachable {s : G.State} {i : N}
 
 /-- On any extracted tree, root-scoped subgame perfection implies root Nash
 equilibrium through the ordinary `GameTree` equilibrium API. -/
-theorem ExtractsGameTree.spe_on_to_nash_at [TotalPreorder U]
+theorem ExtractsGameTree.spe_on_to_nash_at [TotalPreorder U] [DecidableLE U]
     {s : G.State} {tree : GameTree N U}
     (_h : ExtractsGameTree G s tree) {σ : GameTree.Strategy N U}
     (hspe : GameTree.IsSubgamePerfectOn σ tree) :

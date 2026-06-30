@@ -34,7 +34,7 @@ def StrategyProfile (G : ExtensiveGame N U) :=
     Returns `none` at chance states (mover = none). -/
 def StrategyProfile.actionAt [DecidableEq N] {G : ExtensiveGame N U}
     (σ : StrategyProfile G) (s : G.State) :
-    Option (Σ i : N, G.Action s) :=
+    Option (Σ _ : N, G.Action s) :=
   match h : G.mover s with
   | some i => some ⟨i, σ i s h⟩
   | none => none

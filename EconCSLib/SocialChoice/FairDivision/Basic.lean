@@ -67,8 +67,9 @@ def toInstance {N R S : Type*}
   pref i :=
     { rel := fun A B => I.sharePref i (A i) (B i)
       prop :=
-        { reflexive := fun A => I.sharePref i |>.prop.reflexive (A i)
-          transitive := fun _ _ _ hAB hBC => I.sharePref i |>.prop.transitive hAB hBC
+        { reflexive := ⟨fun A => (I.sharePref i |>.prop.reflexive).refl (A i)⟩
+          transitive := ⟨fun _ _ _ hAB hBC =>
+            (I.sharePref i |>.prop.transitive).trans _ _ _ hAB hBC⟩
           total := fun A B => I.sharePref i |>.prop.total (A i) (B i) } }
 
 end ShareInstance
