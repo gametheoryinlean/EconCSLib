@@ -1,6 +1,6 @@
 ---
 id: mechanism_design.auction.online.secretary_quarter_competitive
-title: Secretary Threshold Rule Is 1/4-Competitive
+title: Sample-Then-Threshold Rule Is 1/4-Competitive
 kind: theorem
 status: proved
 primary_topic: mechanism_design
@@ -14,14 +14,14 @@ lean:
   modules:
     - EconCSLib.Examples.Online.SingleItemAuction
   declarations:
-    - Online.Auction.Secretary.maxPairFold
-    - Online.Auction.Secretary.auction
-    - Online.Auction.Secretary.Favorable
-    - Online.Auction.Secretary.welfare_nonneg
-    - Online.Auction.Secretary.welfare_eq_max_of_favorable
-    - Online.Auction.Secretary.favorableSet
-    - Online.Auction.Secretary.favorableSet_card_ge
-    - Online.Auction.Secretary.competitive
+    - Online.Auction.SampleThenThreshold.maxPairFold
+    - Online.Auction.SampleThenThreshold.auction
+    - Online.Auction.SampleThenThreshold.Favorable
+    - Online.Auction.SampleThenThreshold.welfare_nonneg
+    - Online.Auction.SampleThenThreshold.welfare_eq_max_of_favorable
+    - Online.Auction.SampleThenThreshold.favorableSet
+    - Online.Auction.SampleThenThreshold.favorableSet_card_ge
+    - Online.Auction.SampleThenThreshold.competitive
 verification:
   statement: accepted
   proof: accepted
@@ -29,21 +29,22 @@ verification:
 tags:
   - auction
   - online-algorithm
-  - secretary
+  - sample-then-threshold
   - competitive-ratio
   - random-order
 ---
 
-# Secretary Threshold Rule Is 1/4-Competitive
+# Sample-Then-Threshold Rule Is 1/4-Competitive
 
 **Theorem (Roughgarden, Problem 2.1(c)).** Under a uniformly random
 arrival order, the sample-then-threshold online auction obtains expected
 welfare at least one quarter of the maximum valuation.
 
-## The secretary auction
+## The sample-then-threshold auction
 
 Given $n$ bidders with values $v_1, \ldots, v_n$ and distinct identities
-$b_1, \ldots, b_n$, the **secretary auction** proceeds in two phases:
+$b_1, \ldots, b_n$, the **sample-then-threshold auction** proceeds in
+two phases:
 
 1. **Observe phase** (positions $0, \ldots, \lfloor n/2 \rfloor - 1$).
    Set the threshold to $\top$, rejecting every bidder unconditionally.
@@ -68,8 +69,8 @@ where $\sigma$ is a uniformly random permutation of the $n$ bidders.
 
 ## Proof
 
-Let $M = \max_i v_i$. The argument is the classic Dynkin / secretary
-skeleton.
+Let $M = \max_i v_i$. The argument follows the classical Dynkin
+optimal-stopping skeleton.
 
 ### The favourable event
 
@@ -153,16 +154,17 @@ values
 Together with the deterministic impossibility
 ([[mechanism_design.auction.online.no_constant_competitive]]), this
 closes Problem 2.1: worst-case arrival admits no constant competitive
-ratio, yet random-order arrival restores one. This is the single-item,
-prophet-free instance of the secretary phenomenon — sample a constant
-fraction of the input to calibrate, then take the first item that
-exceeds the calibrated threshold.
+ratio, yet random-order arrival restores one. The technique — sample a
+constant fraction of the input to calibrate a threshold, then accept
+the first item that exceeds it — is the single-item instance of the
+broader class of online selection algorithms with random-order
+guarantees.
 
 ## Remarks
 
 ### Lean formalization
 
-The secretary auction is `Secretary.auction n`. The threshold in the
+The auction is `SampleThenThreshold.auction n`. The threshold in the
 select phase is computed by `maxPairFold h`, which folds the rejection
 history to find the lexicographic maximum of $(v, b)$ pairs. The
 favourable event is a structure `Favorable g v σ` recording the
@@ -175,4 +177,4 @@ permutations), `favorableSet_card_ge` (counting), and `competitive`
 
 - [Roughgarden 2016, Lecture 2, Problem 2.1(c)] Tim Roughgarden, *Twenty
   Lectures on Algorithmic Game Theory*, Cambridge University Press.
-  Random-order (secretary) analysis of the online auction.
+  Random-order analysis of the online auction.

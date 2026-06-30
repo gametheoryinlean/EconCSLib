@@ -24,7 +24,7 @@ verification:
 tags:
   - auction
   - online-algorithm
-  - secretary
+  - sample-then-threshold
   - counterexample
   - competitive-ratio
   - needle
@@ -32,10 +32,10 @@ tags:
 
 # Weak Value Comparison Degrades to 1/n on the Needle Profile
 
-**Counterexample.** If the secretary auction uses weak value comparison
-$p \le v$ as the acceptance rule (accepting all ties), it achieves
-expected welfare only $(1/n) \cdot \max v$ on the needle profile — which
-is **not** a constant competitive ratio.
+**Counterexample.** If the sample-then-threshold auction uses weak value
+comparison $p \le v$ as the acceptance rule (accepting all ties), it
+achieves expected welfare only $(1/n) \cdot \max v$ on the needle
+profile — which is **not** a constant competitive ratio.
 
 This complements the strict-comparison counterexample
 ([[mechanism_design.auction.online.secretary_strict_comparison_fails]]),
@@ -53,7 +53,7 @@ v = (M,\, 0,\, 0,\, \ldots,\, 0).
 $$
 
 One *needle* bidder has value $M$; the remaining $n - 1$ *haystack*
-bidders have value $0$. The secretary rule observes
+bidders have value $0$. The sample-then-threshold rule observes
 $\lfloor n/2 \rfloor$ bidders, then posts the observed maximum as the
 threshold. Under weak comparison, the acceptance test is $p \le v_i$.
 
@@ -144,5 +144,5 @@ with the needle at the last position (Case 2).
 
 - [Roughgarden 2016, Lecture 2, Problem 2.1(c)] Tim Roughgarden, *Twenty
   Lectures on Algorithmic Game Theory*, Cambridge University Press.
-  Secretary analysis (stated for distinct values, which excludes the
-  needle profile).
+  Analysis of the online auction (stated for distinct values, which
+  excludes the needle profile).

@@ -1,6 +1,6 @@
 ---
 id: mechanism_design.auction.online.secretary_strict_comparison_fails
-title: Strict Value Comparison Breaks the Secretary Guarantee
+title: Strict Value Comparison Breaks the Competitive Guarantee
 kind: example
 status: proved
 primary_topic: mechanism_design
@@ -23,23 +23,23 @@ verification:
 tags:
   - auction
   - online-algorithm
-  - secretary
+  - sample-then-threshold
   - counterexample
   - competitive-ratio
 ---
 
-# Strict Value Comparison Breaks the Secretary Guarantee
+# Strict Value Comparison Breaks the Competitive Guarantee
 
-**Counterexample.** If the secretary auction uses strict value
-comparison $p < v$ as the acceptance rule (ignoring identities
+**Counterexample.** If the sample-then-threshold auction uses strict
+value comparison $p < v$ as the acceptance rule (ignoring identities
 entirely), it is **not** $1/4$-competitive — even for $n = 2$ bidders
 with injective identities.
 
 ## Construction
 
 Fix $M > 0$ and set $n = 2$ with $v_0 = v_1 = M$ (two bidders with
-identical value). The secretary rule observes the first bidder and sets
-threshold value $p = M$.
+identical value). The sample-then-threshold rule observes the first
+bidder and sets threshold value $p = M$.
 
 ### Welfare is zero on every arrival order
 
@@ -61,10 +61,11 @@ $$
 ## Why it fails
 
 Strict comparison cannot distinguish the observed bidder from a later
-bidder with the **same** value. In the secretary skeleton, the threshold
-is set to the maximum observed value. Any later bidder whose value
-*equals* this maximum should be accepted — they are "as good as the best
-seen so far" — but strict comparison $p < v$ rejects them at the tie.
+bidder with the **same** value. In the sample-then-threshold skeleton,
+the threshold is set to the maximum observed value. Any later bidder
+whose value *equals* this maximum should be accepted — they are "as good
+as the best seen so far" — but strict comparison $p < v$ rejects them
+at the tie.
 
 ## How lexicographic tie-breaking fixes this
 
@@ -114,5 +115,5 @@ $n = 2$, constant values, and any identities below $\top$.
 
 - [Roughgarden 2016, Lecture 2, Problem 2.1(c)] Tim Roughgarden, *Twenty
   Lectures on Algorithmic Game Theory*, Cambridge University Press.
-  Secretary analysis (stated for distinct values, which avoids this
-  failure).
+  Analysis of the online auction (stated for distinct values, which
+  avoids this failure).

@@ -77,7 +77,7 @@ The corollary is immediate since $0 < c \cdot \max v$.
 ## Why the quantifiers matter
 
 - **Per $n$, not just $n = 2$.** A threshold rule may depend on the
-  number of bidders (the secretary auction
+  number of bidders (the sample-then-threshold auction
   [[mechanism_design.auction.online.secretary_quarter_competitive]]
   splits at $\lfloor n/2 \rfloor$), so refuting competitiveness on
   $2$-bidder inputs says nothing about $3$-bidder inputs. The
@@ -93,7 +93,7 @@ This impossibility motivates the escape used in the positive result:
 randomise over arrival orders. Under adversarial arrivals, the auctioneer
 must commit to the opening threshold before seeing any bid, and the
 adversary can exploit this. Under uniformly random arrival order, the
-secretary-style threshold rule recovers a constant $1/4$ guarantee
+sample-then-threshold rule recovers a constant $1/4$ guarantee
 ([[mechanism_design.auction.online.secretary_quarter_competitive]]).
 
 The contrast is the standard online-algorithms story: worst-case
