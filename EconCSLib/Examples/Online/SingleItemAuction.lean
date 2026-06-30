@@ -36,15 +36,16 @@ the "no future" constraint of online algorithms is built into the type.
 * `SingleItemAuction B F` — a threshold rule for lexicographic acceptance.
 * `welfare` — social welfare under a given arrival sequence.
 * `utility` — quasi-linear utility of a specific bidder.
-* `Secretary.auction` — the secretary (sample-then-threshold) pricing rule.
+* `SampleThenThreshold.auction` — the sample-then-threshold pricing rule.
 
 ## Main results
 
 * `dsic` — truthful bidding is weakly dominant for every bidder (Problem 2.1(a)).
 * `welfare_can_be_zero` — any auction with positive opening threshold can be
   forced to welfare `0` (Problem 2.1(b)).
-* `Secretary.competitive` — the secretary rule is 1/4-competitive under
-  uniformly random arrival for injective identities (Problem 2.1(c)).
+* `SampleThenThreshold.competitive` — the sample-then-threshold rule is
+  1/4-competitive under uniformly random arrival for injective identities
+  (Problem 2.1(c)).
 -/
 
 set_option linter.unusedSectionVars false
@@ -333,9 +334,9 @@ theorem no_constant_competitive_ratio [Inhabited B] [Field F] [IsStrictOrderedRi
 
 end SingleItemAuction
 
-/-! ## Secretary auction -/
+/-! ## Sample-then-threshold auction -/
 
-namespace Secretary
+namespace SampleThenThreshold
 
 section AuctionDef
 variable {B F : Type*} [LinearOrder F] [LinearOrder B] [Zero F] [OrderBot B]
@@ -346,9 +347,9 @@ def maxPairFold (h : List (B × F)) : F × B :=
   h.foldl (fun (acc : F × B) (p : B × F) =>
     if acc.1 < p.2 ∨ (acc.1 = p.2 ∧ acc.2 ≤ p.1) then (p.2, p.1) else acc) (0, ⊥)
 
-/-- The secretary (sample-then-threshold) pricing rule. The first
-`⌊n/2⌋` arrivals face threshold `⊤` (rejected unconditionally); thereafter
-the threshold is the lex-max `(value, identity)` seen so far. -/
+/-- The sample-then-threshold pricing rule. The first `⌊n/2⌋` arrivals
+face threshold `⊤` (rejected unconditionally); thereafter the threshold
+is the lex-max `(value, identity)` seen so far. -/
 def auction (n : ℕ) : SingleItemAuction B F where
   threshold h :=
     if h.length < n / 2 then ⊤
@@ -910,20 +911,20 @@ theorem competitive
     _ ≤ ∑ σ : Equiv.Perm (Fin n),
           (auction n).welfare (fun i => (g (σ i), v (σ i))) := step1
 
-end Secretary
+end SampleThenThreshold
 
-/-! ## Counterexample: Strict value comparison breaks the secretary guarantee -/
+/-! ## Counterexample: Strict value comparison breaks the competitive guarantee -/
 
 namespace StrictComparison
 
 variable {B F : Type*} [LinearOrder F] [LinearOrder B] [Zero F] [OrderBot B] [OrderTop B]
 
-open SingleItemAuction Secretary
+open SingleItemAuction SampleThenThreshold
 
-/-- Secretary auction with strict value comparison only. The identity
-component of the threshold is `⊤ : B`, so acceptance degenerates to
-the strict inequality `p < v` (the tie-breaking disjunct `⊤ ≤ b` fails
-for every `b < ⊤`). -/
+/-- Sample-then-threshold auction with strict value comparison only.
+The identity component of the threshold is `⊤ : B`, so acceptance
+degenerates to the strict inequality `p < v` (the tie-breaking disjunct
+`⊤ ≤ b` fails for every `b < ⊤`). -/
 def auction (n : ℕ) : SingleItemAuction B F where
   threshold h :=
     if h.length < n / 2 then ⊤
@@ -932,8 +933,8 @@ def auction (n : ℕ) : SingleItemAuction B F where
 variable [Field F] [IsStrictOrderedRing F]
 
 /-- With `n = 2`, equal values `M > 0`, and identities strictly below `⊤`,
-the strict-comparison secretary auction achieves welfare `= 0` on every
-arrival sequence. Since `max v = M > 0`, this violates the `1/4`-competitive
+the strict-comparison auction achieves welfare `= 0` on every arrival
+sequence. Since `max v = M > 0`, this violates the `1/4`-competitive
 bound. -/
 theorem welfare_eq_zero
     (f : Fin 2 → B × F) (M : F) (hM : 0 < M)
@@ -979,10 +980,11 @@ namespace WeakComparison
 
 variable {B F : Type*} [LinearOrder F] [LinearOrder B] [Zero F] [OrderBot B]
 
-open SingleItemAuction Secretary
+open SingleItemAuction SampleThenThreshold
 
-/-- Secretary auction with weak value comparison: identity threshold = `⊥`,
-so acceptance degenerates to the weak inequality `p ≤ v`. -/
+/-- Sample-then-threshold auction with weak value comparison: identity
+threshold = `⊥`, so acceptance degenerates to the weak inequality
+`p ≤ v`. -/
 def auction (n : ℕ) : SingleItemAuction B F where
   threshold h :=
     if h.length < n / 2 then ⊤

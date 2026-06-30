@@ -31,66 +31,85 @@ tags:
 
 # No Deterministic Constant Competitive Ratio
 
-**Theorem (`welfare_can_be_zero`, Roughgarden Problem 2.1(b)).** Any
-deterministic online single-item auction
-([[mechanism_design.auction.online.single_item_auction]]) with a positive
-opening threshold can be forced to capture **zero** welfare while the
-optimum is positive.
+**Theorem (Roughgarden, Problem 2.1(b)).** For any deterministic online
+single-item auction
+([[mechanism_design.auction.online.single_item_auction]]) with a
+positive opening threshold and any number of bidders $n \ge 1$, there
+exists a valuation profile on which the auction captures **zero**
+welfare while the optimum is positive.
 
-For every $A$ with $A.\mathrm{threshold}\,[\,] = \uparrow t \implies 0 < (\mathrm{ofLex}\,t).1$ and every $n \ge 1$,
-there exists an $n$-bidder profile $f$ with $\mathrm{maxV}\,f > 0$ and
+## Statement
+
+For every threshold rule $T$ with opening threshold value $p_0 > 0$ and
+every $n \ge 1$, there exists an $n$-bidder profile $f$ such that
 
 $$
-A.\mathrm{welfare}(f) \;=\; 0 .
+\mathrm{welfare}_T(f) = 0 \quad\text{and}\quad \max_i v_i > 0.
 $$
 
-**Corollary (`no_constant_competitive_ratio`).** Hence $A$ has no
-constant competitive ratio: for every $c > 0$ and every $n \ge 1$ some
-profile gives $A.\mathrm{welfare}(f) = 0 < c \cdot \mathrm{maxV}\,f$.
+**Corollary.** No deterministic online auction achieves a constant
+competitive ratio: for every $c > 0$ and every $n \ge 1$, some profile
+gives $\mathrm{welfare}_T(f) = 0 < c \cdot \max_i v_i$.
 
 ## Proof
 
-Fix $A$ whose opening threshold has positive value component. Two cases:
+The adversary probes the opening threshold and exploits it.
 
-- **$A.\mathrm{threshold}\,[\,] = \top$.** The adversary sends bidder $0$ with value $1$ and
-  every later bidder with value $0$. Threshold $\top$ rejects everything, so
-  welfare is $0$ while $\mathrm{maxV} \ge 1 > 0$.
-- **$A.\mathrm{threshold}\,[\,] = \uparrow t$ with $(\mathrm{ofLex}\,t).1 > 0$.** Let $p = (\mathrm{ofLex}\,t).1$.
-  Bidder $0$ values the item at $p/2$ and every later bidder values it
-  at $0$. Bidder $0$ faces threshold $t$ and bids $p/2 < p$, so the
-  lex acceptance condition $t \le \mathrm{toLex}(p/2, b_0)$ fails — they
-  are rejected. Every remaining bidder has value $0$, so welfare is $0$
-  by the structural lemma `welfareAux_all_zero`.
+**Case 1: the opening threshold is $\top$** (reject unconditionally).
+The adversary sends one bidder with value $1$ and $n - 1$ bidders with
+value $0$. Threshold $\top$ rejects everyone, so welfare is $0$ while
+$\max v = 1$.
 
-The corollary is immediate since $0 < c \cdot \mathrm{maxV}$.
+**Case 2: the opening threshold has value $p_0 > 0$.** The adversary
+sends all $n$ bidders with value $p_0 / 2$, then sets all but the first
+bidder's value to $0$.
 
-## Why the quantifiers are exactly these
+- Bidder $0$ faces threshold value $p_0$ and bids $p_0/2$. Since
+  $p_0/2 < p_0$, the lexicographic acceptance condition fails — bidder
+  $0$ is rejected.
+- Every remaining bidder has value $0$ and cannot clear any nonneg
+  threshold. All are rejected.
 
-- **Per $n$, not just $n = 2$.** A posted-price auction may depend on the
-  number of bidders (the secretary auction
-  [[mechanism_design.auction.online.secretary_quarter_competitive]] splits
-  at $\lfloor n/2 \rfloor$), so refuting competitiveness on $2$-bidder
-  inputs says nothing about $3$-bidder inputs. The impossibility must —
-  and does — hold for **every** $n$.
-- **Positive opening threshold, and $n \ge 1$ is then tight.** With
-  a non-positive value component in the opening threshold, a lone first
-  bidder wins the item for free, so a single-bidder auction would capture
-  full welfare. Requiring a positive opening threshold — the natural
-  assumption for an auction — removes exactly that obstruction.
+Welfare is $0$, while $\max v = p_0/2 > 0$.
+
+The corollary is immediate since $0 < c \cdot \max v$.
+
+## Why the quantifiers matter
+
+- **Per $n$, not just $n = 2$.** A threshold rule may depend on the
+  number of bidders (the sample-then-threshold auction
+  [[mechanism_design.auction.online.secretary_quarter_competitive]]
+  splits at $\lfloor n/2 \rfloor$), so refuting competitiveness on
+  $2$-bidder inputs says nothing about $3$-bidder inputs. The
+  impossibility holds for **every** $n$.
+- **Positive opening threshold is the natural assumption.** With a
+  non-positive opening threshold, a lone first bidder would win the item
+  for free — an auction that gives the item away is trivially
+  competitive but economically vacuous.
 
 ## Why it matters
 
-This is the impossibility half of Problem 2.1, and it motivates the
-escape used in the positive result:
+This impossibility motivates the escape used in the positive result:
+randomise over arrival orders. Under adversarial arrivals, the auctioneer
+must commit to the opening threshold before seeing any bid, and the
+adversary can exploit this. Under uniformly random arrival order, the
+sample-then-threshold rule recovers a constant $1/4$ guarantee
+([[mechanism_design.auction.online.secretary_quarter_competitive]]).
 
-- **Randomise the input** (rather than the mechanism): under uniformly
-  random arrival order the secretary-style threshold rule recovers a
-  constant guarantee, the $1/4$ bound of
-  [[mechanism_design.auction.online.secretary_quarter_competitive]].
-- The contrast is the standard online-algorithms story: worst-case
-  competitive analysis is hopeless because the algorithm must commit to
-  the opening price before seeing any bid, while average-case
-  (random-order) analysis remains informative.
+The contrast is the standard online-algorithms story: worst-case
+competitive analysis is hopeless, but average-case (random-order)
+analysis remains informative.
+
+## Remarks
+
+### Lean formalization
+
+The main statement is `welfare_can_be_zero`. The hypothesis on the
+opening threshold takes the form: for all $t$ with $T([]) = \uparrow t$,
+the value component of $t$ is positive. The corollary
+`no_constant_competitive_ratio` is immediate. The proof for Case 2 uses
+`welfareAux_all_zero` to show that after the first bidder is rejected,
+all remaining zero-value bidders are also rejected.
 
 ## References
 

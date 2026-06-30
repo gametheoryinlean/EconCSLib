@@ -1,6 +1,6 @@
 ---
 id: mechanism_design.auction.online.secretary_quarter_competitive
-title: Secretary Threshold Rule Is 1/4-Competitive
+title: Sample-Then-Threshold Rule Is 1/4-Competitive
 kind: theorem
 status: proved
 primary_topic: mechanism_design
@@ -10,19 +10,18 @@ topics:
   - mechanism_design.auction.online
 uses:
   - mechanism_design.auction.online.single_item_auction
-  - mechanism_design.auction.online.no_constant_competitive
 lean:
   modules:
     - EconCSLib.Examples.Online.SingleItemAuction
   declarations:
-    - Online.Auction.Secretary.maxPairFold
-    - Online.Auction.Secretary.auction
-    - Online.Auction.Secretary.Favorable
-    - Online.Auction.Secretary.welfare_nonneg
-    - Online.Auction.Secretary.welfare_eq_max_of_favorable
-    - Online.Auction.Secretary.favorableSet
-    - Online.Auction.Secretary.favorableSet_card_ge
-    - Online.Auction.Secretary.competitive
+    - Online.Auction.SampleThenThreshold.maxPairFold
+    - Online.Auction.SampleThenThreshold.auction
+    - Online.Auction.SampleThenThreshold.Favorable
+    - Online.Auction.SampleThenThreshold.welfare_nonneg
+    - Online.Auction.SampleThenThreshold.welfare_eq_max_of_favorable
+    - Online.Auction.SampleThenThreshold.favorableSet
+    - Online.Auction.SampleThenThreshold.favorableSet_card_ge
+    - Online.Auction.SampleThenThreshold.competitive
 verification:
   statement: accepted
   proof: accepted
@@ -30,139 +29,152 @@ verification:
 tags:
   - auction
   - online-algorithm
-  - secretary
+  - sample-then-threshold
   - competitive-ratio
   - random-order
 ---
 
-# Secretary Threshold Rule Is 1/4-Competitive
+# Sample-Then-Threshold Rule Is 1/4-Competitive
 
-**Theorem (Roughgarden, Problem 2.1(c)).** Under a uniformly random arrival
-order, an explicit sample-then-threshold online auction obtains expected
+**Theorem (Roughgarden, Problem 2.1(c)).** Under a uniformly random
+arrival order, the sample-then-threshold online auction obtains expected
 welfare at least one quarter of the maximum valuation.
 
-## The secretary auction
+## The sample-then-threshold auction
 
-`Secretary.auction n` is the rule that posts unbeatable thresholds during
-an *observe* phase (the first $\lfloor n/2\rfloor$ arrivals) and
-thereafter posts the lex-max `(value, identity)` seen so far:
+Given $n$ bidders with values $v_1, \ldots, v_n$ and distinct identities
+$b_1, \ldots, b_n$, the **sample-then-threshold auction** proceeds in
+two phases:
 
-- `threshold h := if h.length < n/2 then ⊤ else ↑(toLex (maxPairFold h))`
+1. **Observe phase** (positions $0, \ldots, \lfloor n/2 \rfloor - 1$).
+   Set the threshold to $\top$, rejecting every bidder unconditionally.
+   Record the lexicographic maximum $(p^*, \bar{b}^*)$ of the observed
+   $(v, b)$ pairs.
 
-where `maxPairFold h` folds the rejection history to find the
-lexicographic maximum of `(value, identity)` pairs, starting from
-$(0, \bot)$.
+2. **Select phase** (positions $\lfloor n/2 \rfloor, \ldots, n-1$).
+   Post the threshold $(p^*, \bar{b}^*)$. Accept the first bidder
+   whose $(v_i, b_i)$ lexicographically exceeds $(p^*, \bar{b}^*)$.
 
 ## Statement
 
-For $n \ge 2$, an injective identity assignment
-$g : \mathrm{Fin}\,n \to B$, nonneg valuations $v$, and truthful bids,
+For $n \ge 2$, distinct identities $b_i$, and nonneg valuations $v_i$:
 
 $$
-\frac14 \cdot \max_i v_i
+\frac{1}{4} \cdot \max_i v_i
 \;\le\;
-\frac{1}{n!}\sum_{\sigma \in \mathrm{Perm}(\mathrm{Fin}\,n)}
-\mathrm{welfare}\bigl(g\circ\sigma,\; v\circ\sigma\bigr),
+\mathbb{E}_\sigma\bigl[\mathrm{welfare}(v \circ \sigma,\; b \circ \sigma)\bigr],
 $$
 
-where the average over permutations $\sigma$ models the uniform random
-arrival order (`competitive`).
+where $\sigma$ is a uniformly random permutation of the $n$ bidders.
 
 ## Proof
 
-Let $\mathrm{MAX} = \max_i v_i$. The argument is the classic Dynkin /
-secretary skeleton in three pieces.
+Let $M = \max_i v_i$. The argument follows the classical Dynkin
+optimal-stopping skeleton.
 
 ### The favourable event
 
-Call $\sigma$ **favourable** (`Favorable g v σ`) when the lex-argmax
-bidder (under the `(v, g)` order) arrives in the second half
-($\mathrm{max\_pos} \ge \lfloor n/2\rfloor$) and the lex-second bidder
-arrives in the first half ($\mathrm{second\_pos} < \lfloor n/2\rfloor$).
+Call a permutation $\sigma$ **favourable** when:
+- The **lex-argmax** bidder — the bidder with the largest $(v_i, b_i)$
+  under lexicographic order — arrives in the select phase.
+- The **lex-second** bidder — the second-largest under the same order —
+  arrives in the observe phase.
 
-The `Favorable` structure records:
-- `v_is_max`: $\forall j,\; v\,j \le v\,(\sigma\,\mathrm{max\_pos})$
-- `g_is_max_among_ties`: $\forall j,\; v\,j = v\,(\sigma\,\mathrm{max\_pos}) \to g\,j \le g\,(\sigma\,\mathrm{max\_pos})$
-- `lex_is_second`: $\forall j \ne \sigma\,\mathrm{max\_pos}$, $j$ is
-  lex-below the second
-- `lex_second_lt_max`: the second is lex-strictly below the max
-- `max_in_second_half`, `second_in_first_half`: the position constraints
+Identity injectivity guarantees a unique lex-argmax and lex-second even
+when values collide.
 
-### Welfare is exactly MAX on the favourable event
+### Welfare equals $M$ on the favourable event
 
-`welfare_eq_max_of_favorable`: on a favourable $\sigma$ the auction sells
-to the lex-argmax bidder at the threshold, so welfare equals
-$\mathrm{MAX}$. The core is an induction (`welfareAux_favorable`)
-processing bidders one at a time:
+On a favourable permutation, the auction sells to the lex-argmax bidder
+at welfare $M$. The argument processes bidders one at a time:
 
-- **Every pre-argmax bidder is rejected.** In the observe phase the price
-  $\top$ rejects everything. In the second phase the threshold is the
-  running lex-max of first-half bids, which is lex-at-least the
-  second-largest; every remaining non-argmax bid is *lex-strictly* below
-  the second-largest (by identity injectivity), hence below the threshold.
-- **The argmax bidder is accepted**, since its `(value, identity)` pair
-  lex-exceeds the threshold, yielding welfare $\mathrm{MAX}$.
+- **Every pre-argmax bidder in phase 2 is rejected.** The threshold
+  $(p^*, \bar{b}^*)$ is at least as large as the lex-second bidder's
+  pair (since the lex-second was observed in phase 1). Every non-argmax
+  bidder is lex-strictly below the lex-second (by identity injectivity),
+  hence lex-strictly below the threshold.
 
-### The favourable event has probability at least 1/4
+- **The lex-argmax bidder is accepted.** Their pair $(v_a, b_a)$
+  lex-exceeds the threshold, since $v_a \ge p^*$ and, at a value tie,
+  $b_a > \bar{b}^*$ (the argmax has the largest identity among
+  value-tied bidders).
 
-`favorableSet_card_ge`: there are at least $n!/4$ favourable permutations.
-The proof finds the lex-argmax $a$ and lex-second $c$ of the pairs
-$(v\,i,\, g\,i)$ using `Finset.exists_max_image` with `Prod.Lex` order
-(identity injectivity makes all pairs distinct, giving $a \ne c$ and
-strict lex ordering). Each permutation $\sigma$ with $\sigma^{-1}(a)$
-in the second half and $\sigma^{-1}(c)$ in the first half is favourable;
-the count of such permutations equals
+### The favourable event has probability $\ge 1/4$
+
+Among all $n!$ permutations, the number of favourable ones is at least
 
 $$
-|\mathrm{favorableSet}\,g\,v|
-\;\ge\; (n-\lfloor n/2\rfloor)\cdot\lfloor n/2\rfloor\cdot (n-2)!,
+\lceil n/2 \rceil \cdot \lfloor n/2 \rfloor \cdot (n-2)!.
 $$
 
-computed by the bijection $\sigma \mapsto \sigma^{-1}$ and the
-combinatorial lemma `count_Q`. The elementary inequality
-$4\cdot\lceil n/2\rceil\cdot\lfloor n/2\rfloor \ge n(n-1)$ gives
-$4\,|\mathrm{favorableSet}\,g\,v| \ge n!$.
+This counts permutations where the lex-argmax occupies one of
+$\lceil n/2 \rceil$ select-phase positions and the lex-second occupies
+one of $\lfloor n/2 \rfloor$ observe-phase positions, with the remaining
+$n - 2$ bidders in any order. The elementary inequality
+
+$$
+4 \cdot \lceil n/2 \rceil \cdot \lfloor n/2 \rfloor \ge n(n-1)
+$$
+
+then gives: $4 \cdot |\text{favourable}| \ge n!$, i.e.,
+$\Pr[\text{favourable}] \ge 1/4$.
 
 ### Assembly
 
-Welfare is nonneg everywhere (`welfare_nonneg`) and equals $\mathrm{MAX}$
-on the favourable set, so the permutation sum is at least
-$|\mathrm{favorableSet}|\cdot\mathrm{MAX} \ge \tfrac14 n!\,\mathrm{MAX}$;
-dividing by $n!$ gives the bound.
+Welfare is nonneg on every permutation and equals $M$ on the favourable
+set. Hence
+
+$$
+\mathbb{E}_\sigma[\mathrm{welfare}]
+\;\ge\; \Pr[\text{favourable}] \cdot M
+\;\ge\; \tfrac{1}{4} M.
+$$
 
 ## Why identity injectivity, not value injectivity
 
-The hypothesis is `Function.Injective g` (identity injectivity), **not**
-`Function.Injective v` (value injectivity). The lex acceptance rule
-([[mechanism_design.auction.online.single_item_auction]]) resolves value
-ties by comparing identities, so:
+The hypothesis is that identities $b_i$ are distinct, **not** that
+values $v_i$ are distinct. This is the mathematically natural condition:
+the competitive-ratio guarantee is about the mechanism, not an
+accidental assumption on the input.
 
-- The lex-argmax and lex-second of `(v i, g i)` are *unique* even when
-  values collide, as long as identities are distinct.
-- The rejection proof for pre-argmax bidders in the second phase uses
-  lex-strict inequality — which only needs identity distinctness at
-  value ties, not global value injectivity.
+The lexicographic order on $(v_i, b_i)$ has a unique argmax and
+second-max even when values collide, as long as identities are distinct.
+The rejection proof for pre-argmax bidders uses lex-strict inequality,
+which needs identity distinctness at value ties — not global value
+injectivity.
 
-This is why `SingleItemAuction` uses a lexicographic threshold
-`WithTop (Lex (F × B))` rather than a simple value threshold: without
-the identity component, the theorem would need the mathematically
-unnatural hypothesis that all bidders have distinct values. See the
-definition node
-([[mechanism_design.auction.online.single_item_auction]]) for the full
-design rationale.
+This is why the auction uses a lexicographic threshold rather than a
+simple value threshold: without the identity component, the theorem
+would require the unnatural hypothesis that all bidders have distinct
+values
+([[mechanism_design.auction.online.single_item_auction]]).
 
 ## Why it matters
 
 Together with the deterministic impossibility
-([[mechanism_design.auction.online.no_constant_competitive]]), this closes
-Problem 2.1: worst-case order admits no constant competitive ratio, yet
-random order restores a constant one. It is the single-item,
-prophet-free instance of the secretary phenomenon — sample a constant
-fraction of the input to set a threshold, then take the first item that
-beats it.
+([[mechanism_design.auction.online.no_constant_competitive]]), this
+closes Problem 2.1: worst-case arrival admits no constant competitive
+ratio, yet random-order arrival restores one. The technique — sample a
+constant fraction of the input to calibrate a threshold, then accept
+the first item that exceeds it — is the single-item instance of the
+broader class of online selection algorithms with random-order
+guarantees.
+
+## Remarks
+
+### Lean formalization
+
+The auction is `SampleThenThreshold.auction n`. The threshold in the
+select phase is computed by `maxPairFold h`, which folds the rejection
+history to find the lexicographic maximum of $(v, b)$ pairs. The
+favourable event is a structure `Favorable g v σ` recording the
+position constraints and lex-ordering witnesses. The main proof chain:
+`welfare_eq_max_of_favorable` (welfare $= M$ on favourable
+permutations), `favorableSet_card_ge` (counting), and `competitive`
+(assembly).
 
 ## References
 
 - [Roughgarden 2016, Lecture 2, Problem 2.1(c)] Tim Roughgarden, *Twenty
   Lectures on Algorithmic Game Theory*, Cambridge University Press.
-  Random-order (secretary) analysis of the online auction.
+  Random-order analysis of the online auction.

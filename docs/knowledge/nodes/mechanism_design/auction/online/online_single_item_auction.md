@@ -38,156 +38,153 @@ tags:
 
 # Online Single-Item (Posted-Price) Auction
 
-The **online single-item auction** sells one indivisible good to bidders
-who arrive one at a time. While the item is unsold, the auctioneer posts
-a take-it-or-leave-it price that may depend **only on the bids already
-seen**; the current bidder either accepts (and the auction ends) or departs
-forever. This is the running example of Roughgarden's *Twenty Lectures*,
+An **online single-item auction** sells one indivisible good to $n$
+bidders who arrive sequentially. Each bidder $i$ has a private value
+$v_i \ge 0$ and a distinct identity $b_i$. While the item is unsold,
+the auctioneer posts a take-it-or-leave-it threshold that depends
+**only on bids already rejected**; the current bidder either clears the
+threshold (and the auction ends) or departs forever.
+
+This is the running example of Roughgarden's *Twenty Lectures*,
 Problem 2.1.
 
 ## Model
 
-The type `SingleItemAuction B F` is parameterised by an identity type `B`
-and a numeric type `F` (any linearly ordered field). Each bidder presents
-a pair `(b, v) : B × F`, and the auction is defined by a single field:
-
-- `threshold : List (B × F) → WithTop (Lex (F × B))` — a lexicographic
-  threshold combining value and identity.
-
-The field reads the full history of rejected `(identity, value)` pairs.
-The threshold `⊤` rejects unconditionally; `↑(toLex (p, b))` accepts
-when `threshold h ≤ ↑(toLex (v_i, b_i))`, which by `Prod.Lex.le_iff`
-gives the **lexicographic** condition:
+A **single-item auction** is specified by a threshold rule
 
 $$
-p < v_i \;\lor\; (p = v_i \;\land\; b \le b_i).
+T : \underbrace{(b_1, v_1), \ldots, (b_{k-1}, v_{k-1})}_{\text{rejected history}} \;\longmapsto\; (p,\, \bar{b}) \in (F \times B)_\top
 $$
 
-A run is driven by the generic online-algorithm framework
-`Online.OnlineAlgorithm Input State Output`, whose single field
-`step : State → Option Input → State × Option Output` consumes one input
-and emits the next state together with an optional output. The auction
-state
+that reads the history of rejected (identity, value) pairs and returns
+either $\top$ (reject unconditionally) or a **lexicographic threshold**
+$(p, \bar{b})$.
+
+Bidder $i$ with value $v_i$ and identity $b_i$ **clears** the threshold
+$(p, \bar{b})$ when
 
 $$
-\mathrm{AuctionState}\,B\,F \;=\; \mathsf{unsold}\,(\text{history} :
-\mathrm{List}\,(B \times F))
-\;\mid\; \mathsf{sold}\,(\text{winner} : \mathbb{N})\,(\text{price} : F)
+p < v_i \quad\lor\quad (p = v_i \;\land\; \bar{b} \le b_i).
 $$
 
-carries in the `unsold` case exactly the list of previously rejected
-$(identity, value)$ pairs — the only thing the pricing rule is allowed to
-read. The embedding into the framework is `A.online`:
+The first bidder to clear the threshold wins the item; the auction pays
+welfare equal to the winner's value. If every bidder is rejected, welfare
+is zero.
 
-```
-step
-  | .unsold h, some (bi, vi) => match A.threshold h with
-                           | ⊤     => (.unsold (h ++ [(bi, vi)]), none)
-                           | ↑t    => if t ≤ toLex (vi, bi)
-                                      then (.sold h.length (ofLex t).1, some (ofLex t).1)
-                                      else (.unsold (h ++ [(bi, vi)]), none)
-  | .unsold h, none   => (.unsold h, none)
-  | .sold w p, _      => (.sold w p, none)
-```
+**Social welfare** of a profile $f = ((b_0, v_0), \ldots, (b_{n-1},
+v_{n-1}))$ presented in arrival order is the value $v_j$ of the first
+bidder $j$ to clear the running threshold, or $0$ if no bidder clears.
 
-## Welfare and utility
+**Utility** of bidder $i$ is quasi-linear: $v_i - p$ if $i$ wins at
+threshold value $p$, and $0$ otherwise.
 
-For game-theoretic statements the $n$ bidders are indexed by
-$\mathrm{Fin}\,n$, with a profile $f : \mathrm{Fin}\,n \to B \times F$
-presented in arrival order.
+## Why tie-breaking is essential
 
-- `A.welfare f` is the **social welfare**: the value $(f\,j).2$ of
-  whichever bidder $j$ first clears the posted price (lexicographically),
-  or $0$ if every bidder is rejected. It is defined via `welfareAux`,
-  a direct recursion carrying the rejection history, so that small
-  concrete profiles reduce cleanly under `simp`.
-- `A.utility f v i` is bidder $i$'s quasi-linear payoff $v_i - p$ when
-  $i$ wins at price $p$, and $0$ otherwise. It factors through
-  `stateBeforeStep`, the state reached *before* bidder $i$ is processed,
-  isolating $i$'s local view from the global trajectory.
+A simpler design would threshold on values alone, accepting when
+$p < v_i$ or when $p \le v_i$. Both fail.
 
-## Remarks
+### Strict comparison fails on equal values
 
-### Why a single lexicographic threshold?
-
-A natural first design would use a simpler threshold in `WithTop F`
-(value only) and require **value injectivity** (`Function.Injective v`)
-in the secretary theorem. But value injectivity is mathematically
-unnatural: the competitive-ratio guarantee is about the mechanism, not
-about an accidental distinctness hypothesis on valuations.
-
-An earlier design used two separate fields (`price` and `bar`) to encode
-the value threshold and identity tie-breaker independently. The current
-single-field design `threshold : List (B × F) → WithTop (Lex (F × B))`
-is equivalent but cleaner: `Lex (F × B)` packages both components into
-a single lexicographic pair, and the acceptance test reduces to a single
-comparison `threshold h ≤ ↑(toLex (v_i, b_i))`.
-
-The secretary auction
-([[mechanism_design.auction.online.secretary_quarter_competitive]])
-requires **identity injectivity** (`Function.Injective g`) — a
-structural property of the bidder-labelling system, not a restriction
-on valuations. The lex acceptance rule resolves value ties by comparing
-identities, so:
-
-- **Tie-breaking is internal.** Value ties at the threshold are
-  resolved by the identity component of the threshold, without an
-  external tie-breaking oracle or an arbitrary selection.
-- **DSIC is format-independent.** The `local_dsic` lemma abstracts
-  the tie-breaking condition as a `Prop` parameter `tie_ok`; truthful
-  bidding is optimal regardless of how ties are broken
-  ([[mechanism_design.auction.online.dsic]]).
-- **The secretary analysis uses `g`-injectivity, not `v`-injectivity.**
-  The lex order on `(v i, g i)` guarantees a unique argmax and
-  second-max even with value ties, and the rejection proof reduces to
-  showing that pre-argmax bids are **lex-strictly** below the threshold.
-
-Setting the identity component to `⊤ : B` (requiring `[OrderTop B]`)
-forces strict value comparison: `threshold h ≤ ↑(toLex (v, b))` with
-identity component `⊤` degenerates to `p < v` since `⊤ ≤ b` fails
-for all `b < ⊤`. This is the `StrictComparison.auction`. It is
-**fatal** for the secretary guarantee: with $v = (M, M)$ and $n = 2$,
-the threshold equals $M$ and the strict test $M < M$ rejects every
-remaining bidder, giving welfare $= 0$ on **all** arrival orders
+If the acceptance rule is $p < v_i$ (no tie-breaking), consider $n = 2$
+bidders with $v_0 = v_1 = M$. The sample-then-threshold rule
+sets $p = M$ after observing the first bidder. The second bidder faces
+$M < M$, which is false. Both arrival orders give welfare $= 0$, while
+$\max v = M$. The mechanism is not competitive at all
 ([[mechanism_design.auction.online.secretary_strict_comparison_fails]]).
 
-Setting the identity component to `⊥ : B` recovers weak comparison
-$p \le v_i$ (since `⊥ ≤ b` holds for all `b`). This is the
-`WeakComparison.auction`. It avoids the equal-value failure, but is
-**also not constant-competitive**: on the needle profile
-$v = (M, 0, \ldots, 0)$, the threshold drops to $0$ and weak comparison
-accepts the **first** phase-2 arrival (since $0 \le 0$), regardless of
+### Weak comparison fails on the needle profile
+
+If the acceptance rule is $p \le v_i$ (accept all ties), consider the
+*needle profile*: $v_0 = M$, $v_1 = \cdots = v_{n-1} = 0$. All
+observed bidders have value $0$, so the threshold drops to $p = 0$.
+The test $0 \le 0$ passes for the first phase-2 arrival, regardless of
 whether it is the needle. The needle is first in phase 2 with
-probability $1/n$, so expected welfare is $(1/n) \cdot M$ — not a
+probability $1/n$, giving expected welfare $(1/n) \cdot M$ — not a
 constant fraction of $\max v$
 ([[mechanism_design.auction.online.secretary_weak_comparison_needle]]).
 
-The secretary auction sets the identity component to the observed
-lex-max identity, navigating between the two pitfalls: it rejects
-haystack bidders whose identities fall below the threshold, while still
-accepting the needle whose value strictly exceeds the threshold.
+### Lexicographic tie-breaking resolves both
 
-### Why two type parameters?
+The key insight is to attach an **identity** component $\bar{b}$ to the
+threshold. At a value tie ($p = v_i$), the auction compares identities:
+accept if $\bar{b} \le b_i$, reject otherwise.
 
-The two-type-parameter design `SingleItemAuction B F` keeps the identity
-type `B` abstract and separate from the value type `F`. This enables
-identity-aware pricing (needed for the secretary analysis) while keeping
-the core auction theory generic. The two indexing conventions coexist:
-`List (B × F)` is the natural type for the *streaming* input, while
-$\mathrm{Fin}\,n \to B \times F$ is the natural type for the
-*game-theoretic* layer (fixed agents, single-bidder deviations via
-`Function.update`, random arrival via `Equiv.Perm (Fin n)`); the two are
-bridged by `List.ofFn`.
+This navigates between the two failure modes:
 
-## Position in the library
+- **Equal-value profiles.** At the tie $p = v_i = M$, the identity
+  comparison $\bar{b} \le b_i$ distinguishes the observed bidder from a
+  later arrival. A bidder with a higher identity than the threshold
+  clears; one with a lower identity does not. The strict-comparison
+  deadlock ($M < M$ always false) is broken.
 
-Concrete instantiations fix the pricing rule and feed the three results
-of Problem 2.1:
-- truthfulness ([[mechanism_design.auction.online.dsic]]),
-- deterministic impossibility
-  ([[mechanism_design.auction.online.no_constant_competitive]]),
-- secretary guarantee
-  ([[mechanism_design.auction.online.secretary_quarter_competitive]]).
+- **Needle profile.** When $p = 0$ and a haystack bidder with value $0$
+  arrives, the value test $0 < 0$ fails, so acceptance falls to the
+  identity test $\bar{b} \le b_i$. The sample-then-threshold rule sets $\bar{b}$ to
+  the maximum identity seen in phase 1. Haystack bidders from phase 2
+  have identities below this maximum (by identity injectivity), so they
+  are rejected. The needle, whose value $M > 0$ strictly exceeds the
+  threshold, is accepted unconditionally.
+
+The combined acceptance condition is the **lexicographic order** on
+$(v, b)$: this is the mathematical content of the threshold design. The
+sample-then-threshold auction with this rule is $1/4$-competitive
+([[mechanism_design.auction.online.secretary_quarter_competitive]]).
+
+## The three parts of Problem 2.1
+
+Concrete threshold rules yield the three results:
+
+1. **Truthfulness (Problem 2.1(a)).** Every single-item auction of this
+   form is DSIC: truthful bidding $v_i$ weakly dominates any
+   misreport, regardless of the threshold rule
+   ([[mechanism_design.auction.online.dsic]]).
+
+2. **Deterministic impossibility (Problem 2.1(b)).** Under adversarial
+   arrival order, no deterministic threshold rule achieves a constant
+   competitive ratio
+   ([[mechanism_design.auction.online.no_constant_competitive]]).
+
+3. **Random-order guarantee (Problem 2.1(c)).** Under uniformly random
+   arrival, the sample-then-threshold rule is $1/4$-competitive
+   ([[mechanism_design.auction.online.secretary_quarter_competitive]]).
+
+## Remarks
+
+### Lean formalization
+
+The auction is formalised as `SingleItemAuction B F` with a single field
+`threshold : List (B × F) → WithTop (Lex (F × B))`. The type
+`Lex (F × B)` is Lean's lexicographic product; `WithTop` adjoins $\top$.
+The acceptance test is a single comparison
+`threshold h ≤ ↑(toLex (v_i, b_i))`, which by `Prod.Lex.le_iff`
+unfolds to $p < v_i \lor (p = v_i \land \bar{b} \le b_i)$.
+
+The auction is embedded into a generic online-algorithm framework
+(`OnlineAlgorithm`) via `SingleItemAuction.online`. The state is either
+$\mathsf{unsold}(\text{history})$ or $\mathsf{sold}(\text{winner},
+\text{price})$. Welfare is computed by `welfareAux`, a direct recursion
+carrying the rejection history, chosen so that small concrete profiles
+reduce cleanly under `simp`. Utility factors through `stateBeforeStep`
+to isolate each bidder's local view.
+
+### Identity injectivity, not value injectivity
+
+The competitive-ratio theorem requires `Function.Injective g` (distinct
+identities), **not** `Function.Injective v` (distinct values). This is
+the mathematically natural hypothesis: the competitive-ratio guarantee
+is about the mechanism design, not an accidental distinctness condition
+on valuations. The lexicographic order on $(v_i, b_i)$ has a unique
+argmax and second-max even when values collide, as long as identities
+are distinct.
+
+### The two type parameters
+
+`SingleItemAuction B F` keeps the identity type $B$ and the value type
+$F$ abstract and separate. The streaming input is typed as
+$\mathrm{List}(B \times F)$; the game-theoretic layer uses
+$\mathrm{Fin}\,n \to B \times F$ with single-bidder deviations via
+`Function.update` and random arrival via `Equiv.Perm (Fin n)`. The two
+views are bridged by `List.ofFn`.
 
 ## References
 

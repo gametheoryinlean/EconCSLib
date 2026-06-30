@@ -33,57 +33,79 @@ tags:
 
 **Theorem (Roughgarden, Problem 2.1(a)).** In the online single-item
 auction ([[mechanism_design.auction.online.single_item_auction]]) — for
-*any* history-dependent pricing rule — truthful bidding $b_i = v_i$ is a
-weakly dominant strategy for every bidder.
+*any* threshold rule — truthful bidding is a weakly dominant strategy
+for every bidder.
 
-Formally, for every pricing rule $A$, every arrival/bid profile
-$f : \mathrm{Fin}\,n \to B \times F$, every true-valuation profile
-$v : \mathrm{Fin}\,n \to F$, and every bidder $i$,
+## Statement
+
+For every threshold rule $T$, every arrival profile of $n$ bidders with
+true valuations $v_1, \ldots, v_n$, and every bidder $i$:
 
 $$
-A.\mathrm{utility}(f,\, v,\, i)
-\;\le\;
-A.\mathrm{utility}\bigl(f[i \mapsto ((f\,i).1,\, v_i)],\; v,\; i\bigr).
+u_i(\text{misreport}) \;\le\; u_i(\text{truthful}).
 $$
+
+That is, bidding $b_i = v_i$ weakly dominates any alternative bid,
+regardless of the other bidders' actions and regardless of the threshold
+rule.
 
 ## Proof
 
-The argument is a locality observation followed by a single-variable
-optimisation.
+The argument has two independent parts.
 
-1. **The posted price bidder $i$ faces is independent of $b_i$.**
-   `stateBeforeStep f i` runs only the first $i$ bids, none of which is
-   $b_i$, so
-   $$
-   \mathrm{stateBeforeStep}\,(f[i \mapsto x])\, i
-   \;=\; \mathrm{stateBeforeStep}\, f\, i
-   $$
-   for every alternative entry $x$ (`stateBeforeStep_update_self`). This
-   is the structural heart of the result: a posted-price rule cannot let
-   a bidder move their own price.
+### The price bidder $i$ faces is independent of $b_i$
 
-2. **Single-bidder optimisation at a fixed price.** With price $p$ and
-   tie-breaking condition `tie_ok` fixed, bidder $i$'s payoff is
-   $v_i - p$ if the lex condition $p < b_i \lor (p = b_i \land
-   \mathit{tie\_ok})$ holds, and $0$ otherwise. Truthful bidding
-   $b_i = v_i$ accepts exactly when the surplus is nonneg, which is
-   optimal. This is the `local_dsic` lemma, parametric in `tie_ok`.
+The threshold at position $i$ is computed from the rejection history
+$(b_1, v_1), \ldots, (b_{i-1}, v_{i-1})$ — the bids of bidders who
+arrived *before* $i$. Replacing bidder $i$'s bid changes nothing about
+this history:
 
-`dsic` combines the two steps: rewrite via `stateBeforeStep_update_self`,
-then apply `local_dsic` with the appropriate tie-breaking condition
-derived from the threshold's identity component.
+$$
+T\bigl((b_1,v_1),\ldots,(b_{i-1},v_{i-1})\bigr) \text{ is the same
+whether $i$ bids } v_i \text{ or any } b_i'.
+$$
+
+This is the structural heart of the result: a posted-price mechanism
+cannot let a bidder influence their own price.
+
+### Single-bidder optimisation at a fixed threshold
+
+Given a fixed threshold $(p, \bar{b})$, bidder $i$'s payoff is:
+
+- $v_i - p$ if the lexicographic condition
+  $p < b_i \lor (p = b_i \land \bar{b} \le \mathrm{id}_i)$ holds,
+- $0$ otherwise.
+
+Truthful bidding $b_i = v_i$ accepts exactly when the surplus
+$v_i - p$ is nonneg: if $v_i > p$, the bidder accepts and earns a
+positive surplus; if $v_i < p$, the bidder rejects and avoids a loss.
+At the boundary $v_i = p$, the surplus is zero, so accepting or
+rejecting are both optimal. This is the best any strategy can do.
 
 ## Why it matters
 
-The truthfulness here is **format-independent**: it holds for *every*
-history-dependent posted-price rule, not just a particular one. This is
-the defining advantage of posted-price mechanisms over the sealed-bid
-second-price auction ([[mechanism_design.auction.basic.second_price_dsic]])
-— truthfulness comes for free from the order of moves (price first, bid
-second) rather than from a carefully engineered payment rule. It is what
-licenses treating reported bids as true valuations in the welfare analyses
-of parts (b) ([[mechanism_design.auction.online.no_constant_competitive]])
-and (c) ([[mechanism_design.auction.online.secretary_quarter_competitive]]).
+Truthfulness is **format-independent**: it holds for *every*
+history-dependent threshold rule, not just a particular one. This is the
+defining advantage of posted-price mechanisms over sealed-bid formats
+like the second-price auction
+([[mechanism_design.auction.basic.second_price_dsic]]) — truthfulness
+follows from the order of moves (threshold posted first, bid observed
+second) rather than from a carefully engineered payment rule.
+
+This result licenses treating reported bids as true valuations in the
+welfare analyses of parts (b)
+([[mechanism_design.auction.online.no_constant_competitive]]) and (c)
+([[mechanism_design.auction.online.secretary_quarter_competitive]]).
+
+## Remarks
+
+### Lean formalization
+
+The price-independence step is `stateBeforeStep_update_self`: the auction
+state before processing bidder $i$ is unchanged by replacing $i$'s entry
+in the profile. The single-bidder optimisation is `local_dsic`, which is
+parametric in the tie-breaking condition — it works for any threshold
+rule. The main theorem `dsic` combines both steps.
 
 ## References
 
