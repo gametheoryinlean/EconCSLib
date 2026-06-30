@@ -10,8 +10,6 @@ topics:
   - mechanism_design.auction.online
 uses:
   - mechanism_design.auction.online.single_item_auction
-  - mechanism_design.auction.online.secretary_quarter_competitive
-  - mechanism_design.auction.online.secretary_strict_comparison_fails
 lean:
   modules:
     - EconCSLib.Examples.Online.SingleItemAuction
