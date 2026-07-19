@@ -18,7 +18,7 @@ lean:
     - StrategicGame.IsNashEquilibrium.isRationalizable
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
   alignment: aligned
 tags:
   - strategic-game

@@ -19,7 +19,7 @@ lean:
     - SocialChoice.Voting.muller_satterthwaite
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
   alignment: aligned
 tags:
   - social-choice

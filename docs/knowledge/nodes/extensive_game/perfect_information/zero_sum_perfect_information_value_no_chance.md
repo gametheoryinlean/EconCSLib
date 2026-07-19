@@ -2,7 +2,7 @@
 id: game_theory.extensive_game.perfect_information.zero_sum_perfect_information_value_no_chance
 title: Value In Finite Zero-Sum Perfect-Information Games (No-Chance)
 kind: theorem
-status: formalized
+status: proved
 primary_topic: game_theory.extensive_game
 topics:
   - game_theory.extensive_game
@@ -17,7 +17,7 @@ lean:
     - GameTree.value₀_eq_outcome_and_zeroSum
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
   alignment: aligned
 tags:
   - extensive-game

@@ -2,7 +2,7 @@
 id: game_theory.extensive_game.perfect_information.zermelo_determinacy
 title: Zermelo Determinacy For Finite Perfect-Information Games
 kind: theorem
-status: formalized
+status: proved
 primary_topic: game_theory.extensive_game
 topics:
   - game_theory.extensive_game
@@ -16,7 +16,7 @@ lean:
     - zermelo_determinacy
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
   alignment: aligned
 tags:
   - extensive-game

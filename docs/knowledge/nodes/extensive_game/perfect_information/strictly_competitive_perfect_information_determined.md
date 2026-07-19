@@ -2,7 +2,7 @@
 id: game_theory.extensive_game.perfect_information.strictly_competitive_perfect_information_determined
 title: Strictly Competitive Perfect-Information Determinacy
 kind: theorem
-status: formalized
+status: proved
 primary_topic: game_theory.extensive_game
 topics:
   - game_theory.extensive_game
@@ -18,7 +18,7 @@ lean:
     - GameTree.value₀_eq_outcome_and_zeroSum
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
   alignment: aligned
 tags:
   - extensive-game

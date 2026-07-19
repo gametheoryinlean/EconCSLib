@@ -2,7 +2,7 @@
 id: game_theory.extensive_game.perfect_information.spe_implies_nash
 title: Subgame-Perfect Equilibrium Implies Nash Equilibrium
 kind: proposition
-status: formalized
+status: proved
 primary_topic: game_theory.extensive_game
 topics:
   - game_theory.extensive_game
@@ -16,7 +16,7 @@ lean:
     - IsSubgamePerfect.toNE
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
   alignment: aligned
 tags:
   - extensive-game

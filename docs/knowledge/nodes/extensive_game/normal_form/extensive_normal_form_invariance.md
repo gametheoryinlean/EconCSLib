@@ -2,7 +2,7 @@
 id: game_theory.extensive_game.normal_form.extensive_normal_form_invariance
 title: Normal Form Invariance Of Extensive Representations
 kind: proposition
-status: formalized
+status: proved
 primary_topic: game_theory.extensive_game
 topics:
   - game_theory.extensive_game
@@ -17,7 +17,7 @@ lean:
     - GameTree.toStrategicGame_nash_iff_isNashAt
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
   alignment: aligned
 tags:
   - extensive-game

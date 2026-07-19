@@ -18,7 +18,7 @@ lean:
     - IsOrdinalPotential.isNash_iff_localMax
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
   alignment: aligned
 tags:
   - strategic-game

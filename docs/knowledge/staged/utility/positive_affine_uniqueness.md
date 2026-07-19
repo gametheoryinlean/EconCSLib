@@ -15,8 +15,8 @@ lean:
     - IsPositiveAffineOf.symm
 verification:
   statement: accepted
-  proof: gap
-  alignment: pending
+  proof: accepted
+  alignment: aligned
 tags:
   - utility
   - affine

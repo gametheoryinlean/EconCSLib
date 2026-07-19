@@ -18,7 +18,7 @@ lean:
     - SocialChoice.Voting.strategyproof_monotonic
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
   alignment: aligned
 tags:
   - social-choice

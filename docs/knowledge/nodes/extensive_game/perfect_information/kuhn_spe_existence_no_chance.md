@@ -2,7 +2,7 @@
 id: game_theory.extensive_game.perfect_information.kuhn_spe_existence_no_chance
 title: Kuhn Existence Of Pure Subgame-Perfect Equilibrium (No-Chance)
 kind: theorem
-status: formalized
+status: proved
 primary_topic: game_theory.extensive_game
 topics:
   - game_theory.extensive_game
@@ -17,7 +17,7 @@ lean:
     - Kuhn_exists_SPE
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
   alignment: aligned
 tags:
   - extensive-game
