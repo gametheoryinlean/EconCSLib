@@ -17,6 +17,9 @@ lean:
   declarations:
     - Online.OnlineAlgorithm
     - Online.OnlineAlgorithm.run
+    - Online.OnlineAlgorithm.runAll
+    - Online.IsCompetitiveMax
+    - Online.IsCompetitiveMin
     - Online.Auction.AuctionState
     - Online.Auction.SingleItemAuction
     - Online.Auction.SingleItemAuction.online
@@ -166,6 +169,22 @@ $\mathsf{unsold}(\text{history})$ or $\mathsf{sold}(\text{winner},
 carrying the rejection history, chosen so that small concrete profiles
 reduce cleanly under `simp`. Utility factors through `stateBeforeStep`
 to isolate each bidder's local view.
+
+`OnlineAlgorithm.runAll` is also part of the framework: unlike `run`
+(which halts on the first emitted output), `runAll` gathers every emitted
+output in arrival order and is the natural driver for streaming problems
+such as scheduling or matching. The single-item stopping auction only ever
+emits at most one output, so `run` is the relevant driver here; `runAll`
+is documented for completeness as a public export of `EconCSLib.Algorithm.Online`.
+
+`IsCompetitiveMax` and `IsCompetitiveMin` are the abstract
+competitive-ratio predicates for the framework. `IsCompetitiveMax value
+opt c` asserts `c * opt reqs ≤ value reqs` for every request sequence
+(maximisation), while `IsCompetitiveMin` asserts the symmetric bound
+`value reqs ≤ c * opt reqs` (minimisation). The auction competitive-ratio
+results (e.g. the $1/4$-guarantee) are stated as direct inequalities
+rather than by invoking `IsCompetitiveMax` by name, but the definitions
+provide the abstract notion that these results instantiate.
 
 ### Identity injectivity, not value injectivity
 
