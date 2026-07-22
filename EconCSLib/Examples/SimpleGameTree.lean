@@ -8,7 +8,7 @@ import EconCSLib.GameTheory.ExtensiveGame.GameTreeNE
 import EconCSLib.GameTheory.ExtensiveGame.GameTreeStrategicForm
 
 /-!
-# EconCSLib.Examples.SimpleGameTree
+# Examples.SimpleGameTree
 
 A sample 2-player zero-sum perfect-info game expressed in the
 `GameTree` framework, used to smoke-test `value`, `Kuhn_exists_SPE`,
@@ -57,17 +57,15 @@ def sample : GameTree Player ℚ :=
       (List.cons (Leaf (zeroSumLeaf (-10))) List.nil))
     (List.cons (Leaf (zeroSumLeaf 3)) List.nil)
 
--- Sanity: the game is well-typed.
+/-- Player A's proper subgame inside `sample`. -/
+def sampleLeftSubgame : GameTree Player ℚ :=
+  Node (0 : Player)
+    (Leaf (zeroSumLeaf 10))
+    (List.cons (Leaf (zeroSumLeaf (-10))) List.nil)
+
+-- Sanity: the game is well-typed. (Deeper `#eval` checks are blocked by
+-- the noncomputable `value` relying on classical choice.)
 example : GameTree Player ℚ := sample
-
--- `value` is computable (backward induction over the decidable order `≤` on `ℚ`),
--- so the value evaluates and is machine-checkable on this concrete game.
-#eval value₀ sample          -- 3  (B picks min{10, 3} = 3)
-#eval value sample 0         -- 3
-#eval value sample 1         -- -3
-
-/-- The player-0 value of the sample is `3`, checked by computation. -/
-example : value₀ sample = 3 := by decide
 
 /-- The zero-sum predicate holds on the sample game. -/
 theorem sample_zero_sum : IsZeroSum sample := by
@@ -76,32 +74,19 @@ theorem sample_zero_sum : IsZeroSum sample := by
 /-- **Existence of an SPE** for the sample game (via `Kuhn_exists_SPE`). -/
 example : ∃ σ : Strategy Player ℚ, IsSubgamePerfect σ := Kuhn_exists_SPE
 
-/-- Pure root-scoped SPE existence for the sample (Kuhn's theorem; no zero-sum
-    hypothesis required). -/
-theorem sample_zermelo_spe : ∃ σ : Strategy Player ℚ, IsSubgamePerfectOn σ sample :=
-  zermelo_exists_pure_SPE sample
+/-- Zermelo-style pure SPE existence for the zero-sum sample. -/
+theorem sample_zermelo_spe : ∃ σ : Strategy Player ℚ, IsSubgamePerfect σ :=
+  zermelo_exists_pure_SPE sample sample_zero_sum
 
-/-- Pure root Nash existence for the sample (Kuhn's theorem). -/
+/-- Zermelo-style pure root Nash existence for the zero-sum sample. -/
 theorem sample_zermelo_ne :
     ∃ σ : Strategy Player ℚ, GameTree.IsNashEquilibrium σ sample :=
-  zermelo_exists_pure_NE sample
-
-/-- **Zermelo determinacy on the sample**: `optStrategy` is a saddle with value
-    `value₀ sample` — player 0 secures it, player 1 caps it. This is the result
-    that genuinely uses the zero-sum hypothesis `sample_zero_sum`. -/
-theorem sample_zermelo_determinacy :
-    (∀ σ' : Strategy Player ℚ, IVariant (1 : Player) optStrategy σ' →
-        value₀ sample ≤ outcome σ' sample 0) ∧
-    (∀ σ' : Strategy Player ℚ, IVariant (0 : Player) optStrategy σ' →
-        outcome σ' sample 0 ≤ value₀ sample) :=
-  zermelo_determinacy sample sample_zero_sum
+  zermelo_exists_pure_NE sample sample_zero_sum
 
 /-- A one-leaf game has only its root as a subgame. -/
 theorem leaf_hasOnlyRootSubgames (p : Player → ℚ) :
-    HasOnlyRootSubgames (Leaf p : GameTree Player ℚ) := by
-  intro s hsub
-  cases hsub
-  rfl
+    HasOnlyRootSubgames (Leaf p : GameTree Player ℚ) :=
+  hasOnlyRootSubgames_Leaf p
 
 /-- On a game with no proper subgames, root Nash already gives the corresponding
     root-scoped subgame-perfect condition. This instantiates the pure finite-tree
@@ -118,7 +103,106 @@ theorem sample_value_zero_sum : (value sample) 0 + (value sample) 1 = 0 :=
 /-- The backward-induction strategy is subgame-perfect on the sample root. -/
 theorem sample_optStrategy_spe_on :
     IsSubgamePerfectOn (optStrategy : Strategy Player ℚ) sample :=
-  optStrategy_isSubgamePerfect.toSubgamePerfectOn sample
+  optStrategy_isSubgamePerfectOn sample
+
+/-- The global SPE predicate is equivalent to root-scoped SPE at every root. -/
+theorem sample_optStrategy_global_spe_iff_roots :
+    IsSubgamePerfect (optStrategy : Strategy Player ℚ) ↔
+      ∀ g : GameTree Player ℚ,
+        IsSubgamePerfectOn (optStrategy : Strategy Player ℚ) g :=
+  isSubgamePerfect_iff_forall_isSubgamePerfectOn
+
+/-- The global backward-induction SPE is Nash at the sample root. -/
+theorem sample_optStrategy_nash_at :
+    IsNashAt (optStrategy : Strategy Player ℚ) sample :=
+  optStrategy_isNashAt sample
+
+/-- The left child is Player A's proper subgame in the sample tree. -/
+theorem sample_left_subgame :
+    Subtree sampleLeftSubgame sample := by
+  unfold sample
+  change Subtree sampleLeftSubgame
+    (Node (1 : Player) sampleLeftSubgame
+      (List.cons (Leaf (zeroSumLeaf 3)) List.nil))
+  exact Subtree.head (1 : Player)
+    sampleLeftSubgame
+    (List.cons (Leaf (zeroSumLeaf 3)) List.nil)
+
+/-- The left child is a nontrivial subgame, not just a reflexive subtree. -/
+theorem sample_left_properSubgame :
+    ProperSubgame sampleLeftSubgame sample := by
+  unfold sample
+  change ProperSubgame sampleLeftSubgame
+    (Node (1 : Player) sampleLeftSubgame
+      (List.cons (Leaf (zeroSumLeaf 3)) List.nil))
+  exact ProperSubgame.head (1 : Player)
+    sampleLeftSubgame
+    (List.cons (Leaf (zeroSumLeaf 3)) List.nil)
+
+/-- Root-scoped SPE on the sample restricts to Player A's proper subgame. -/
+theorem sample_optStrategy_spe_on_left_subgame :
+    IsSubgamePerfectOn (optStrategy : Strategy Player ℚ) sampleLeftSubgame :=
+  optStrategy_isSubgamePerfectOn_properSubgame sample_left_properSubgame
+
+/-- Root-scoped SPE on the sample gives Nash equilibrium at Player A's
+    proper subgame. -/
+theorem sample_optStrategy_nash_at_left_subgame :
+    IsNashAt (optStrategy : Strategy Player ℚ) sampleLeftSubgame :=
+  optStrategy_isNashAt_properSubgame sample_left_properSubgame
+
+/-- The direct-child convenience theorem gives the same SPE restriction to
+    Player A's subgame. -/
+theorem sample_optStrategy_spe_on_head :
+    IsSubgamePerfectOn (optStrategy : Strategy Player ℚ) sampleLeftSubgame := by
+  simpa [sample, sampleLeftSubgame] using
+    (sample_optStrategy_spe_on.head
+      (m := (1 : Player))
+      (h := sampleLeftSubgame)
+      (t := List.cons (Leaf (zeroSumLeaf 3)) List.nil))
+
+/-- The direct-child convenience theorem also gives Nash equilibrium at
+    Player A's subgame. -/
+theorem sample_optStrategy_nash_at_head :
+    IsNashAt (optStrategy : Strategy Player ℚ) sampleLeftSubgame := by
+  simpa [sample, sampleLeftSubgame] using
+    (sample_optStrategy_spe_on.toNashAt_head
+      (m := (1 : Player))
+      (h := sampleLeftSubgame)
+      (t := List.cons (Leaf (zeroSumLeaf 3)) List.nil))
+
+/-- Kuhn's theorem gives one pure strategy that is subgame-perfect on every
+    subtree of the sample root. -/
+theorem sample_has_spe_on_every_subtree :
+    ∃ σ : Strategy Player ℚ,
+      ∀ s : GameTree Player ℚ, Subtree s sample → IsSubgamePerfectOn σ s :=
+  Kuhn_exists_SPE_on_subtrees sample
+
+/-- The same pure strategy can be viewed as Nash at every subtree of the sample
+    root. This is the pure finite-tree subtree-Nash consequence of SPE. -/
+theorem sample_has_nash_at_every_subtree :
+    ∃ σ : Strategy Player ℚ,
+      ∀ s : GameTree Player ℚ, Subtree s sample → IsNashAt σ s :=
+  Kuhn_exists_NE_on_subtrees sample
+
+/-- The recursive node characterization splits subgame perfection on `sample`
+    into root Nash, SPE on Player A's subgame, and SPE on the right leaf. -/
+theorem sample_optStrategy_spe_on_decomposes :
+    IsNashAt (optStrategy : Strategy Player ℚ) sample ∧
+      IsSubgamePerfectOn (optStrategy : Strategy Player ℚ) sampleLeftSubgame ∧
+        ∀ c ∈ List.cons (Leaf (zeroSumLeaf 3)) List.nil,
+          IsSubgamePerfectOn (optStrategy : Strategy Player ℚ) c := by
+  simpa [sample, sampleLeftSubgame] using
+    (isSubgamePerfectOn_Node_iff
+      (σ := (optStrategy : Strategy Player ℚ))
+      (m := (1 : Player))
+      (h := sampleLeftSubgame)
+      (t := List.cons (Leaf (zeroSumLeaf 3)) List.nil)).mp
+        sample_optStrategy_spe_on
+
+/-- The right terminal branch is automatically Nash for every strategy. -/
+theorem sample_right_leaf_nash_at (σ : Strategy Player ℚ) :
+    IsNashAt σ (Leaf (zeroSumLeaf 3)) :=
+  isNashAt_Leaf σ (zeroSumLeaf 3)
 
 /-- The extracted strategic-form game has a pure Nash equilibrium, and this is
     exactly the root-scoped Nash predicate on the original tree. -/

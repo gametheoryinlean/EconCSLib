@@ -334,8 +334,8 @@ private noncomputable def revealedSWF [Fintype N] [Nonempty N] [Fintype A]
   fun P =>
     { rel := revealedRel f P
       prop :=
-        { reflexive := fun _ => Or.inl rfl
-          transitive := revealedRel_trans f hf_total hf_res hU hM P
+        { reflexive := ⟨fun _ => Or.inl rfl⟩
+          transitive := ⟨revealedRel_trans f hf_total hf_res hU hM P⟩
           total := revealedRel_total f hf_total hU hM P } }
 
 private theorem revealedSWF_unanimity [Fintype N] [Nonempty N] [Fintype A]

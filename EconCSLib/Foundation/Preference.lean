@@ -57,12 +57,13 @@ def indiff {A : Type*} (R : A → A → Prop) (a b : A) : Prop :=
 
 /-- Derived strict preference is transitive when the weak relation is transitive. -/
 theorem strict_transitive {A : Type*} {R : A → A → Prop}
-    (h : Transitive R) : Transitive (strict R) := by
+    (h : IsTrans A R) : IsTrans A (strict R) := by
+  constructor
   intro x y z hxy hyz
   constructor
-  · exact h hxy.1 hyz.1
+  · exact h.trans x y z hxy.1 hyz.1
   · intro hzx
-    exact hxy.2 (h hyz.1 hzx)
+    exact hxy.2 (h.trans y z x hyz.1 hzx)
 
 /-! ### Indifference and strict preference -/
 
@@ -132,8 +133,8 @@ instance (priority := 100) LinearOrder.toTotalPreorder [LinearOrder A] : TotalPr
 /-- A weak preference relation is admissible if it is reflexive, transitive,
     and total. -/
 class IsPreference {A : Type*} (R : A → A → Prop) : Prop where
-  reflexive : Reflexive R
-  transitive : Transitive R
+  reflexive : Std.Refl R
+  transitive : IsTrans A R
   total : ∀ a b : A, R a b ∨ R b a
 
 /-- A bundled weak preference relation.
@@ -162,16 +163,16 @@ def indifferent {A : Type*} (p : Pref A) (a b : A) : Prop :=
 def ofTotalPreorder {A : Type*} (r : TotalPreorder A) : Pref A where
   rel := fun a b => @LE.le A r.toPreorder.toLE a b
   prop :=
-    { reflexive := fun a => r.le_refl a
-      transitive := fun _ _ _ => r.le_trans _ _ _
+    { reflexive := ⟨fun a => r.le_refl a⟩
+      transitive := ⟨fun a b c hab hbc => r.le_trans a b c hab hbc⟩
       total := fun a b => r.le_total a b }
 
 /-- Bundle an explicit linear order as a preference. -/
 def ofLinearOrder {A : Type*} (r : LinearOrder A) : Pref A where
   rel := fun a b => @LE.le A r.toLE a b
   prop :=
-    { reflexive := fun a => r.le_refl a
-      transitive := fun _ _ _ => r.le_trans _ _ _
+    { reflexive := ⟨fun a => r.le_refl a⟩
+      transitive := ⟨fun a b c hab hbc => r.le_trans a b c hab hbc⟩
       total := fun a b => r.le_total a b }
 
 end Pref

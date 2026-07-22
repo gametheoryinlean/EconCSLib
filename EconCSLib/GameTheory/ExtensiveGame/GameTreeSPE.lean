@@ -6,16 +6,17 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import EconCSLib.GameTheory.ExtensiveGame.BackwardInduction
 
 /-!
-# EconCSLib.GameTheory.ExtensiveGame.GameTreeSPE
+# ExtensiveGame.GameTreeSPE
 
-Strategies, outcomes, and **Kuhn's theorem** on `GameTree N U`:
+Strategies, outcomes, and **Kuhn's theorem** on `GameTree ι U`:
 every finite perfect-information game without chance has a
 subgame-perfect equilibrium, obtainable via backward induction.
 
 ## Minimal assumptions
 
-Only `[TotalPreorder U]` — preorder + totality, no antisymmetry,
-no decidability. See `ExtensiveGame/BackwardInduction.lean`.
+Only `[TotalPreorder U] [DecidableLE U]` — preorder + totality plus
+decidable comparison for the computable argmax used by backward induction.
+See `ExtensiveGame/BackwardInduction.lean`.
 
 ## Main definitions
 
@@ -31,30 +32,19 @@ no decidability. See `ExtensiveGame/BackwardInduction.lean`.
 ## Main results
 
 * `outcome_optStrategy_eq_value` — outcome of `optStrategy` is the BI value.
-* `optStrategy_isSubgamePerfect` — the backward-induction strategy `optStrategy`
-  is a subgame-perfect equilibrium (the substantive theorem).
-* `Kuhn_exists_SPE` — existence form: every finite perfect-information game has
-  an SPE.
-
-## A note on the name "Kuhn"
-
-"Kuhn's theorem" here means the **backward-induction / SPE-existence** theorem
-(Kuhn 1953). It is distinct from the *other* result also called Kuhn's theorem —
-the equivalence of mixed and behavioral strategies under perfect recall — whose
-infrastructure lives in `ExtensiveGame/BehaviorStrategy.lean` (tracked under
-EG-L2). Do not conflate the two.
+* `IVariant.symm` / `IVariant.trans` — unilateral-deviation variants form an
+  equivalence relation for each fixed player.
+* `Kuhn` — `optStrategy` is a subgame-perfect equilibrium.
+  Equivalently: every finite perfect-info game has an SPE.
 
 ## References
 
-* [MSZ, Ch. 3] Maschler, Solan, Zamir, *Game Theory* (Cambridge, 2013) —
-  backward induction on finite perfect-information games.
-* Kuhn, H. W. (1953), "Extensive Games and the Problem of Information," in
-  *Contributions to the Theory of Games, Vol. II*.
+* [MSZ] Maschler, Solan, Zamir, *Game Theory*, Theorem 3.13 (Kuhn).
 -/
 
 namespace GameTree
 
-variable {N U : Type*} [TotalPreorder U]
+variable {ι U : Type*} [TotalPreorder U] [DecidableLE U]
 
 /-! ### Strategies -/
 
@@ -63,14 +53,14 @@ variable {N U : Type*} [TotalPreorder U]
 
     Note: a single `Strategy` covers all players. Player-`i` "strategies"
     are conceptualized as the restriction to nodes where `mover = i`. -/
-def Strategy (N U : Type*) : Type _ :=
-  (m : N) → (h : GameTree N U) → (t : List (GameTree N U)) →
-    { c : GameTree N U // c ∈ h :: t }
+def Strategy (ι U : Type*) : Type _ :=
+  (m : ι) → (h : GameTree ι U) → (t : List (GameTree ι U)) →
+    { c : GameTree ι U // c ∈ h :: t }
 
 /-- The outcome (terminal payoff vector) of playing strategy `σ` starting
     from game tree `g`. Walks down the tree, using `σ` to pick a child at
     each `Node`, until a `Leaf` is reached. -/
-noncomputable def outcome (σ : Strategy N U) : GameTree N U → (N → U)
+noncomputable def outcome (σ : Strategy ι U) : GameTree ι U → (ι → U)
   | Leaf p => p
   | Node m h t => outcome σ (σ m h t).val
 termination_by g => g.size
@@ -80,14 +70,14 @@ decreasing_by
 
 omit [TotalPreorder U] in
 @[simp]
-theorem outcome_Leaf (σ : Strategy N U) (p : N → U) :
+theorem outcome_Leaf (σ : Strategy ι U) (p : ι → U) :
     outcome σ (Leaf p) = p := by
   rw [outcome]
 
 omit [TotalPreorder U] in
 @[simp]
-theorem outcome_Node (σ : Strategy N U) (m : N) (h : GameTree N U)
-    (t : List (GameTree N U)) :
+theorem outcome_Node (σ : Strategy ι U) (m : ι) (h : GameTree ι U)
+    (t : List (GameTree ι U)) :
     outcome σ (Node m h t) = outcome σ (σ m h t).val := by
   rw [outcome]
 
@@ -98,13 +88,13 @@ theorem outcome_Node (σ : Strategy N U) (m : N) (h : GameTree N U)
     attaining the argmax for the mover).
 
     Noncomputable — uses classical choice via `value_Node_eq_some_child_value`. -/
-noncomputable def optStrategy [DecidableLE U] : Strategy N U := fun m h t =>
+noncomputable def optStrategy : Strategy ι U := fun m h t =>
   ⟨(value_Node_eq_some_child_value m h t).choose,
    (value_Node_eq_some_child_value m h t).choose_spec.1⟩
 
 /-- At a node, the `optStrategy` picks a child whose value equals the node's value. -/
-theorem value_optStrategy_eq [DecidableLE U] (m : N) (h : GameTree N U)
-    (t : List (GameTree N U)) :
+theorem value_optStrategy_eq (m : ι) (h : GameTree ι U)
+    (t : List (GameTree ι U)) :
     value (optStrategy m h t).val = value (Node m h t) :=
   ((value_Node_eq_some_child_value m h t).choose_spec.2).symm
 
@@ -112,22 +102,60 @@ theorem value_optStrategy_eq [DecidableLE U] (m : N) (h : GameTree N U)
 
 /-- Two strategies are `i`-variants if they agree on all nodes NOT owned by `i`.
     I.e., `σ'` is obtained from `σ` by changing only player `i`'s choices. -/
-def IVariant (i : N) (σ σ' : Strategy N U) : Prop :=
-  ∀ (m : N) (h : GameTree N U) (t : List (GameTree N U)),
+def IVariant (i : ι) (σ σ' : Strategy ι U) : Prop :=
+  ∀ (m : ι) (h : GameTree ι U) (t : List (GameTree ι U)),
     m ≠ i → σ m h t = σ' m h t
 
 omit [TotalPreorder U] in
 /-- `IVariant` is reflexive: any strategy is an `i`-variant of itself. -/
-theorem IVariant.refl (i : N) (σ : Strategy N U) : IVariant i σ σ :=
+theorem IVariant.refl (i : ι) (σ : Strategy ι U) : IVariant i σ σ :=
   fun _ _ _ _ => rfl
+
+omit [TotalPreorder U] in
+/-- An `i`-variant agrees with the original strategy at every node not owned
+    by player `i`. -/
+theorem IVariant.eq_of_mover_ne {i m : ι} {σ σ' : Strategy ι U}
+    (hiv : IVariant i σ σ') {h : GameTree ι U} {t : List (GameTree ι U)}
+    (hm : m ≠ i) :
+    σ m h t = σ' m h t :=
+  hiv m h t hm
+
+omit [TotalPreorder U] in
+/-- `IVariant` is symmetric. -/
+theorem IVariant.symm {i : ι} {σ σ' : Strategy ι U}
+    (hiv : IVariant i σ σ') :
+    IVariant i σ' σ :=
+  fun m h t hm => (hiv.eq_of_mover_ne (m := m) (h := h) (t := t) hm).symm
+
+omit [TotalPreorder U] in
+/-- `IVariant` is transitive. -/
+theorem IVariant.trans {i : ι} {σ σ' σ'' : Strategy ι U}
+    (hσσ' : IVariant i σ σ') (hσ'σ'' : IVariant i σ' σ'') :
+    IVariant i σ σ'' :=
+  fun m h t hm =>
+    (hσσ'.eq_of_mover_ne (m := m) (h := h) (t := t) hm).trans
+      (hσ'σ''.eq_of_mover_ne (m := m) (h := h) (t := t) hm)
+
+omit [TotalPreorder U] in
+/-- For each fixed player, `IVariant` is an equivalence relation on strategy
+    profiles. -/
+theorem IVariant.equivalence (i : ι) :
+    Equivalence (IVariant (U := U) i) where
+  refl := IVariant.refl i
+  symm := by
+    intro σ σ' hiv
+    exact hiv.symm
+  trans := by
+    intro σ σ' σ'' hσσ' hσ'σ''
+    exact hσσ'.trans hσ'σ''
 
 /-! ### Subgame-perfect equilibrium -/
 
 /-- A strategy is **subgame-perfect** (SPE) if, at every subtree, no player
     can strictly improve their payoff by a unilateral deviation — i.e., by
     switching to any `i`-variant strategy. -/
-def IsSubgamePerfect (σ : Strategy N U) : Prop :=
-  ∀ (g : GameTree N U) (i : N) (σ' : Strategy N U),
+def IsSubgamePerfect (σ : Strategy ι U) : Prop :=
+  ∀ (g : GameTree ι U) (i : ι) (σ' : Strategy ι U),
     IVariant i σ σ' → outcome σ' g i ≤ outcome σ g i
 
 /-! ### Kuhn's theorem (main result) -/
@@ -137,8 +165,8 @@ def IsSubgamePerfect (σ : Strategy N U) : Prop :=
 
     This is the bridge between `value` (defined via argmax) and `outcome`
     (defined via tree traversal). -/
-theorem outcome_optStrategy_eq_value [DecidableLE U] (g : GameTree N U) :
-    outcome (optStrategy : Strategy N U) g = value g := by
+theorem outcome_optStrategy_eq_value (g : GameTree ι U) :
+    outcome (optStrategy : Strategy ι U) g = value g := by
   induction g using GameTree.strong_induction with
   | base p => simp [outcome_Leaf, value_Leaf]
   | step m h t ih =>
@@ -154,8 +182,8 @@ theorem outcome_optStrategy_eq_value [DecidableLE U] (g : GameTree N U) :
     and every `i`-variant deviation `σ'`, the deviating outcome is no better
     than `optStrategy`'s outcome at coordinate `i`. This is the SPE property
     spelled out before bundling into existence form. -/
-theorem optStrategy_isSubgamePerfect [DecidableLE U] :
-    IsSubgamePerfect (optStrategy : Strategy N U) := by
+theorem optStrategy_isSubgamePerfect :
+    IsSubgamePerfect (optStrategy : Strategy ι U) := by
   intro g i σ' hiv
   induction g using GameTree.strong_induction with
   | base p =>
@@ -196,7 +224,7 @@ theorem optStrategy_isSubgamePerfect [DecidableLE U] :
     game without chance admits a subgame-perfect equilibrium.
 
     The backward-induction strategy `optStrategy` is such an SPE. -/
-theorem Kuhn_exists_SPE [DecidableLE U] : ∃ σ : Strategy N U, IsSubgamePerfect σ :=
+theorem Kuhn_exists_SPE : ∃ σ : Strategy ι U, IsSubgamePerfect σ :=
   ⟨optStrategy, optStrategy_isSubgamePerfect⟩
 
 end GameTree

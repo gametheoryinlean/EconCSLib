@@ -413,7 +413,7 @@ private theorem decisive_spread_forward [Fintype N] [Fintype A]
   have hxz : ∀ i, Prefers P i x z ↔ Prefers Q i x z := fun i => (hQ i).1
   have hzx : ∀ i, Prefers P i z x ↔ Prefers Q i z x := fun i => (hQ i).2.1
   rw [iia_strict hIIA hxz hzx]
-  exact strict_transitive (F Q).prop.transitive
+  exact (strict_transitive (F Q).prop.transitive).trans x y z
     (h Q ⟨fun i hi => (hQ i).2.2.1 hi |>.1,
       fun i hi => (hQ i).2.2.2 hi |>.1⟩)
     (hU Q y z (fun i => by
@@ -436,7 +436,7 @@ private theorem decisive_spread_backward [Fintype N] [Fintype A]
   have hzy_iff : ∀ i, Prefers P i z y ↔ Prefers Q i z y := fun i => (hQ i).1
   have hyz_iff : ∀ i, Prefers P i y z ↔ Prefers Q i y z := fun i => (hQ i).2.1
   rw [iia_strict hIIA hzy_iff hyz_iff]
-  exact strict_transitive (F Q).prop.transitive
+  exact (strict_transitive (F Q).prop.transitive).trans z x y
     (hU Q z x (fun i => by
       by_cases hi : i ∈ C
       · exact (hQ i).2.2.1 hi |>.1
@@ -646,10 +646,10 @@ theorem decisive_contraction [Fintype N] [Fintype A]
             exact hSoc ⟨hxzrel, hnzx⟩
           exact not_not.mp hnotnot
         · exact hzxrel
-      have hzyrel : F P₀ z y := (F P₀).prop.transitive hzxrel hxyrel
+      have hzyrel : F P₀ z y := (F P₀).prop.transitive.trans _ _ _ hzxrel hxyrel
       have hnyz : ¬ F P₀ y z := by
         intro hyzrel
-        have hyxrel : F P₀ y x := (F P₀).prop.transitive hyzrel hzxrel
+        have hyxrel : F P₀ y x := (F P₀).prop.transitive.trans _ _ _ hyzrel hzxrel
         exact hnyx hyxrel
       exact ⟨hzyrel, hnyz⟩
     exact ⟨T, hT_nonempty, by

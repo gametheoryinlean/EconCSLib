@@ -8,7 +8,7 @@ import Mathlib.Algebra.Order.Ring.Rat
 import Mathlib.Tactic.Linarith
 
 /-!
-# EconCSLib.GameTheory.ExtensiveGame.Zermelo
+# ExtensiveGame.Zermelo
 
 **Zermelo-style finite game results** as two-player zero-sum consequences of
 backward induction and Kuhn's theorem.
@@ -17,7 +17,7 @@ Zermelo (1913) established determinacy for finite perfect-information
 two-player win/loss/draw games (Chess, in his original paper).
 Here we frame it as the special case of Kuhn's theorem where:
 
-* `N = Fin 2` — exactly two players,
+* `ι = Fin 2` — exactly two players,
 * payoffs are in `ℚ` (any `[LinearOrderedField U]` would do),
 * the game is **zero-sum**: `payoff leaf 0 + payoff leaf 1 = 0` at every leaf.
 
@@ -28,26 +28,27 @@ Here we frame it as the special case of Kuhn's theorem where:
 
 ## Main results
 
-* `zermelo_determinacy` — **determinacy / saddle value**: in a finite two-player
-  zero-sum perfect-information game, `optStrategy` is a saddle point with value
-  `value₀ g`. Player 0, by playing `optStrategy`, secures at least `value₀ g`
-  against every opponent play; player 1, by playing `optStrategy`, holds player 0
-  to at most `value₀ g`. This is the genuine Zermelo content (the value is
-  determined and both players have a pure optimal strategy).
-* `IsZeroSum.of_subtree` — zero-sumness is inherited by every subgame.
-* `outcome_zero_sum` — every strategy's terminal outcome is zero-sum in a
-  zero-sum tree.
+* `IsZeroSum.of_subtree` / `IsZeroSum.of_properSubgame` — zero-sumness is
+  inherited by subgames.
+* `zermelo_exists_pure_SPE` — every finite 2-player zero-sum perfect-info game
+  has a pure-strategy subgame-perfect equilibrium.
+* `zermelo_exists_pure_SPE_on` — the root-scoped SPE version.
+* `zermelo_exists_pure_NE` — the same game has a pure-strategy Nash equilibrium
+  at the root.
+* `zermelo_exists_pure_NE_on_subtrees` — one pure strategy is Nash on every
+  subtree of the root.
+* `zermelo_exists_pure_SPE_on_subtree` /
+  `zermelo_exists_pure_NE_on_subtree` — fixed-subtree versions.
+* `zermelo_exists_pure_SPE_on_properSubgames` /
+  `zermelo_exists_pure_NE_on_properSubgames` — proper-subgame versions.
 * `value_zero_sum` — backward induction preserves the zero-sum value invariant.
 * `value_one_eq_neg_value₀` — player 1's backward-induction value is the
   negative of player 0's value.
 * `value₀_Node_zero_isMax` / `value₀_Node_one_isMin` — the local max/min
   behavior of the zero-sum value at player-0 and player-1 nodes.
-* `value₀_eq_outcome_and_zeroSum` — `optStrategy` realizes the player-0 value and
-  the value vector is zero-sum (packaging lemma; the saddle statement is
-  `zermelo_determinacy`).
-* `zermelo_exists_pure_SPE` / `zermelo_exists_pure_NE` — the `Fin 2` / `ℚ`
-  instances of Kuhn's existence theorem. **Existence needs no zero-sum
-  hypothesis**; the zero-sum refinement is `zermelo_determinacy`.
+* `outcome_optStrategy_zero_sum` — the backward-induction strategy reaches a
+  zero-sum terminal outcome.
+* `value₀_eq_optStrategy_outcome` — `optStrategy` realizes the player-0 value.
 
 ## References
 
@@ -100,26 +101,117 @@ theorem IsZeroSum.of_subtree {s g : GameTree (Fin 2) ℚ}
   | inHead m h t _ ih => exact ih (IsZeroSum.head hzs)
   | inTail m h t hmem _ ih => exact ih (IsZeroSum.tail_mem hzs hmem)
 
-/-! ### Existence (instances of Kuhn's theorem)
+/-- Zero-sumness is inherited by proper subgames. -/
+theorem IsZeroSum.of_properSubgame {s g : GameTree (Fin 2) ℚ}
+    (hzs : IsZeroSum g) (hproper : ProperSubgame s g) : IsZeroSum s :=
+  hzs.of_subtree hproper.toSubtree
 
-Existence of a pure SPE / Nash equilibrium is **Kuhn's theorem**; it holds for
-any finite perfect-information game and does **not** use the zero-sum
-hypothesis. These two declarations are just the `Fin 2` / `ℚ` instances, kept as
-named entry points. The genuinely zero-sum result — that the game has a
-determined value realized by a saddle point — is `zermelo_determinacy` below. -/
+/-! ### Existence theorem -/
 
-/-- Pure root-scoped subgame-perfect existence for a finite two-player game on
-    `ℚ`: the `Fin 2` / `ℚ` instance of `Kuhn_exists_SPE_on`. Zero-sum is **not**
-    needed for existence; see `zermelo_determinacy` for the zero-sum refinement. -/
-theorem zermelo_exists_pure_SPE (g : GameTree (Fin 2) ℚ) :
+/-- **Zermelo's theorem** (existence form): every finite two-player zero-sum
+    perfect-information game admits a pure-strategy subgame-perfect equilibrium.
+
+    This is the specialization of Kuhn's theorem (`Kuhn_exists_SPE`) to the
+    2-player zero-sum setting on rationals. The zero-sum hypothesis is part of
+    the Zermelo-style statement; existence itself follows from Kuhn's theorem. -/
+theorem zermelo_exists_pure_SPE (g : GameTree (Fin 2) ℚ) (_hzs : IsZeroSum g) :
+    ∃ σ : Strategy (Fin 2) ℚ, IsSubgamePerfect σ :=
+  Kuhn_exists_SPE
+
+/-- Every finite two-player zero-sum perfect-information game admits a
+    root-scoped pure-strategy subgame-perfect equilibrium. -/
+theorem zermelo_exists_pure_SPE_on (g : GameTree (Fin 2) ℚ) (_hzs : IsZeroSum g) :
     ∃ σ : Strategy (Fin 2) ℚ, IsSubgamePerfectOn σ g :=
   Kuhn_exists_SPE_on g
 
-/-- Pure root Nash existence for a finite two-player game on `ℚ`: the `Fin 2` /
-    `ℚ` instance of `Kuhn_exists_NE`. Zero-sum is **not** needed. -/
-theorem zermelo_exists_pure_NE (g : GameTree (Fin 2) ℚ) :
-    ∃ σ : Strategy (Fin 2) ℚ, IsNashEquilibrium σ g :=
-  Kuhn_exists_NE g
+/-- Every finite two-player zero-sum perfect-information game admits a
+    pure-strategy Nash equilibrium at the root. -/
+theorem zermelo_exists_pure_NE (g : GameTree (Fin 2) ℚ) (hzs : IsZeroSum g) :
+    ∃ σ : Strategy (Fin 2) ℚ, IsNashEquilibrium σ g := by
+  obtain ⟨σ, hspe⟩ := zermelo_exists_pure_SPE g hzs
+  exact ⟨σ, hspe.toNE g⟩
+
+/-- Every finite two-player zero-sum perfect-information game admits one pure
+    strategy that is subgame-perfect on every subtree of the root. -/
+theorem zermelo_exists_pure_SPE_on_subtrees
+    (g : GameTree (Fin 2) ℚ) (_hzs : IsZeroSum g) :
+    ∃ σ : Strategy (Fin 2) ℚ,
+      ∀ s : GameTree (Fin 2) ℚ, Subtree s g → IsSubgamePerfectOn σ s :=
+  Kuhn_exists_SPE_on_subtrees g
+
+/-- Every finite two-player zero-sum perfect-information game admits one pure
+    strategy that is Nash on every subtree of the root. -/
+theorem zermelo_exists_pure_NE_on_subtrees
+    (g : GameTree (Fin 2) ℚ) (_hzs : IsZeroSum g) :
+    ∃ σ : Strategy (Fin 2) ℚ,
+      ∀ s : GameTree (Fin 2) ℚ, Subtree s g → IsNashAt σ s :=
+  Kuhn_exists_NE_on_subtrees g
+
+/-- Every zero-sum subtree admits a root-scoped pure-strategy
+    subgame-perfect equilibrium. -/
+theorem zermelo_exists_pure_SPE_on_subtree
+    {s g : GameTree (Fin 2) ℚ} (hzs : IsZeroSum g) (hsub : Subtree s g) :
+    ∃ σ : Strategy (Fin 2) ℚ, IsSubgamePerfectOn σ s :=
+  zermelo_exists_pure_SPE_on s (hzs.of_subtree hsub)
+
+/-- Every zero-sum subtree admits a pure-strategy Nash equilibrium at its
+    root. -/
+theorem zermelo_exists_pure_NE_on_subtree
+    {s g : GameTree (Fin 2) ℚ} (hzs : IsZeroSum g) (hsub : Subtree s g) :
+    ∃ σ : Strategy (Fin 2) ℚ, IsNashAt σ s := by
+  obtain ⟨σ, hspe⟩ := zermelo_exists_pure_SPE_on_subtree hzs hsub
+  exact ⟨σ, hspe.toNashAt⟩
+
+/-- Every finite two-player zero-sum perfect-information game admits one pure
+    strategy that is subgame-perfect on every proper subgame of the root. -/
+theorem zermelo_exists_pure_SPE_on_properSubgames
+    (g : GameTree (Fin 2) ℚ) (_hzs : IsZeroSum g) :
+    ∃ σ : Strategy (Fin 2) ℚ,
+      ∀ s : GameTree (Fin 2) ℚ, ProperSubgame s g → IsSubgamePerfectOn σ s :=
+  Kuhn_exists_SPE_on_properSubgames g
+
+/-- Every finite two-player zero-sum perfect-information game admits one pure
+    strategy that is Nash on every proper subgame of the root. -/
+theorem zermelo_exists_pure_NE_on_properSubgames
+    (g : GameTree (Fin 2) ℚ) (_hzs : IsZeroSum g) :
+    ∃ σ : Strategy (Fin 2) ℚ,
+      ∀ s : GameTree (Fin 2) ℚ, ProperSubgame s g → IsNashAt σ s :=
+  Kuhn_exists_NE_on_properSubgames g
+
+/-- Every proper zero-sum subgame admits a root-scoped pure-strategy
+    subgame-perfect equilibrium. -/
+theorem zermelo_exists_pure_SPE_on_properSubgame
+    {s g : GameTree (Fin 2) ℚ} (hzs : IsZeroSum g)
+    (hproper : ProperSubgame s g) :
+    ∃ σ : Strategy (Fin 2) ℚ, IsSubgamePerfectOn σ s :=
+  zermelo_exists_pure_SPE_on_subtree hzs hproper.toSubtree
+
+/-- Every proper zero-sum subgame admits a pure-strategy Nash equilibrium at
+    its root. -/
+theorem zermelo_exists_pure_NE_on_properSubgame
+    {s g : GameTree (Fin 2) ℚ} (hzs : IsZeroSum g)
+    (hproper : ProperSubgame s g) :
+    ∃ σ : Strategy (Fin 2) ℚ, IsNashAt σ s :=
+  zermelo_exists_pure_NE_on_subtree hzs hproper.toSubtree
+
+/-- Every finite two-player zero-sum perfect-information game admits one pure
+    strategy that is Nash at the root and Nash on every proper subgame. -/
+theorem zermelo_exists_pure_NE_and_NE_on_properSubgames
+    (g : GameTree (Fin 2) ℚ) (_hzs : IsZeroSum g) :
+    ∃ σ : Strategy (Fin 2) ℚ,
+      IsNashAt σ g ∧
+        ∀ s : GameTree (Fin 2) ℚ, ProperSubgame s g → IsNashAt σ s :=
+  Kuhn_exists_NE_and_NE_on_properSubgames g
+
+/-- Every finite two-player zero-sum perfect-information game admits one pure
+    strategy that is Nash at the root and subgame-perfect on every proper
+    subgame. -/
+theorem zermelo_exists_pure_NE_and_SPE_on_properSubgames
+    (g : GameTree (Fin 2) ℚ) (_hzs : IsZeroSum g) :
+    ∃ σ : Strategy (Fin 2) ℚ,
+      IsNashAt σ g ∧
+        ∀ s : GameTree (Fin 2) ℚ, ProperSubgame s g → IsSubgamePerfectOn σ s :=
+  Kuhn_exists_NE_and_SPE_on_properSubgames g
 
 /-! ### Backward-induction value in zero-sum games -/
 
@@ -127,7 +219,7 @@ theorem zermelo_exists_pure_NE (g : GameTree (Fin 2) ℚ) :
 
     Under zero-sum, this fully determines both players' values
     (player 1's value = `-value₀`). -/
-def value₀ (g : GameTree (Fin 2) ℚ) : ℚ :=
+noncomputable def value₀ (g : GameTree (Fin 2) ℚ) : ℚ :=
   (value g) 0
 
 /-- At a zero-sum leaf, `value₀` equals player 0's payoff and
@@ -222,29 +314,13 @@ theorem value₀_Node_one_isMin (h : GameTree (Fin 2) ℚ)
 
 /-! ### Backward-induction outcome in zero-sum games -/
 
-/-- In a zero-sum tree, the terminal outcome of **any** strategy is zero-sum:
-    following any strategy ends at some leaf, and every leaf of a zero-sum tree
-    is zero-sum. This is the strategy-level analogue of `value_zero_sum`. -/
-theorem outcome_zero_sum (σ : Strategy (Fin 2) ℚ) (g : GameTree (Fin 2) ℚ)
-    (hzs : IsZeroSum g) :
-    outcome σ g 0 + outcome σ g 1 = 0 := by
-  revert hzs
-  induction g using GameTree.strong_induction with
-  | base p =>
-      intro hzs
-      simpa [outcome_Leaf, IsZeroSum] using hzs
-  | step m h t ih =>
-      intro hzs
-      rw [outcome_Node]
-      have hmem : (σ m h t).val ∈ h :: t := (σ m h t).property
-      exact ih _ hmem (IsZeroSum.child_mem hzs hmem)
-
 /-- The terminal outcome reached by the backward-induction strategy is
     zero-sum whenever the game tree is zero-sum. -/
 theorem outcome_optStrategy_zero_sum (g : GameTree (Fin 2) ℚ) (hzs : IsZeroSum g) :
     outcome (optStrategy : Strategy (Fin 2) ℚ) g 0 +
-      outcome (optStrategy : Strategy (Fin 2) ℚ) g 1 = 0 :=
-  outcome_zero_sum optStrategy g hzs
+      outcome (optStrategy : Strategy (Fin 2) ℚ) g 1 = 0 := by
+  rw [outcome_optStrategy_eq_value]
+  exact value_zero_sum g hzs
 
 /-- In a zero-sum game, the backward-induction outcome for player 1 is the
     negative of player 0's backward-induction value. -/
@@ -262,66 +338,12 @@ theorem value₀_eq_optStrategy_outcome (g : GameTree (Fin 2) ℚ) :
   unfold value₀
   rw [outcome_optStrategy_eq_value]
 
-/-- Packaging lemma: the backward-induction strategy realizes player 0's value,
-    and the value vector is zero-sum. This is *not* the minimax statement — it
-    has no quantification over opponent strategies. The genuine saddle / security
-    statement is `zermelo_determinacy`. -/
-theorem value₀_eq_outcome_and_zeroSum (g : GameTree (Fin 2) ℚ) (hzs : IsZeroSum g) :
+/-- A real value theorem for finite zero-sum perfect-information trees:
+    the backward-induction strategy realizes player 0's value, and the value
+    vector is zero-sum. -/
+theorem value₀_minimax_prop (g : GameTree (Fin 2) ℚ) (hzs : IsZeroSum g) :
     value₀ g = outcome (optStrategy : Strategy (Fin 2) ℚ) g 0 ∧
       (value g) 1 = -value₀ g :=
   ⟨value₀_eq_optStrategy_outcome g, value_one_eq_neg_value₀ g hzs⟩
-
-/-! ### Determinacy (the saddle value)
-
-The genuine Zermelo content. Combining subgame perfection of `optStrategy`
-(`optStrategy_isSubgamePerfect`) with the zero-sum invariant gives a saddle
-point: `value₀ g` is simultaneously what player 0 can secure and what player 1
-can hold player 0 to. -/
-
-/-- **Player 0's security.** If player 0 plays `optStrategy` (so the deviating
-    profile `σ'` is a `1`-variant, leaving player 0's choices fixed), then player
-    0's payoff is at least `value₀ g` against *every* play of player 1.
-
-    Proof: subgame perfection at player 1 caps `outcome σ' g 1 ≤ value g 1 =
-    -value₀ g`; the zero-sum identity `outcome σ' g 0 = -outcome σ' g 1` then
-    forces `outcome σ' g 0 ≥ value₀ g`. -/
-theorem value₀_le_outcome_of_iVariant_one (g : GameTree (Fin 2) ℚ)
-    (hzs : IsZeroSum g) {σ' : Strategy (Fin 2) ℚ}
-    (hiv : IVariant (1 : Fin 2) optStrategy σ') :
-    value₀ g ≤ outcome σ' g 0 := by
-  have h1 := optStrategy_isSubgamePerfect g (1 : Fin 2) σ' hiv
-  rw [outcome_optStrategy_eq_value, value_one_eq_neg_value₀ g hzs] at h1
-  have hsum := outcome_zero_sum σ' g hzs
-  linarith
-
-/-- **Player 1's security.** If player 1 plays `optStrategy` (so `σ'` is a
-    `0`-variant, leaving player 1's choices fixed), then player 0's payoff is at
-    most `value₀ g` against *every* play of player 0. Immediate from subgame
-    perfection at player 0; no zero-sum hypothesis is needed for this direction. -/
-theorem outcome_le_value₀_of_iVariant_zero (g : GameTree (Fin 2) ℚ)
-    {σ' : Strategy (Fin 2) ℚ} (hiv : IVariant (0 : Fin 2) optStrategy σ') :
-    outcome σ' g 0 ≤ value₀ g := by
-  have h0 := optStrategy_isSubgamePerfect g (0 : Fin 2) σ' hiv
-  rw [outcome_optStrategy_eq_value] at h0
-  simpa [value₀] using h0
-
-/-- **Zermelo's theorem (determinacy / saddle value).** In a finite two-player
-    zero-sum perfect-information game, `optStrategy` is a saddle point with value
-    `value₀ g`:
-
-    * playing `optStrategy`, player 0 *secures* at least `value₀ g` against every
-      opponent play (`1`-variant);
-    * playing `optStrategy`, player 1 *holds* player 0 to at most `value₀ g`
-      against every opponent play (`0`-variant).
-
-    Hence the game is determined and `value₀ g` is its value, attained by the
-    pure backward-induction strategy on both sides. -/
-theorem zermelo_determinacy (g : GameTree (Fin 2) ℚ) (hzs : IsZeroSum g) :
-    (∀ σ' : Strategy (Fin 2) ℚ, IVariant (1 : Fin 2) optStrategy σ' →
-        value₀ g ≤ outcome σ' g 0) ∧
-    (∀ σ' : Strategy (Fin 2) ℚ, IVariant (0 : Fin 2) optStrategy σ' →
-        outcome σ' g 0 ≤ value₀ g) :=
-  ⟨fun _ hiv => value₀_le_outcome_of_iVariant_one g hzs hiv,
-   fun _ hiv => outcome_le_value₀_of_iVariant_zero g hiv⟩
 
 end GameTree

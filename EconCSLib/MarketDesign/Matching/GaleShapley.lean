@@ -270,11 +270,11 @@ noncomputable def ofEquivData (wPrefs mPrefs : GS.Preferences n) :
         | some _,  none    => True
         | some w1, some w2 => (wPrefs.prefs i).idxOf w1 ≤ (wPrefs.prefs i).idxOf w2
       prop :=
-        { reflexive := by intro ow; cases ow <;> simp
-          transitive := by
+        { reflexive := ⟨by intro ow; cases ow <;> simp⟩
+          transitive := ⟨by
             intro ow1 ow2 ow3 h12 h23
             cases ow1 <;> cases ow2 <;> cases ow3 <;> simp_all
-            exact Nat.le_trans h12 h23
+            exact Nat.le_trans h12 h23⟩
           total := by
             intro ow1 ow2; cases ow1 <;> cases ow2 <;> simp
             exact Nat.le_or_le _ _ } }
@@ -286,11 +286,11 @@ noncomputable def ofEquivData (wPrefs mPrefs : GS.Preferences n) :
         | some _,  none    => True
         | some m1, some m2 => (mPrefs.prefs j).idxOf m1 ≤ (mPrefs.prefs j).idxOf m2
       prop :=
-        { reflexive := by intro om; cases om <;> simp
-          transitive := by
+        { reflexive := ⟨by intro om; cases om <;> simp⟩
+          transitive := ⟨by
             intro om1 om2 om3 h12 h23
             cases om1 <;> cases om2 <;> cases om3 <;> simp_all
-            exact Nat.le_trans h12 h23
+            exact Nat.le_trans h12 h23⟩
           total := by
             intro om1 om2; cases om1 <;> cases om2 <;> simp
             exact Nat.le_or_le _ _ } }
