@@ -92,6 +92,17 @@ Contributors: [Wang Haocheng](https://github.com/hcWang942),
 [XGCC666](https://github.com/XGCC666),
 [Zli-Math](https://github.com/Zli-Math).
 
+## Another Library Named EconCSLib
+
+See also [nikhgarg/EconCSLib](https://github.com/nikhgarg/EconCSLib), a
+separate project with the same name that was developed independently and
+concurrently. That project focuses on AI-assisted, paper-by-paper
+formalization of Economics and Computation research, together with workflows
+for human review of the translation from papers into Lean. This project
+focuses on the human curation, with AI assistance, of reusable definitions,
+theorems, and a cross-linked knowledge base for the field. The projects are
+complementary but are not affiliated.
+
 ## References
 
 - Maschler, Solan, Zamir, *Game Theory* (Cambridge University Press, 2013)
