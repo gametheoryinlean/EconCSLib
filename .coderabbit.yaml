@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Lean-specific PR review policy for EconCSLib.
+language: "en-US"
+
+reviews:
+  # Keep routine proof-style feedback low-noise; reserve comments for correctness,
+  # mathematical meaning, public API design, and maintainability.
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+
+  path_instructions:
+    - path: "**/*.lean"
+      instructions: |
+        Review Lean changes as a theorem-prover library, not merely as ordinary source code.
+        Prioritize actionable findings that can affect mathematical meaning, soundness policy,
+        public API stability, imports, or maintainability.
+
+        Check that theorem statements preserve the intended quantifiers, assumptions, and
+        approximation guarantees stated in module docstrings and cited references. Flag a
+        semantic weakening only when the diff provides concrete evidence.
+
+        Check that new definitions and instances respect the repository dependency direction:
+        Math/ stays independent of EconCS domain modules, stable modules are registered in
+        EconCSLib.lean, and Examples/ and OpenProblem/ remain opt-in.
+
+        Treat `sorry`, `admit`, `axiom`, `Prop := True`, unproved semantic fields, and
+        placeholder predicates as high-signal review targets. Confirm that any allowed
+        OpenProblem placeholder follows the documented `answer(sorry) ↔ P := by sorry`
+        policy and that its interface-level nature is clearly documented.
+
+        Do not leave comments for harmless tactic or formatting preferences when the proof is
+        clear and robust. Lean CI is the authority for elaboration and kernel checking.
+
+    - path: "EconCSLib/OpenProblem/**/*.lean"
+      instructions: |
+        These modules deliberately describe unresolved research questions. Verify that the
+        docstring distinguishes an open-problem interface from a formal proof, and that
+        interface predicates do not silently claim executable, probabilistic, or complexity
+        semantics they do not encode. Ask for a precise note whenever a placeholder such as
+        `Prop := True` represents a material mathematical assumption.
+
+    - path: "docs/knowledge/**/*.md"
+      instructions: |
+        Check that each node has accurate mathematical claims, lawful external references,
+        and real dependency links. Keep provenance and implementation history out of scholarly
+        `## References` sections, following AGENTS.md.
+
+    - path: ".github/workflows/**/*.yml"
+      instructions: |
+        Review workflow changes for least-privilege permissions, untrusted pull-request
+        safety, secret exposure, immutable action pinning where practical, and preservation
+        of the Lean build and placeholder checks.
