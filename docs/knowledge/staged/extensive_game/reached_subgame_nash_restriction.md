@@ -35,7 +35,7 @@ lean:
 verification:
   statement: accepted
   proof: accepted
-  alignment: pending
+  alignment: aligned
 tags:
   - extensive-game
   - behavioral-strategy
