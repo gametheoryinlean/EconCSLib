@@ -9,7 +9,7 @@ import Mathlib.Algebra.BigOperators.Field
 /-!
 # EconCSLib.GameTheory.StrategicGame.ZeroSum.StochasticMatrix
 
-Formalises **[MFoGT Cor. 2.5.2]**: every finite stochastic matrix has an
+Formalizes [MFoGT, Corollary 2.5.2]: every finite stochastic matrix has an
 invariant distribution. Proven via the matrix game with payoff `B := A − I`:
 its value is `0`, and any row-optimal strategy `x*` is a left eigenvector
 of `A` (i.e. `x* A = x*`).
@@ -20,6 +20,8 @@ of `A` (i.e. `x* A = x*`).
 * `uniformDist` — uniform mixed strategy on a finite nonempty type.
 * `MatrixGame.exists_invariant_distribution` — every stochastic matrix
   admits an invariant distribution.
+* `MatrixGame.exists_invariant_measure_nonneg` — every finite nonnegative
+  matrix admits the invariant measure used in [MFoGT, Section 7.3.2].
 
 ## Blueprint
 
@@ -32,7 +34,9 @@ set_option linter.unusedSectionVars false
 
 namespace EconCSLib.StrategicGame
 
-variable {I : Type} [Fintype I] [Nonempty I] [DecidableEq I]
+universe uI
+
+variable {I : Type uI} [Fintype I] [Nonempty I] [DecidableEq I]
 
 /-- A finite (row-)**stochastic matrix**: entries are non-negative and each
 row sums to `1`. -/
@@ -90,7 +94,7 @@ private theorem disp_Ej (A : I → I → ℝ) (x : stdSimplex ℝ I) (j : I) :
     rw [← Finset.sum_sub_distrib]; refine Finset.sum_congr rfl (fun i _ => ?_); ring]
   congr 1
   show ∑ i, x.val i * (if i = j then (1 : ℝ) else 0) = x.val j
-  simp [Fintype.sum_ite_eq', mul_ite]
+  simp [mul_ite]
 
 /-- Row-side payoff under `disp A`: `Ei i y = (Ay)_i − y_i`. -/
 private theorem disp_Ei (A : I → I → ℝ) (y : stdSimplex ℝ I) (i : I) :
@@ -106,7 +110,7 @@ private theorem disp_Ei (A : I → I → ℝ) (y : stdSimplex ℝ I) (i : I) :
     Finset.sum_congr rfl (fun j _ => mul_comm _ _)]
   congr 1
   show ∑ j, y.val j * (if i = j then (1 : ℝ) else 0) = y.val i
-  simp [Fintype.sum_ite_eq, mul_ite]
+  simp [mul_ite]
 
 /-- Under the uniform distribution, the column-side payoff under `disp A`
 is zero (when `A` is stochastic). -/
@@ -223,6 +227,153 @@ theorem exists_invariant_distribution (A : I → I → ℝ) (hA : IsStochasticMa
   refine ⟨x_star, fun j => ?_⟩
   have hzero_term : (∑ i, x_star.val i * A i j) - x_star.val j = 0 :=
     (Finset.sum_eq_zero_iff_of_nonneg (fun j _ => hxx_nn j)).mp hsum j (Finset.mem_univ _)
+  linarith
+
+/-! ### Invariant measures for general nonnegative matrices -/
+
+/-- Row sum of a matrix. -/
+private def rowSum (A : I → I → ℝ) (i : I) : ℝ := ∑ j, A i j
+
+/-- The generalized displacement matrix
+`B i j := A i j - rowSum A i * [i = j]`. Every row sums to zero, without a
+stochasticity assumption on `A`. -/
+private def dispGen (A : I → I → ℝ) : I → I → ℝ :=
+  fun i j => A i j - (if i = j then rowSum A i else 0)
+
+private theorem dispGen_Ej (A : I → I → ℝ) (x : stdSimplex ℝ I) (j : I) :
+    (⟨dispGen A⟩ : MatrixGame I I ℝ).Ej x j
+      = (∑ i, x.val i * A i j) - x.val j * rowSum A j := by
+  show wsum x (fun i => dispGen A i j) = (∑ i, x.val i * A i j) - x.val j * rowSum A j
+  show (∑ i, x.val i * (A i j - if i = j then rowSum A i else 0))
+      = (∑ i, x.val i * A i j) - x.val j * rowSum A j
+  rw [show (∑ i, x.val i * (A i j - if i = j then rowSum A i else 0))
+        = (∑ i, x.val i * A i j) - (∑ i, x.val i * (if i = j then rowSum A i else 0)) from by
+    rw [← Finset.sum_sub_distrib]; refine Finset.sum_congr rfl (fun i _ => ?_); ring]
+  congr 1
+  show ∑ i, x.val i * (if i = j then rowSum A i else 0) = x.val j * rowSum A j
+  simp [mul_ite]
+
+private theorem dispGen_Ei (A : I → I → ℝ) (y : stdSimplex ℝ I) (i : I) :
+    (⟨dispGen A⟩ : MatrixGame I I ℝ).Ei i y
+      = (∑ j, A i j * y.val j) - rowSum A i * y.val i := by
+  show wsum y (fun j => dispGen A i j) = (∑ j, A i j * y.val j) - rowSum A i * y.val i
+  show (∑ j, y.val j * (A i j - if i = j then rowSum A i else 0))
+      = (∑ j, A i j * y.val j) - rowSum A i * y.val i
+  rw [show (∑ j, y.val j * (A i j - if i = j then rowSum A i else 0))
+        = (∑ j, y.val j * A i j) - (∑ j, y.val j * (if i = j then rowSum A i else 0)) from by
+    rw [← Finset.sum_sub_distrib]; refine Finset.sum_congr rfl (fun j _ => ?_); ring]
+  rw [show (∑ j, y.val j * A i j) = ∑ j, A i j * y.val j from
+    Finset.sum_congr rfl (fun j _ => mul_comm _ _)]
+  have hpick : (∑ j, y.val j * (if i = j then rowSum A i else 0)) = y.val i * rowSum A i := by
+    simp [mul_ite]
+  rw [hpick]; ring
+
+/-- Under the uniform distribution, every row payoff of `dispGen A` is zero. -/
+private theorem dispGen_Ei_uniform (A : I → I → ℝ) (i : I) :
+    (⟨dispGen A⟩ : MatrixGame I I ℝ).Ei i (uniformDist : stdSimplex ℝ I) = 0 := by
+  rw [dispGen_Ei A uniformDist i]
+  simp only [uniformDist_val]
+  have hcard_pos : 0 < (Fintype.card I : ℝ) := by exact_mod_cast Fintype.card_pos
+  have hne : (Fintype.card I : ℝ) ≠ 0 := hcard_pos.ne'
+  have hsum : (∑ j, A i j * (1 / (Fintype.card I : ℝ))) = rowSum A i / (Fintype.card I : ℝ) := by
+    unfold rowSum
+    rw [Finset.sum_div]
+    exact Finset.sum_congr rfl (fun j _ => by ring)
+  rw [hsum]; ring
+
+/-- If `A` is nonnegative, an index minimizing `y` has nonnegative row payoff
+in the generalized displacement game. -/
+private theorem dispGen_Ei_argmin_nonneg (A : I → I → ℝ) (hA : ∀ i j, 0 ≤ A i j)
+    (y : stdSimplex ℝ I) :
+    ∃ i, 0 ≤ (⟨dispGen A⟩ : MatrixGame I I ℝ).Ei i y := by
+  obtain ⟨i₀, _, hi_min⟩ := Finset.exists_min_image Finset.univ y.val Finset.univ_nonempty
+  refine ⟨i₀, ?_⟩
+  rw [dispGen_Ei A y i₀]
+  have hAy_ge : ∑ j, A i₀ j * y.val j ≥ rowSum A i₀ * y.val i₀ := by
+    have hge : ∀ j, A i₀ j * y.val i₀ ≤ A i₀ j * y.val j := fun j =>
+      mul_le_mul_of_nonneg_left (hi_min j (Finset.mem_univ _)) (hA i₀ j)
+    calc rowSum A i₀ * y.val i₀
+        = (∑ j, A i₀ j) * y.val i₀ := rfl
+      _ = ∑ j, A i₀ j * y.val i₀ := by rw [Finset.sum_mul]
+      _ ≤ ∑ j, A i₀ j * y.val j := Finset.sum_le_sum (fun j _ => hge j)
+  linarith
+
+/-- The `dispGen A` matrix game's value is at most `0`, for any matrix `A`. -/
+private theorem dispGen_value_le_zero (A : I → I → ℝ) :
+    (⟨dispGen A⟩ : MatrixGame I I ℝ).value ≤ 0 := by
+  set game : MatrixGame I I ℝ := ⟨dispGen A⟩
+  rw [game.value_eq_minimax]
+  have hguarII : game.guarantee_II uniformDist = 0 := by
+    show Finset.sup' Finset.univ Finset.univ_nonempty (fun i => game.Ei i uniformDist) = 0
+    have hall : ∀ i, game.Ei i (uniformDist : stdSimplex ℝ I) = 0 := dispGen_Ei_uniform A
+    rw [show (fun i => game.Ei i (uniformDist : stdSimplex ℝ I)) = fun _ => (0 : ℝ) from
+      funext hall]
+    simp
+  have hbdd : BddBelow (Set.range (fun y : stdSimplex ℝ I => game.guarantee_II y)) := by
+    obtain ⟨C, hC⟩ := MinimaxLoomis.mu.aux.bddBelow game.g
+    exact ⟨C, by rintro r ⟨y, rfl⟩; exact hC y⟩
+  have hle : game.minimax ≤ game.guarantee_II uniformDist := ciInf_le hbdd uniformDist
+  linarith
+
+/-- The `dispGen A` matrix game's value is at least `0`, for any nonnegative matrix `A`. -/
+private theorem dispGen_value_ge_zero (A : I → I → ℝ) (hA : ∀ i j, 0 ≤ A i j) :
+    0 ≤ (⟨dispGen A⟩ : MatrixGame I I ℝ).value := by
+  set game : MatrixGame I I ℝ := ⟨dispGen A⟩
+  rw [game.value_eq_minimax]
+  apply le_ciInf
+  intro y
+  obtain ⟨i₀, hi₀⟩ := dispGen_Ei_argmin_nonneg A hA y
+  have hle : game.Ei i₀ y ≤ game.guarantee_II y := by
+    show game.Ei i₀ y ≤ Finset.sup' Finset.univ Finset.univ_nonempty (fun i => game.Ei i y)
+    exact Finset.le_sup' (fun i => game.Ei i y) (Finset.mem_univ _)
+  linarith
+
+/-- The generalized displacement game of a nonnegative matrix has value zero. -/
+private theorem dispGen_value_eq_zero (A : I → I → ℝ) (hA : ∀ i j, 0 ≤ A i j) :
+    (⟨dispGen A⟩ : MatrixGame I I ℝ).value = 0 :=
+  le_antisymm (dispGen_value_le_zero A) (dispGen_value_ge_zero A hA)
+
+/-- Every finite nonnegative matrix has the invariant measure used before
+[MFoGT, Lemma 7.3.6]. This generalizes `exists_invariant_distribution` by
+replacing row-stochasticity with normalization by each row's own sum. -/
+theorem exists_invariant_measure_nonneg (A : I → I → ℝ) (hA : ∀ i j, 0 ≤ A i j) :
+    ∃ x : stdSimplex ℝ I, ∀ j, ∑ i, x.val i * A i j = x.val j * ∑ k, A j k := by
+  set game : MatrixGame I I ℝ := ⟨dispGen A⟩
+  obtain ⟨x_star, y_star, hxx, hyy⟩ : ∃ xx yy,
+      xx ∈ game.optimalRowStrategies ∧ yy ∈ game.optimalColumnStrategies := by
+    obtain ⟨xx, yy, hnash⟩ := game.exists_mixed_nash_equilibrium
+    obtain ⟨h1, h2⟩ := (game.optimal_pairs_iff_saddle_point xx yy).mpr hnash
+    exact ⟨xx, yy, h1, h2⟩
+  have hxx_ge : ∀ j, game.Ej x_star j ≥ game.value := by
+    intro j
+    have h := (game.mem_optimalRowStrategies_iff_E_ge x_star).mp hxx (stdSimplex.pure j)
+    have heq : game.E x_star (stdSimplex.pure j) = game.Ej x_star j := by
+      show wsum x_star (fun i => wsum (stdSimplex.pure j) (game.g i))
+        = wsum x_star (fun i => game.g i j)
+      refine Finset.sum_congr rfl (fun i _ => ?_)
+      show x_star.val i * wsum (stdSimplex.pure j) (game.g i) = x_star.val i * game.g i j
+      rw [wsum_pure_apply]
+    linarith
+  have hval := dispGen_value_eq_zero A hA
+  have hxx_nn : ∀ j, (∑ i, x_star.val i * A i j) - x_star.val j * rowSum A j ≥ 0 := by
+    intro j
+    have h := hxx_ge j
+    rw [hval] at h
+    rw [dispGen_Ej A x_star j] at h
+    exact h
+  have hsum : ∑ j, ((∑ i, x_star.val i * A i j) - x_star.val j * rowSum A j) = 0 := by
+    have hswap : ∑ j, ∑ i, x_star.val i * A i j = ∑ i, x_star.val i * rowSum A i := by
+      rw [Finset.sum_comm]
+      refine Finset.sum_congr rfl (fun i _ => ?_)
+      unfold rowSum
+      rw [← Finset.mul_sum]
+    rw [Finset.sum_sub_distrib, hswap]
+    ring
+  refine ⟨x_star, fun j => ?_⟩
+  have hzero_term : (∑ i, x_star.val i * A i j) - x_star.val j * rowSum A j = 0 :=
+    (Finset.sum_eq_zero_iff_of_nonneg (fun j _ => hxx_nn j)).mp hsum j (Finset.mem_univ j)
+  unfold rowSum at hzero_term
+  show ∑ i, x_star.val i * A i j = x_star.val j * ∑ k, A j k
   linarith
 
 end MatrixGame

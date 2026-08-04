@@ -9,9 +9,17 @@ kind: theorem
 status: staged
 uses:
   - game_theory.strategic_game.zero_sum.learning.hannan_set
+lean:
+  modules:
+    - EconCSLib.GameTheory.StrategicGame.NoRegret.EmpiricalDistribution
+  declarations:
+    - StrategicGame.noExternalRegret_empiricalDistribution_approaches_hannan
+    - StrategicGame.NoRegretProbability.noExternalRegret_empiricalDistribution_approaches_hannan_ae
+    - StrategicGame.NoRegretProbability.externalRegretMatchingStrategy_empiricalDistribution_approaches_hannan_ae
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
+  alignment: aligned
 tags:
   - strategic-game
   - learning
