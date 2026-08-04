@@ -4,7 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
 import EconCSLib.OpenProblem.EFXExistence
+import EconCSLib.OpenProblem.OnlineSubmodularWelfareRandomOrder
+import EconCSLib.OpenProblem.SubadditiveProphetStaticPricing
 import EconCSLib.OpenProblem.SubmodularWelfareDemandOracle
+import EconCSLib.OpenProblem.TruthfulSubmodularCA
 
 /-!
 # EconCSLib.OpenProblem
