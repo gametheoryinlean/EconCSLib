@@ -31,7 +31,14 @@ It is adapted from `FormalConjectures.Util.Answer` in
 
 `answer(sorry)` is a marker for an unresolved mathematical answer. Replacing it
 with a term is not the same as proving the problem: whether the supplied answer
-is mathematically meaningful remains a human judgment.
+is mathematically meaningful remains a human judgment.  In particular, when a
+problem asks for an explicit number, function, asymptotic rate, mechanism, or
+characterization, filling the answer slot with the defining `sInf`, `sSup`,
+pointwise extremum, the correctness predicate itself, or a trivially equivalent
+restatement is not accepted as a solution.  Such terms may satisfy the Lean
+type while failing to identify the mathematical object requested by the
+research question; this explicitness condition is intentionally enforced by
+human review.
 -/
 
 public meta section
@@ -70,6 +77,14 @@ register_option econcslib.answer : AnswerSetting := {
 }
 
 def mkAnswerAnnotation (e : Expr) : Expr := mkAnnotation `answer e
+
+/-- Construct the canonical unresolved answer at a known expected type and
+retain the `answer` annotation.  This is needed when `answer(sorry)` appears at
+a type other than `Prop`; elaborating the surface `sorry` syntax directly can
+otherwise make the resulting declaration depend on syntax hygiene. -/
+def mkCanonicalSorryAnnotation (expectedType : Expr) : TermElabM Expr := do
+  let sorryExpr ← Meta.mkSorry expectedType (synthetic := false)
+  return mkAnswerAnnotation sorryExpr
 
 /-- Find the first subexpression carrying the `answer` annotation,
 returning the inner expression if found. -/
@@ -113,23 +128,16 @@ def answerElab : TermElab := fun stx expectedType? => do
       let expr ← elabTermAndSynthesize a expectedType?
       let exprType ← (Meta.inferType expr) >>= instantiateMVars
       if exprType.hasExprMVar then throwPostpone
-      let some declName := (← read).declName?
-        | throwError "Failed to find the name of the declaration"
-      let answerName : Name := declName.str "_answer"
-      let levelParamNames : List Name := (collectLevelParams {} exprType).params.toList
-      let answerAuxiliaryDecl : DefinitionVal := {
-        name := answerName
-        levelParams := levelParamNames
-        type := exprType
-        value := expr
-        hints := .abbrev
-        safety := .safe
-      }
-      addDecl (.defnDecl answerAuxiliaryDecl) true
-      return mkAnswerAnnotation (.const answerName <| levelParamNames.map Level.param)
+      let answerName ← mkAuxName `_answer
+      let answerExpr ← Meta.mkAuxDefinition answerName exprType expr (compile := false)
+      return mkAnswerAnnotation answerExpr
     | .alwaysTrue =>
       if expectedType? == some (Expr.sort .zero) && a == (← `(term| sorry)) then
         return .const `True []
+      else if a == (← `(term| sorry)) then
+        match expectedType? with
+        | some ty => mkCanonicalSorryAnnotation ty
+        | none => elabTermAndAnnotate a expectedType? true
       else
         elabTermAndAnnotate a expectedType? true
   | _ => Elab.throwUnsupportedSyntax

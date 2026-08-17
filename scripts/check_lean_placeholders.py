@@ -7,6 +7,10 @@ problem modules may use the upstream-style pattern
     theorem problemName : answer(sorry) ↔ P := by
       sorry
 
+Quantitative open problems may instead put `answer(sorry)` at the required
+number-, function-, or structure-valued position and use the same direct
+`by sorry` proof.
+
 under `EconCSLib/OpenProblem/`. The answer elaborator implementation itself has
 one syntax quotation mentioning `sorry`; this script allows that exact use.
 """
@@ -142,7 +146,7 @@ def is_open_problem_proof_sorry(code: str, pos: int) -> bool:
         return False
 
     decl_prefix = prefix[theorem_pos:]
-    return re.search(r"\banswer\s*\(\s*sorry\s*\)\s*↔", decl_prefix) is not None
+    return re.search(r"\banswer\s*\(\s*sorry\s*\)", decl_prefix) is not None
 
 
 def check_file(path: pathlib.Path, root: pathlib.Path) -> list[str]:

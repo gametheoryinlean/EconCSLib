@@ -101,8 +101,18 @@ improve readability.
 ## Placeholder Policy
 
 Lean source under `EconCSLib/` must not contain ordinary `sorry` or `admit`.
-Open-problem theorems under `EconCSLib/OpenProblem/` may use only the scoped
-`answer(sorry) ↔ P := by sorry` pattern.
+Open-problem theorems under `EconCSLib/OpenProblem/` may use either of these
+scoped patterns:
+
+- a propositional yes/no answer: `answer(sorry) ↔ P := by sorry`;
+- a number-, function-, or structure-valued answer occurring in a correctness
+  predicate, for example `IsCorrectAnswer (answer(sorry)) := by sorry`.
+
+Use the typed form when the research goal asks to identify or exhibit concrete
+mathematical data rather than merely prove or disprove a proposition.  Merely
+copying the target predicate, or naming its defining `sInf`/`sSup`, is not an
+acceptable mathematical answer even if it elaborates; this explicitness
+requirement is enforced by human review.
 
 When a mathematical target is not ready for implementation:
 
