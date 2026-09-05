@@ -15,13 +15,9 @@ repository-relative paths throughout.
 2. Read [`README.md`](README.md) and [`docs/design.md`](docs/design.md). For a
    focused task, inspect the target file, imports, and neighboring modules.
 
-3. For Lean changes, fetch the Mathlib cache if needed and build:
-
-   ```bash
-   lake exe cache get
-   lake build
-   lake build EconCSLib.Examples
-   ```
+3. For Lean changes, fetch the Mathlib cache with `lake exe cache get` if
+   needed. Follow [Verification](#verification) for the required checks; an
+   initial full build is not a separate prerequisite.
 
 4. For knowledge-base changes, read
    [`docs/maintainers/knowledge-blueprint.md`](docs/maintainers/knowledge-blueprint.md)
@@ -104,7 +100,15 @@ Lean source under `EconCSLib/` must not contain ordinary `sorry` or `admit`.
 Open-problem theorems under `EconCSLib/OpenProblem/` may use only the scoped
 `answer(sorry) ↔ P := by sorry` pattern.
 
-When a mathematical target is not ready for implementation:
+A difficult or unfinished proof is not by itself a reason to replace the
+requested implementation with a blueprint node. Attempt the relevant proof
+route and investigate concrete blockers. If blocked, preserve valid progress,
+explain the unresolved obligation, and distinguish completed work from the
+outstanding task. Recording a blocker does not complete the requested
+formalization. This fallback does not add authorization to publish a GitHub
+issue.
+
+When a concrete blocker leaves a mathematical target unimplemented:
 
 - record it as a knowledge-blueprint node or GitHub issue;
 - link Lean modules and declarations only when they exist;
@@ -144,6 +148,9 @@ The distinction is workflow metadata, not a public-versus-private boundary.
 ## Verification
 
 Run checks from the repository root and scale them to the files changed.
+Run the required checks on the final changed state. Reuse a successful result
+while its relevant inputs remain unchanged. A baseline build is optional
+unless needed to distinguish an existing failure from a regression.
 
 ### Lean changes
 
