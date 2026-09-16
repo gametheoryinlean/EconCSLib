@@ -9,22 +9,9 @@ topics:
   - game_theory.extensive_game.imperfect_information
 uses:
   - game_theory.extensive_game.equilibrium.reached_subgame_nash_restriction
-lean:
-  repository: econcslib
-  modules:
-    - EconCSLib.GameTheory.ExtensiveGame.BehaviorStrategy
-  declarations:
-    - ExtensiveGame.BehaviorStrategy.IsCompletelyMixed
-    - ExtensiveGame.BehaviorProfile.IsCompletelyMixed
-    - ExtensiveGame.BehaviorProfile.IsCompletelyMixedWithPositiveReach
-    - ExtensiveGame.BehaviorProfile.IsCompletelyMixed.actionProb_pos
-    - ExtensiveGame.IsBehaviorSubgamePerfect
-    - ExtensiveGame.IsBehaviorNashEq.toSubgamePerfect_of_reachProb_pos
-    - ExtensiveGame.IsBehaviorNashEq.toSubgamePerfect_of_isCompletelyMixed
 verification:
   statement: accepted
-  proof: accepted
-  alignment: pending
+  proof: gap
 tags:
   - extensive-game
   - behavioral-strategy
@@ -35,28 +22,24 @@ tags:
 
 # Completely Mixed Nash Is Subgame Perfect
 
-Let $\Gamma$ be an extensive-form game. Every Nash equilibrium in completely
-mixed strategies, whether behavior strategies or mixed strategies in the
-textbook statement, is a subgame-perfect equilibrium.
+Let $\Gamma$ be a finite extensive-form game in which Nature assigns positive
+probability to every legal chance action. If a completely mixed behavioral
+profile is a Nash equilibrium, then it is a subgame-perfect equilibrium.
 
 ## Lean Scope
 
-The current Lean theorem
-`ExtensiveGame.IsBehaviorNashEq.toSubgamePerfect_of_isCompletelyMixed`
-formalizes the behavior-strategy side in the same finite-fuel, Arena-based
-interface used for [MSZ, Theorem 7.5]. Complete mixing is represented by
-`ExtensiveGame.BehaviorProfile.IsCompletelyMixed`, and the bridge from complete
-mixing to positive reach of every subgame root is packaged as
-`ExtensiveGame.BehaviorProfile.IsCompletelyMixedWithPositiveReach`.
+This theorem is not currently implemented. Complete mixing together with
+full-support chance laws makes every finite history, hence every subgame root,
+positively reachable. Reached-subgame Nash restriction then gives Nash
+equilibrium in every structurally lawful subgame.
 
-Under that positive-reach interface and the existing affine
-`ExtensiveGame.ReachedSubgamePayoffTransfer` hypothesis for every subgame root,
-the proof is a direct universal application of
-`ExtensiveGame.IsBehaviorNashEq.restrictSubgame_of_reachProb_pos`.
-
-The mixed-strategy version and a concrete derivation of positive reach from
-finite histories with explicit chance probabilities remain future
-strengthenings.
+A Lean proof should be stated in the occurrence-sensitive observed-game layer,
+using `ObservedGame.BehavioralProfile` and
+`ObservedChanceGame.IsBehavioralStandardSubgamePerfectAtFuel` (or an eventual
+unbounded terminating analogue). It must derive positive reach from the
+finite-history product law and the full-support assumptions. The deleted
+state-indexed implementation merely bundled positive reach and affine payoff
+transfer as hypotheses, so it did not establish the advertised theorem.
 
 ## References
 

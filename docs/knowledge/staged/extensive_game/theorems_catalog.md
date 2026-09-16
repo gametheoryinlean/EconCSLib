@@ -44,34 +44,35 @@ pure-strategy subgame-perfect equilibrium.
 | Field | Value |
 |-------|-------|
 | Knowledge node | [[game_theory.extensive_game.perfect_information.kuhn_spe_existence_no_chance]] |
-| Lean module | `EconCSLib.ExtensiveGame.GameTreeSPE` |
-| Lean declarations | `optStrategy_isSubgamePerfect`, `Kuhn_exists_SPE` |
-| Status | formalized (proof: gap — induction sketch accepted) |
+| Lean module | `EconCSLib.GameTheory.ExtensiveGame.Compiler.GameTreeOccurrenceObserved` |
+| Lean declarations | `occurrenceBackwardInductionProfile_isPureStandardSubgamePerfect`, `Kuhn_exists_occurrencePureSPE` |
+| Status | formalized |
 
 ### 2. Kuhn's SPE Existence (with chance)
 
-**Result:** Kuhn's theorem extended to games that include Nature/chance nodes;
-existence of a mixed-strategy SPE.
+**Result:** Kuhn's theorem extended to finite perfect-information games with
+fixed Nature/chance laws; existence of a pure contingent-strategy SPE.
 
 | Field | Value |
 |-------|-------|
-| Knowledge node | [[game_theory.extensive_game.kuhn_spe_existence_with_chance]] |
-| Lean module | pending — see EG-L6 [#220](https://github.com/gametheoryinlean/EconCSLib/issues/220) |
+| Knowledge node | [[game_theory.extensive_game.perfect_information.kuhn_spe_existence_with_chance]] |
+| Lean module | `EconCSLib.GameTheory.ExtensiveGame.StochasticGameTree` (normalized execution only) |
 | Lean declarations | pending |
-| Status | staged; blocked on chance-extension port |
+| Status | staged; equilibrium-existence proof gap |
 
 ### 3. Zermelo's Determinacy
 
 **Result:** Every finite 2-player zero-sum perfect-information game is determined:
 `optStrategy` is a saddle point with value `value₀ g` — player 0 secures at least
 `value₀ g`, player 1 holds player 0 to at most `value₀ g`. (Bare pure-SPE / Nash
-existence is the Kuhn instance `zermelo_exists_pure_SPE` / `zermelo_exists_pure_NE`,
+structural endpoint/root-Nash existence is provided by
+`zermelo_exists_pure_globalEndpointSPE_on` / `zermelo_exists_pure_NE`,
 which needs no zero-sum hypothesis.)
 
 | Field | Value |
 |-------|-------|
 | Knowledge node | [[game_theory.extensive_game.perfect_information.zermelo_determinacy]] |
-| Lean module | `EconCSLib.ExtensiveGame.Zermelo` |
+| Lean module | `EconCSLib.GameTheory.ExtensiveGame.Zermelo` |
 | Lean declarations | `zermelo_determinacy`, `value₀_eq_outcome_and_zeroSum` |
 | Status | formalized |
 
@@ -83,7 +84,7 @@ vector `value : GameTree N U → (N → U)` to every node of the game tree.
 | Field | Value |
 |-------|-------|
 | Knowledge node | [[game_theory.extensive_game.perfect_information.zero_sum_perfect_information_value_no_chance]] |
-| Lean module | `EconCSLib.ExtensiveGame.BackwardInduction` |
+| Lean module | `EconCSLib.GameTheory.ExtensiveGame.BackwardInduction` |
 | Lean declarations | `value`, `valueList` |
 | Status | formalized |
 
@@ -95,8 +96,8 @@ whole game.
 | Field | Value |
 |-------|-------|
 | Knowledge node | [[game_theory.extensive_game.perfect_information.spe_implies_nash]] |
-| Lean module | `EconCSLib.ExtensiveGame.GameTreeNE` |
-| Lean declarations | `IsSubgamePerfect.toNE` |
+| Lean module | `EconCSLib.GameTheory.ExtensiveGame.Observed.SPE` |
+| Lean declarations | `ObservedGame.IsPureStandardSubgamePerfect.isNashAtInit` |
 | Status | formalized |
 
 ### 6. Normal-Form Reduction
@@ -108,21 +109,22 @@ if and only if it is a Nash equilibrium at the root of the tree.
 | Field | Value |
 |-------|-------|
 | Knowledge node | [[game_theory.extensive_game.normal_form.agent_normal_form]] |
-| Lean module | `EconCSLib.ExtensiveGame.GameTreeStrategicForm` |
+| Lean module | `EconCSLib.GameTheory.ExtensiveGame.GameTreeStrategicForm` |
 | Lean declarations | `GameTree.toStrategicGame`, `toStrategicGame_nash_iff_isNashAt` |
 | Status | formalized |
 
 ### 7. Imperfect-Information Strategies
 
-**Result:** Definition of information sets, pure strategies, and behavioral
-strategies for games with imperfect information.
+**Result:** Definition of coherent information-set actions,
+information-indexed pure strategies, and history-indexed behavioral strategies
+for games with imperfect information.
 
 | Field | Value |
 |-------|-------|
 | Knowledge node | [[game_theory.extensive_game.imperfect_information.information_set]] |
-| Lean module | `EconCSLib.ExtensiveGame.ImperfectInformation` |
-| Lean declarations | see module |
-| Status | staged (definitions in place; key theorems pending) |
+| Lean module | `EconCSLib.GameTheory.ExtensiveGame.ImperfectInformation`, `EconCSLib.GameTheory.ExtensiveGame.Observed.Behavior` |
+| Lean declarations | `FiniteImperfectGame.PureStrategy`, `ObservedGame.BehavioralStrategy` |
+| Status | formalized definitions; equilibrium-existence theorems pending |
 
 ### 8. Sequential Equilibrium
 
@@ -131,10 +133,10 @@ equilibrium (Kreps–Wilson 1982).
 
 | Field | Value |
 |-------|-------|
-| Knowledge node | [[game_theory.extensive_game.sequential_equilibrium]] |
-| Lean module | pending — see EG-L4 [#182](https://github.com/gametheoryinlean/EconCSLib/issues/182) |
+| Knowledge node | [[game_theory.extensive_game.imperfect_information.sequential_equilibrium]] |
+| Lean module | pending |
 | Lean declarations | pending |
-| Status | staged; pending EG-L4 #182 |
+| Status | staged; proof gap |
 
 ### 9. Behavioral ≡ Mixed Under Perfect Recall
 
@@ -143,10 +145,10 @@ a behavioral strategy (Kuhn 1953).
 
 | Field | Value |
 |-------|-------|
-| Knowledge node | [[game_theory.extensive_game.isbell_behavioral_to_mixed]] |
-| Lean module | pending — see EG-L2 [#180](https://github.com/gametheoryinlean/EconCSLib/issues/180) |
-| Lean declarations | pending |
-| Status | staged; pending EG-L2 #180 |
+| Knowledge node | [[game_theory.extensive_game.imperfect_information.perfect_recall_mixed_to_behavioral]] |
+| Lean module | `EconCSLib.GameTheory.ExtensiveGame.Observed.KuhnConditioning.Realization` (finite bounded realization); general target pending |
+| Lean declarations | `ObservedChanceGame.isBehavioralNashOnDesignatedContinuationsAtFuel_iff_mixed` |
+| Status | bounded finite theorem formalized; unrestricted textbook statement remains a proof gap |
 
 ---
 
@@ -154,9 +156,9 @@ a behavioral strategy (Kuhn 1953).
 
 | Item | Blocked on |
 |------|-----------|
-| Kuhn with chance (row 2) | EG-L6 #220 (chance-extension port) |
-| Sequential equilibrium (row 8) | EG-L4 #182 |
-| Behavioral ≡ mixed (row 9) | EG-L2 #180 |
+| Kuhn with chance (row 2) | standard subgame/equilibrium layer for normalized chance trees |
+| Sequential equilibrium (row 8) | beliefs, consistency, and sequential-rationality implementation |
+| General behavioral ≡ mixed (row 9) | extension beyond the current finite bounded realization theorem |
 
 ## References
 

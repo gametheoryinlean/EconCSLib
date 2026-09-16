@@ -51,9 +51,9 @@ and that the value vector is zero-sum (`value g 1 = -value₀ g`).
 ## Scope
 
 This is the no-chance specialization of the MFoGT proposition cited below
-(stated there in "with or without Nature" form). The variant with chance /
-Nature nodes lives at [[zero_sum_perfect_information_value_with_chance]] and is
-gated on [EG-L3 / #181](https://github.com/gametheoryinlean/EconCSLib/issues/181).
+(stated there in "with or without Nature" form). The binary rational-payoff
+variant with chance / Nature nodes is also formalized at
+[[game_theory.extensive_game.perfect_information.zero_sum_perfect_information_value_with_chance]].
 
 ## References
 

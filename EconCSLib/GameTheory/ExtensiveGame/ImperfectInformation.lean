@@ -10,41 +10,60 @@ import Mathlib.Tactic.FinCases
 /-!
 # EconCSLib.GameTheory.ExtensiveGame.ImperfectInformation
 
-A finite interface for imperfect-information extensive games.
+A finite-state interface for imperfect-information extensive games.
 
-This is intentionally a lightweight structural layer.  It records vertices,
-available actions, transitions, mover ownership, terminal payoffs, and
-information-set labels.  Well-formedness conditions are predicates, not fields,
-so examples can start small while later theorem statements can assume exactly
-the conditions they need.
+This is intentionally a lightweight structural layer. It records vertices,
+available actions, transitions, mover ownership, terminal payoffs,
+information-set labels, an abstract action type for every information set, and
+explicit equivalences to concrete legal actions. Mover and decision-node
+well-formedness conditions remain predicates so theorem statements can assume
+exactly the conditions they need.
+
+Only the state carrier is structurally finite. The interface does not itself
+assert acyclicity, termination, reachability of every state, or finiteness of
+unused information/action carriers; results needing those properties must
+state them separately.
 
 ## Main definitions
 
-* `FiniteImperfectGame` — finite imperfect-information extensive game data.
+* `FiniteImperfectGame` — compact finite-state imperfect-information game data.
 * `FiniteImperfectGame.subgameAt` — the same game rooted at a chosen state.
 * `SameMoverOnInfo` — nodes in one information set have the same mover.
 * `SameActionsOnInfo` — nodes in one information set have the same action type.
 * `NoChanceOnDecisionInfo` — information sets are only used at player nodes.
-* `PureStrategy` — choices indexed by player and information set.
+* `PlayerInfoSet` — information sets witnessed for one player.
+* `PureStrategy` — abstract choices indexed only by that player's information
+  sets.
 * `PureStrategy.actionAt` — induced action at a concrete state.
 -/
 
-/-- Finite imperfect-information extensive game data.
+/-- Compact finite-state imperfect-information extensive game data.
 
 `info s = none` means the state is not in a strategic information set, typically
 because it is terminal or chance-controlled.  `info s = some k` places state `s`
-in information set `k`. -/
+in information set `k`.
+
+The structure name is historical: only `State` is required to be finite.
+Termination, acyclicity, and any additional finiteness assumptions are
+deliberately theorem-local. -/
 structure FiniteImperfectGame (N U : Type*) where
   State : Type*
   [stateFintype : Fintype State]
   [stateDecidableEq : DecidableEq State]
   InfoSet : Type*
   [infoDecidableEq : DecidableEq InfoSet]
+  /-- One abstract action type for each strategic information set. -/
+  InfoAction : InfoSet → Type*
   Action : State → Type*
   next : (s : State) → Action s → State
   init : State
   mover : State → Option N
   info : State → Option InfoSet
+  /-- Concrete legal actions at a labeled node are coherently represented by
+  the abstract actions of that information set. -/
+  actionEquiv :
+    (s : State) → (k : InfoSet) → info s = some k →
+      InfoAction k ≃ Action s
   payoff : State → N → U
 
 attribute [instance] FiniteImperfectGame.stateFintype
@@ -78,28 +97,43 @@ def SameActionsOnInfo : Prop :=
   ∀ {s t : G.State} {k : G.InfoSet},
     G.info s = some k → G.info t = some k → Nonempty (G.Action s ≃ G.Action t)
 
+/-- Explicit abstract-to-concrete action equivalences imply action-type
+coherence at every information set. -/
+theorem sameActionsOnInfo : G.SameActionsOnInfo := by
+  intro s t k hs ht
+  exact
+    ⟨(G.actionEquiv s k hs).symm.trans
+      (G.actionEquiv t k ht)⟩
+
 /-- Strategic information sets are attached only to player-controlled states. -/
 def NoChanceOnDecisionInfo : Prop :=
   ∀ {s : G.State} {k : G.InfoSet}, G.info s = some k → ∃ i : N, G.mover s = some i
 
 /-- Basic well-formedness package for information-set reasoning. -/
 def InfoWellFormed : Prop :=
-  G.SameMoverOnInfo ∧ G.SameActionsOnInfo ∧ G.NoChanceOnDecisionInfo
+  G.SameMoverOnInfo ∧ G.NoChanceOnDecisionInfo
 
-/-- Re-rooting a finite imperfect-information game preserves the local
+/-- Re-rooting a finite-state imperfect-information game preserves the local
 information-set well-formedness package. -/
 theorem subgameAt_infoWellFormed {s : G.State} (h : G.InfoWellFormed) :
     (G.subgameAt s).InfoWellFormed := by
-  simpa [subgameAt, InfoWellFormed, SameMoverOnInfo, SameActionsOnInfo,
+  simpa [subgameAt, InfoWellFormed, SameMoverOnInfo,
     NoChanceOnDecisionInfo] using h
 
-/-- A pure strategy chooses one abstract action for each player and information set.
+/-- An information set witnessed at a decision of player `i`. -/
+def PlayerInfoSet (i : N) :=
+  { k : G.InfoSet //
+    ∃ s : G.State,
+      G.info s = some k ∧ G.mover s = some i }
 
-The action type is indexed by a representative state for that information set.
-For a concrete state `s`, `actionAt` below specializes this choice at `s`, so
-choices are constant on information sets by construction at the API boundary. -/
+/-- A pure strategy chooses one abstract action at each information set at
+which player `i` can move.
+
+The domain contains only information sets witnessed for that player. Most
+importantly, the strategy cannot inspect a concrete state after receiving the
+information-set label. -/
 def PureStrategy (i : N) : Type _ :=
-  (k : G.InfoSet) → (s : G.State) → G.info s = some k → G.mover s = some i → G.Action s
+  (k : G.PlayerInfoSet i) → G.InfoAction k.1
 
 /-- A pure strategy profile. -/
 def PureStrategyProfile : Type _ :=
@@ -110,78 +144,20 @@ def PureStrategyProfile : Type _ :=
 def PureStrategy.actionAt {i : N} (σ : G.PureStrategy i) {s : G.State}
     {k : G.InfoSet} (hinfo : G.info s = some k) (hmover : G.mover s = some i) :
     G.Action s :=
-  σ k s hinfo hmover
+  G.actionEquiv s k hinfo
+    (σ ⟨k, ⟨s, hinfo, hmover⟩⟩)
 
-/-- If two states are in the same information set, a strategy is queried through
-    the same information-set label at both states.  This is the formal
-    constancy-by-indexing property; comparing concrete action values requires
-    an action equivalence from `SameActionsOnInfo`. -/
-theorem actionAt_same_info_label {i : N} (σ : G.PureStrategy i)
+/-- Actions prescribed at two nodes in the same information set become equal
+after transporting them back to that information set's abstract action
+type. This is the actual information-consistency property. -/
+theorem actionAt_same_info {i : N} (σ : G.PureStrategy i)
     {s t : G.State} {k : G.InfoSet}
     (hs : G.info s = some k) (ht : G.info t = some k)
     (hms : G.mover s = some i) (hmt : G.mover t = some i) :
-    PureStrategy.actionAt G σ hs hms = σ k s hs hms ∧
-      PureStrategy.actionAt G σ ht hmt = σ k t ht hmt :=
-  ⟨rfl, rfl⟩
+    (G.actionEquiv s k hs).symm
+        (PureStrategy.actionAt G σ hs hms) =
+      (G.actionEquiv t k ht).symm
+        (PureStrategy.actionAt G σ ht hmt) := by
+  simp only [PureStrategy.actionAt, Equiv.symm_apply_apply]
 
 end FiniteImperfectGame
-
-/-! ### Small example -/
-
-namespace Examples.ImperfectInformation
-
-inductive Player | P0 | P1
-  deriving DecidableEq
-
-inductive State | root | left | right | stop
-  deriving DecidableEq
-
-instance : Fintype State :=
-  ⟨⟨[State.root, State.left, State.right, State.stop], by decide⟩,
-    fun x => by cases x <;> decide⟩
-
-inductive Info | hiddenChoice
-  deriving DecidableEq
-
-inductive RootAction | L | R
-  deriving DecidableEq
-
-inductive P1Action | Stop
-  deriving DecidableEq
-
-/-- A tiny imperfect-information game where player 1 cannot distinguish two
-    singleton-action states reached after player 0's root choice. -/
-def tiny : FiniteImperfectGame Player ℤ where
-  State := State
-  InfoSet := Info
-  Action
-    | .root => RootAction
-    | .left => P1Action
-    | .right => P1Action
-    | .stop => PEmpty
-  next
-    | .root, RootAction.L => .left
-    | .root, RootAction.R => .right
-    | .left, P1Action.Stop => .stop
-    | .right, P1Action.Stop => .stop
-  init := .root
-  mover
-    | .root => some .P0
-    | .left => some .P1
-    | .right => some .P1
-    | .stop => none
-  info
-    | .left => some .hiddenChoice
-    | .right => some .hiddenChoice
-    | _ => none
-  payoff _ _ := 0
-
-theorem tiny_same_mover : tiny.SameMoverOnInfo := by
-  intro s t k hs ht
-  cases s <;> cases t <;> cases k <;> simp [tiny] at hs ht ⊢
-
-theorem tiny_no_chance_on_info : tiny.NoChanceOnDecisionInfo := by
-  intro s k hs
-  cases s <;> cases k <;> simp [tiny] at hs ⊢
-
-end Examples.ImperfectInformation

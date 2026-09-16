@@ -30,14 +30,6 @@ variable {N : Type*} {U : Type*}
 def IsReachable (G : ExtensiveGame N U) (s : G.State) : Prop :=
   G.toControlledGame.IsReachable s
 
-/-- The historical payoff-aware reachability predicate is exactly the
-canonical controlled-game predicate. -/
-@[simp]
-theorem isReachable_iff_toControlledGame
-    (G : ExtensiveGame N U) (s : G.State) :
-    G.IsReachable s ↔ G.toControlledGame.IsReachable s :=
-  Iff.rfl
-
 /-- The initial state is always reachable. -/
 theorem isReachable_init (G : ExtensiveGame N U) : G.IsReachable G.init :=
   ControlledGame.isReachable_init G.toControlledGame
