@@ -45,6 +45,17 @@ jobs:
       - name: Build examples
         run: lake build EconCSLib.Examples
 
+      - name: Build executable probability test dependencies
+        run: |
+          lake build \
+            EconCSLib.Math.Probability.FiniteLaw \
+            EconCSLib.Math.Probability.Effective \
+            EconCSLib.Math.Probability.FiniteMarkovChain.Reachability \
+            EconCSLib.Math.Probability.FiniteMarkovChain.Discounted \
+            EconCSLib.Math.Probability.FiniteMarkovChain.Automaton \
+            EconCSLib.Math.Probability.FiniteMarkovChain.Parity \
+            EconCSLib.GameTheory.ExtensiveGame.Execution.Discrete.DiscountedPathUtility
+
       - name: Test executable probability laws
         run: |
           lake env lean tests/FiniteLawSmoke.lean
