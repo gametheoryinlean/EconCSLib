@@ -7,24 +7,27 @@ import EconCSLib.OpenProblem.Util.Answer
 import EconCSLib.SocialChoice.FairDivision.Indivisible.Instance
 
 /-!
-# 05. EFX existence for additive valuations
--/
+# EFX existence for additive valuations
 
+Does every nonnegative additive instance with at least four agents admit a
+complete EFX allocation?
 
+The native `AdditiveInstance` represents additive values by real item weights.
+Its `allGoods : Finset G` is the finite ground set; the ambient label type `G`
+may be infinite. Nonnegativity is required on `allGoods`. Native `feasible`
+means that the bundles partition this set, and `IsEFX` checks removal of every
+good, including zero-valued goods. The library compares distinct agents;
+self-comparisons follow from nonnegativity. Empty bundles are allowed.
 
-section
+This is an existence statement, with no computational or Pareto requirement.
+The three-agent additive case is established in [Chaudhury–Garg–Mehlhorn 2024].
 
-/-!
-## Exact EFX existence for additive valuations
+## References
 
-This specification reuses EconCSLib's `AdditiveInstance`, complete feasibility, and
-`IsEFX`; see [Plaut–Roughgarden 2020, §2, Definition 2.3]. The finite set `allGoods`
-determines the instance even if the ambient label type is infinite. Weights need only
-be nonnegative on that set. EFX checks every removed good, including zero-value goods;
-self-comparisons follow from nonnegativity.
-
-The question is unrestricted existence for at least four agents. Empty bundles are
-allowed, and no efficiency, Pareto, encoding, or machine condition is added.
+* B. Plaut and T. Roughgarden, "Almost Envy-Freeness with General Valuations",
+  SIAM Journal on Discrete Mathematics 34(2) (2020), Definition 2.3.
+* B. R. Chaudhury, J. Garg, and K. Mehlhorn, "EFX Exists for Three Agents",
+  Journal of the ACM 71(1) (2024), Article 4.
 -/
 
 namespace EconCSLib.OpenProblem.New.EconCSBench.EFXAdditiveExistence
@@ -41,18 +44,7 @@ def EFXAdditiveExistenceStatement : Prop :=
           ∃ allocation : Allocation N G,
             problem.feasible allocation ∧ problem.IsEFX allocation
 
-end EconCSLib.OpenProblem.New.EconCSBench.EFXAdditiveExistence
-
-end
-
-
-/-!
-## Questions and answers
--/
-
-namespace EconCSLib.OpenProblem.New.EconCSBench.EFXAdditiveExistence
-
-/-- Existence of a complete EFX allocation for every nonnegative additive instance. -/
+/-- The unresolved answer to complete EFX existence for nonnegative additive valuations. -/
 theorem efxAdditiveExistence :
     answer(sorry) ↔ EFXAdditiveExistenceStatement := by
   sorry
