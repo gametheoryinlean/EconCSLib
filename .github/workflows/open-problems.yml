@@ -20,6 +20,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - name: Test placeholder checker
+        run: python3 -m unittest discover -s tests -p test_check_lean_placeholders.py
       - name: Check placeholder policy
         run: python3 scripts/check_lean_placeholders.py EconCSLib EconCSLib.lean
       - name: Set up Lean and Mathlib

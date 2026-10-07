@@ -85,20 +85,39 @@ def tokenize(text: str) -> list[Token]:
             i = e + len(closing)
             value = '<literal>'
         elif text[i] == '"':
+            interpolated = bool(tokens and tokens[-1].value == '!')
+            braces = 0
             i += 1
             while i < n:
-                if text[i] == '\\':
+                # Keep the outer string open while reading an interpolation.
+                # Fail closed on lexical forms that would require parsing nested
+                # Lean terms; their quotes/braces must not hide executable code.
+                if braces and (text[i] in {'"', '«'} or
+                               text.startswith(('--', '/-'), i)):
+                    raise LexError('nested strings, quoted identifiers, and comments '
+                                   'inside interpolation are unsupported: '
+                                   'use a named intermediate value')
+                if (braces and text[i] == "'" and not ident_rest(text[i - 1])
+                        and (char := CHAR.match(text, i))):
+                    i = char.end()
+                elif text[i] == '\\':
                     i += 2
                 elif text[i] == '"':
                     i += 1
                     break
+                elif interpolated and text[i] == '{':
+                    braces += 1
+                    i += 1
+                elif braces and text[i] == '}':
+                    braces -= 1
+                    i += 1
                 else:
                     i += 1
             else:
                 raise LexError(f'unterminated string at offset {start}')
             # Do not silently hide executable interpolation behind string stripping.
             # Complex interpolation is deliberately fail-closed for placeholder words.
-            if (tokens and tokens[-1].value == '!' and
+            if (interpolated and
                     re.search(r'\b(?:sorry|admit|sorryAx)\b', text[start:i])):
                 raise LexError('placeholder-like text in an interpolated string: '
                                'use an ordinary string for literal text; '

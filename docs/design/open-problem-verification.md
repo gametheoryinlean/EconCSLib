@@ -45,6 +45,9 @@ The existing syntax quotation in `OpenProblem/Util/Answer.lean` has a narrow
 exception. The answer elaborator is unchanged.
 
 The checker recognizes identifier apostrophes, comments, and string literals.
+It rejects interpolated expressions containing nested strings, quoted identifiers,
+or comments rather than risk hiding executable placeholders. Use a named
+intermediate value for these expressions.
 It checks source syntax; mathematical correctness and transitive axiom
 dependencies require review. Unresolved answers must not justify supporting
 results or implementations.
