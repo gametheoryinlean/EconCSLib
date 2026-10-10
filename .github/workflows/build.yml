@@ -45,6 +45,16 @@ jobs:
       - name: Build examples
         run: lake build EconCSLib.Examples
 
+      - name: Validate executable finite probability
+        run: |
+          lake env lean tests/FiniteLawSmoke.lean
+          lake env lean tests/FiniteLawAudit.lean
+
+      - name: Validate exact finite absorbing chains
+        run: |
+          lake env lean tests/FiniteMarkovChainSmoke.lean
+          lake env lean tests/FiniteMarkovChainAudit.lean
+
       - name: Check Lean sources for placeholders
         run: python3 scripts/check_lean_placeholders.py EconCSLib
 

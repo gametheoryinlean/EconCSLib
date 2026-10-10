@@ -54,6 +54,8 @@ exactly where every constraint enters.
 | Matching | `MarketDesign/Matching/` | — | Planned |
 | Mechanism design (auctions) | `MechanismDesign/` | — | Planned |
 | Foundation vocabulary | `Foundation/` | — | Planned |
+| Executable finite probability | `Math/Probability/FiniteLaw/` | [`finite-law.md`](finite-law.md) | Available |
+| Exact finite absorbing chains | `Math/Probability/FiniteMarkovChain.lean` | [`finite-markov-chain.md`](finite-markov-chain.md) | Available |
 | Reusable mathematics | `Math/` | — | Planned |
 
 The remaining rows show where additional focused notes can be added as APIs
