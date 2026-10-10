@@ -1,0 +1,47 @@
+name: Open-problem verification
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: open-problems-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-open-problems:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test placeholder checker
+        run: python3 -m unittest discover -s tests -p test_check_lean_placeholders.py
+      - name: Check placeholder policy
+        run: python3 scripts/check_lean_placeholders.py EconCSLib EconCSLib.lean
+      - name: Set up Lean and Mathlib
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: "false"
+          build: "false"
+          test: "false"
+          lint: "false"
+          use-mathlib-cache: "true"
+      - name: Build every open-problem module
+        shell: bash
+        run: |
+          modules=()
+          while IFS= read -r -d '' file; do
+            module=${file%.lean}
+            modules+=("${module//\//.}")
+          done < <(git ls-files -z -- 'EconCSLib/OpenProblem/*.lean')
+          if [ "${#modules[@]}" -eq 0 ]; then
+            echo 'No open-problem modules found.' >&2
+            exit 1
+          fi
+          lake build "${modules[@]}"
