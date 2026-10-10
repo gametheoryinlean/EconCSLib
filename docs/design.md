@@ -59,11 +59,12 @@ Public Lean source under `EconCSLib/` must not contain ordinary `sorry` or
 Mathematical targets that are not yet implemented belong in the knowledge
 blueprint or issue tracker, not as deferred Lean declarations.
 
-Experimental open-problem interfaces under `EconCSLib/OpenProblem/` have one
-scoped exception: theorem statements may use `answer(sorry) ↔ P := by sorry` to
-record an unresolved yes/no answer in the style of Formal Conjectures. This
-exception is checked by `scripts/check_lean_placeholders.py`; ordinary `sorry`
-and all `admit` uses remain forbidden.
+Named theorems/lemmas under `EconCSLib/OpenProblem/` may contain typed
+`answer(sorry)` in their result types, with the entire proof `:= by sorry`
+only for that same declaration. Each problem fixes its answer type.
+See [open-problem verification](design/open-problem-verification.md) for the
+placeholder policy, dedicated build, and merge order. Supporting results and
+implementations must not depend on unresolved answers.
 
 ## Source Layout
 
