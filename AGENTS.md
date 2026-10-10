@@ -157,6 +157,23 @@ python3 scripts/check_lean_placeholders.py EconCSLib EconCSLib.lean
 
 The placeholder checker must pass.
 
+For EFG changes, also validate the complete governed surface and its proof
+and execution boundaries:
+
+```bash
+python3 scripts/build_efg_modules.py
+python3 scripts/check_efg_governance.py
+python3 scripts/check_efg_api_growth.py
+python3 scripts/check_efg_computability.py --skip-build
+python3 scripts/check_efg_axioms.py --skip-build
+```
+
+Build examples before the two `--skip-build` audits. Read
+`docs/design/extensive_game.md` for the entry route and
+`docs/design/efg-mathematical-provenance.md` for theorem scope. Sequential-equilibrium and arbitrary-measure pure-strategy prototypes are
+excluded from this release.
+
+
 ### Knowledge-base changes
 
 ```bash

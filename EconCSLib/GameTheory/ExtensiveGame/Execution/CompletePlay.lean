@@ -628,6 +628,10 @@ namespace ControlledGame
 
 variable {N : Type*}
 
+/-- Complete legal histories of a payoff-free controlled game. -/
+abbrev History (G : ControlledGame N) :=
+  G.toArena.HistoryFrom G.init
+
 /-- Complete terminal-absorbing plays of a payoff-free controlled game. -/
 abbrev CompletePlay (G : ControlledGame N) :=
   G.toArena.CompletePlayFrom G.init

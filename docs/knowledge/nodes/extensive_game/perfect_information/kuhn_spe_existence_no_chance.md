@@ -11,10 +11,10 @@ uses:
   - game_theory.extensive_game.perfect_information.subgame_perfect_equilibrium
 lean:
   modules:
-    - EconCSLib.GameTheory.ExtensiveGame.GameTreeSPE
+    - EconCSLib.GameTheory.ExtensiveGame.Compiler.GameTreeOccurrenceObserved
   declarations:
-    - optStrategy_isSubgamePerfect
-    - Kuhn_exists_SPE
+    - GameTree.occurrenceBackwardInductionProfile_isPureStandardSubgamePerfect
+    - GameTree.Kuhn_exists_occurrencePureSPE
 verification:
   statement: accepted
   proof: accepted
@@ -30,8 +30,9 @@ tags:
 Every finite perfect-information game **without chance moves** has a
 subgame-perfect equilibrium in pure strategies.
 
-Formally, on `GameTree N U` with `[TotalPreorder U]`, the strategy
-`optStrategy` produced by backward induction is subgame-perfect.
+Formally, for each root `GameTree N U` with `[TotalPreorder U]`, the
+backward-induction profile lifted to the occurrence-sensitive compiler is
+standard subgame-perfect on its complete all-history subgame system.
 
 ## Proof Sketch
 
@@ -41,18 +42,19 @@ tree is shorter, so induction gives a subgame-perfect strategy profile there.
 Combining the reduced-game strategy with the locally optimal choices at removed
 positions yields a pure strategy profile that is Nash in every subgame.
 
-The Lean proof in `GameTreeSPE.lean` follows exactly this pattern, with the
-`GameTree.strong_induction` principle providing the size-decreasing induction
-hypothesis.
+The Lean proof first establishes the structural backward-induction
+inequalities and then proves them for every full-history-contingent unilateral
+deviation in `GameTreeOccurrenceObserved.lean`. Thus repeated equal subtree
+values at different paths remain distinct decision occurrences.
 
 ## Scope
 
 This node is the no-chance specialization of the MFoGT theorem cited below
 (stated there in "with or without Nature" form). The variant that allows
-chance/Nature nodes is tracked by [[kuhn_spe_existence_with_chance]] and the
-Lean implementation is gated on the vNM theorem in
-`EconCSLib/Utility/Lottery.lean` (see
-[EG-L3 / #181](https://github.com/gametheoryinlean/EconCSLib/issues/181)).
+chance/Nature nodes is tracked by
+[[game_theory.extensive_game.perfect_information.kuhn_spe_existence_with_chance]].
+The current real-payoff stochastic-tree module provides normalized chance
+execution, but not yet the general standard-SPE existence theorem.
 
 ## References
 

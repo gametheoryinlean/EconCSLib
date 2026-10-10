@@ -21,13 +21,15 @@ tags:
 # Chomp Strategy Stealing
 
 For finite $n,m\ge 1$, the $n\times m$ Chomp game is a finite perfect-information
-game. The first player has a winning strategy.
+game. The $1\times 1$ board is exceptional: the first player is forced to take
+the poisoned cell and loses. On every nontrivial rectangle, equivalently when
+$1<nm$, the first player has a winning strategy.
 
-When $n=m$, an explicit winning strategy is:
+When $n=m\ge 2$, an explicit winning strategy is:
 
 - first choose square $(2,2)$;
-- after the opponent chooses $(1,k)$, choose $(k,1)$;
-- after the opponent chooses $(k,1)$, choose $(1,k)$.
+- after a nonterminal opponent move $(1,k)$, choose $(k,1)$;
+- after a nonterminal opponent move $(k,1)$, choose $(1,k)$.
 
 ## Proof Sketch
 
@@ -38,4 +40,4 @@ second-player win.
 
 ## References
 
-- [MFoGT, Exercise 6.8.1 and Hints for Chapter 6, Exercise 1] Laraki, Renault, and Sorin, *Mathematical Foundations of Game Theory*. Finite Chomp first-player win and square-board explicit mirror strategy.
+- [MFoGT, Exercise 6.8.1 and Hints for Chapter 6, Exercise 1] Laraki, Renault, and Sorin, *Mathematical Foundations of Game Theory*. Nontrivial finite Chomp first-player win and square-board explicit mirror strategy.
