@@ -166,14 +166,22 @@ end
 section
 
 /-!
-## Certifying an explicit optimal-auction candidate
+## Mathematical correctness contract for an optimal-auction candidate
 
-Both research routes require a concrete prior, at least two bidders and two items, and
-exact global revenue optimality. No polynomial learning bound is stated. An answer
-must supply its mathematical environment and auction; an existence proof alone does
-not supply an explicit formula or learned network. The reference witness requires
-multidimensional density, excluding diagonal single-parameter priors. We retain
-broader continuity variants explicitly.
+The formal contract checks at least two bidders and two items, DSIC, IR, and exact global
+revenue optimality for a supplied environment and auction. It does not encode the source
+problem's requirement for an explicit characterization or learned representation: the
+answer type permits arbitrary functions, including witnesses selected from an abstract
+existence theorem. When an answer is submitted, its prior and auction formulas or learned
+representation must therefore undergo separate mathematical review. A proof of this
+contract alone does not certify completion of either research route. No polynomial
+learning bound is stated.
+
+The reference question interprets a continuous prior as absolute continuity of each
+bidder's value-vector distribution with respect to multidimensional Lebesgue measure.
+This is stronger than atomlessness and excludes diagonal single-parameter priors; it does
+not require independent item values, full support, or an everywhere-positive density.
+Broader continuity conventions remain available as separately named variants.
 -/
 
 namespace EconCSLib.OpenProblem.New.EconCSBench.RevenueOptimalDSICAuction
@@ -192,16 +200,18 @@ def ReferenceRevenueOptimalAuctionQuestion {bidders items : ℕ}
     (E : AuctionEnvironment bidders items) (A : RandomizedAuction bidders items) : Prop :=
   0 < E.valueMax ∧ RevenueOptimalDSICAuctionQuestion .bidderDensity E A
 
-/-- Mathematical data supplied by either the computational or characterization route. A
-submission must also exhibit the formula or learned representation, rather than merely
-obtaining these functions from an abstract existence theorem. -/
+/-- Mathematical environment and auction data for the correctness contract. This type
+permits arbitrary functions and does not enforce explicitness. A submitted answer's prior
+and auction formulas or learned representation require separate mathematical review. -/
 structure AuctionAnswer where
   bidders : ℕ
   items : ℕ
   environment : AuctionEnvironment bidders items
   auction : RandomizedAuction bidders items
 
-/-- Exact feasibility, truthfulness, IR, and global optimality for a supplied answer. -/
+/-- Exact feasibility, truthfulness, IR, and global optimality for a supplied answer under
+the reference density convention. This predicate does not certify an explicit
+characterization or learned representation. -/
 def AuctionAnswer.IsCorrect (answer : AuctionAnswer) : Prop :=
   ReferenceRevenueOptimalAuctionQuestion answer.environment answer.auction
 
@@ -216,8 +226,8 @@ end
 
 namespace EconCSLib.OpenProblem.New.EconCSBench.RevenueOptimalDSICAuction
 
-/-- Exhibit a concrete genuinely multidimensional continuous environment and its optimal
-auction. -/
+/-- Certify the supplied environment and auction under the reference density convention.
+An explicit characterization or learned representation must be reviewed separately. -/
 theorem revenueOptimalDSICAuction :
     AuctionAnswer.IsCorrect (answer(sorry)) := by
   sorry
