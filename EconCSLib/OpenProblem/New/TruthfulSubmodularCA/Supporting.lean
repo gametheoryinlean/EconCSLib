@@ -8,7 +8,8 @@ import EconCSLib.OpenProblem.New.TruthfulSubmodularCA.Problem
 /-!
 # TruthfulSubmodularCA: supporting material
 
-Auxiliary definitions and lemmas for the problem statement.
+Auxiliary definitions and lemmas for the problem statement, plus a separate answer
+theorem for the original complete-output, demand-only target.
 -/
 
 section
@@ -421,6 +422,18 @@ theorem partialQueryConventionLogLogStatement_of_complete {mode : OracleConventi
   · exact M.toPartial_hasMeasurableOutcomes hMeas
   · exact (M.toPartial_usesPolynomialQueries_iff coefficient exponent).mpr hQueries
   · simpa only [Mechanism.toPartial_expectedWelfare] using hApprox
+
+/-!
+## Answer for the original complete-output, demand-only target
+-/
+
+/-- The original submitted question: a universally truthful mechanism with complete
+allocations, an O(log log m) welfare approximation, and polynomially many bundle-only
+demand queries. This target is separate from the partial-output, value-and-demand
+question in `truthfulSubmodularCA`; no equivalence between the targets is asserted. -/
+theorem truthfulSubmodularCACompleteDemandOnly :
+    answer(sorry) ↔ DemandOnlyTruthfulSubmodularLogLogStatement := by
+  sorry
 
 end
 end EconCSLib.OpenProblem.New.EconCSBench.TruthfulSubmodularCA
