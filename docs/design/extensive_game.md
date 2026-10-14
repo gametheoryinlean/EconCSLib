@@ -1,340 +1,191 @@
-# Extensive games — API design
+# Extensive Games — Reading Guide and Architecture
 
-Developer-facing design notes for the two extensive-game representations in
-`EconCSLib/GameTheory/ExtensiveGame/`: the general state-space `Arena` model
-and the finite perfect-information, no-chance inductive `GameTree` model.
+This is the short entry point for EconCSLib's extensive-game framework. It
+explains how the main concepts fit together and gives a concrete route into the
+existing examples. It is not an API inventory. Use
+[`efg-public-api.md`](efg-public-api.md) to choose imports and
+[`efg-document-authority.md`](efg-document-authority.md) to locate the
+authoritative policy or theorem-boundary document.
 
-> Scope. The structural-core section below records the dependency boundary of
-> the `Arena` model. The remainder of this note covers the `GameTree` files
-> (`GameTree`, `BackwardInduction`, `GameTreeSPE`, `GameTreeNE`,
-> `GameTreeStrategicForm`, `Zermelo`, plus the `Examples/SimpleGameTree` smoke
-> test).
+EconCSLib supports two complementary representations:
 
-Part of the [design documentation set](README.md). Complements, does not replace:
+- finite inductive trees for structural recursion, backward induction, and
+  executable finite examples;
+- history-indexed controlled games for imperfect information, chance,
+  behavioral and mixed strategies, continuation semantics, and representation
+  transfer.
 
-- [`docs/design.md`](../design.md) — project-wide architecture and rules.
-- `docs/knowledge/` — the published mathematical blueprint (textbook layer).
+The first representation is the shortest route for a finite perfect-information
+game. The second is the canonical semantic route when information, observations,
+or stochastic execution matter.
 
-## Arena structural core
+## 1. Conceptual route
 
-The state-space model separates universal extensive-game structure from
-assumptions needed only by particular semantics or algorithms:
+Read the canonical history-indexed design in this order:
 
 ```text
 Arena
-  → ControlledGame
-  → histories and complete plays
-  → ControlledObservedGame
+  pure states, dependent legal actions, and transitions
+    ↓
+ControlledGame
+  initial state and player/non-player control
+    ↓
+ControlledDecisionGame
+  decision information, represented coordinates, and information actions
+    ├── pure/behavioral/mixed strategies
+    ├── perfect recall and Kuhn realization
+    └── lawful subgames and continuation systems
+    ↓ optional
+ControlledObservedGame
+  private observations, public observations, and their projections
+
+Orthogonal semantic layers attach only when needed:
+  chance law ─ termination/objective ─ execution law ─ equilibrium
 ```
 
-- `Arena` stores only states, dependent legal actions, and transitions.
-- `ControlledGame` adds an initial state and a mover label. A nonterminal state
-  with `mover = none` is non-player-controlled (and may later be interpreted
-  as nature); `isNonPlayerState` is the canonical predicate for this case.
-  The compatibility name `isChanceState` supplies no probability law by
-  itself.
-- A mover label on a terminal state is ignored. In particular, observed games
-  create decision-information coordinates only from nonterminal histories.
-- `Arena.History` records action occurrences, so two paths that reach the same
-  state remain distinct.
-- `Arena.CompletePlayFromHistory` represents both infinite play and finite play
-  by stuttering after a terminal history.
-- `ControlledObservedGame` adds public/private observations, decision
-  information, information-indexed actions, and raw pure strategies.
-  `AllDecisionInfoRepresented` is the optional no-junk certificate asserting
-  that every declared strategy coordinate comes from a concrete nonterminal
-  player decision; the carrier does not bake this modelling assumption into
-  its data.
+Each step answers one modeling question:
 
-Its universe mapping is
-`base : ControlledGame.{uN, uA, uS} N`: both the concrete action fiber and
-`InfoAction` live in `uA`, while the state carrier remains independently in
-`uS`. This order follows the public player/action/state universe order of
-`ControlledGame`; reversing `uA` and `uS` would accidentally align abstract
-information actions with the state universe.
+| Layer | Question answered | Deliberately absent |
+|---|---|---|
+| `Arena` | How can play move? | players, chance, payoff, information |
+| `ControlledGame` | Who controls a state? | a probability law for non-player states |
+| `ControlledDecisionGame` | What does a moving player know and what can they choose? | private/public signal histories, objectives |
+| `ControlledObservedGame` | What does each player currently observe, and what is public? | recall, finiteness, termination, equilibrium |
+| semantic certificates | Under which law, objective, horizon, and recall assumptions is a theorem stated? | hidden strengthening of the carrier |
 
-Endpoint reachability and occurrence-sensitive history are connected by
-`Arena.reachable_iff_nonempty_history`. The proposition records that at least
-one history exists without identifying distinct action histories that merge
-at the same state.
+This order is a mental model, not a requirement to construct every record by
+hand. In particular, strategy coordinates come from represented decision
+information, not from the optional observation layer.
 
-The opt-in import
-`EconCSLib.GameTheory.ExtensiveGame.Interface.StructuralCore` exposes exactly
-these structural facilities. It does not require finiteness, decidable
-equality, termination, an objective, a payoff interpretation, a probability
-law, perfect recall, or an equilibrium concept. Those assumptions belong in
-separate higher layers.
+### State and occurrence convention
 
-The import boundary is physical rather than documentary:
+`Arena` is a compact transition system: mover, available actions, and the next
+state are state-indexed. Complete typed histories are occurrence-sensitive, so
+two distinct paths remain distinct even when they reach the same compact state.
+If control or legal actions genuinely depend on the path rather than the compact
+state, put the required memory into the state or use an occurrence-based
+frontend/compiler. Do not infer node equality from endpoint equality.
+
+### Chance convention
+
+`ControlledGame.mover s = none` means only that no strategic player controls
+`s`. It does not define a chance distribution. A stochastic presentation must
+supply its chance law explicitly. This keeps deterministic structure, discrete
+PMF execution, and analytic kernels from being conflated.
+
+## 2. Getting-started route
+
+Start from a concrete finite representation, then inspect the canonical layers
+only as the example needs them.
+
+### Finite perfect information
+
+Use the inductive `GameTree` track when the game is structurally finite, has
+perfect information, and has no chance node in the source syntax.
 
 ```text
-Structural/Basic.lean
-  → Structural/Reachability.lean
-  → Structural/History.lean
-      ├→ Execution/CompletePlay.lean
-      └→ Observed/Controlled.lean
-            → Observed/Controlled/Infrastructure/WellFormed.lean
-  → Interface/StructuralCore.lean  (facade over both branches)
+GameTree
+  → backward-induction value and policy
+  → occurrence-sensitive observed compiler
+  → pure Nash and standard pure SPE
 ```
 
-The compatibility modules `Basic.lean`, `Execution/Reachability.lean`, and
-`Execution/History.lean` add the historical payoff-aware `ExtensiveGame`
-carrier and its projections, but are not imported by the structural facade.
-The import-boundary regression checks that `ExtensiveGame` and
-`ExtensiveGame.payoff` remain unavailable through the narrow facade.
+The canonical compiler is
+[`GameTreeOccurrenceObserved.lean`](../../EconCSLib/GameTheory/ExtensiveGame/Compiler/GameTreeOccurrenceObserved.lean).
+Its occurrence presentation is preferred when equal subtree values could make
+an endpoint compiler identify distinct nodes. Detailed finite-tree signatures
+remain in [`extensive_game-2-reference.md`](extensive_game-2-reference.md).
 
-The compatibility migration is closed by explicit definitional bridges:
+### Finite imperfect information
 
-- `ExtensiveGame.ofControlledGame_toControlledGame_self` is the
-  forget-payoff/reattach-payoff round-trip;
-- `ExtensiveGame.isReachable_iff_toControlledGame` identifies historical root
-  reachability with the canonical controlled predicate;
-- `ExtensiveGame.unfold_toControlledGame` and `unfold_toArena` show that the
-  historical payoff-aware unfolding delegates to the canonical controlled
-  and Arena unfoldings.
+Read
+[`FiniteImperfectCompilation.lean`](../../EconCSLib/Examples/ExtensiveGame/FiniteImperfectCompilation.lean)
+as the first worked example. It shows:
 
-`Examples.ExtensiveGame.LegacyApiMigration` compiles these bridges through the
-historical import path. Bounded `Play`, behavioral strategies, and
-payoff-aware subgame operations remain higher semantic layers rather than
-members of the structural core; this PR does not delete those APIs.
+1. compact finite game data;
+2. a nontrivial information set shared by two decision states;
+3. local compiler well-formedness obligations;
+4. compilation to the canonical observed EFG;
+5. occurrence-sensitive information and perfect-recall checks.
 
-`ExtensiveGame N U` remains as the state-payoff compatibility layer over
-`ControlledGame N`. Its state payoff is convenient for the existing API but
-is not the authoritative semantics for general terminal-history or infinite
-play objectives.
+This route lets a new user see a complete model before learning every low-level
+carrier field.
 
-This parent-structure migration is intentionally **not source-compatible at
-the generated-constructor boundary**. Field projections and most named
-structure literals remain compatible, but positional calls to
-`ExtensiveGame.mk` and pattern matches on the old generated constructor must
-be migrated. Downstream code should construct games with
-`ExtensiveGame.ofArena arena init mover payoff`, or wrap existing controlled
-dynamics with `ExtensiveGame.ofControlledGame base payoff`; neither API exposes
-the parent-record layout.
+### Finite recall and mixed/behavioral realization
 
-`Arena.unfoldEndpoint` is the canonical projection from an unfolded history
-state back to its compact Arena endpoint. Its transition theorem records that
-this projection commutes with `next`; later simulation or compiler layers can
-build on that theorem without entering the minimal carrier.
+After the compilation example, read
+[`RootScopedKuhn.lean`](../../EconCSLib/Examples/ExtensiveGame/RootScopedKuhn.lean).
+It demonstrates perfect recall, mixed and behavioral profiles, bounded law
+realization, deviation coverage, and why the construction is scoped to a
+selected continuation root.
 
-## Design principles, as they land here
+### Representation edge cases
 
-1. **Bourbaki discipline.** `GameTree N U` constrains *neither* `N` nor `U`: no
-   `Fintype`, no `DecidableEq`, no order. Finiteness is structural (the inductive
-   type); `[TotalPreorder U]` is added only at the theorems that compare payoffs.
-2. **Minimal order, no field.** The entire value / SPE / Kuhn stack needs only
-   `[TotalPreorder U]` (reflexive + transitive + total) — *no* antisymmetry, *no*
-   decidability, *no* arithmetic. Numbers (`ℚ`) enter only in the zero-sum
-   `Zermelo` layer, where sums and negation are genuinely used.
-3. **Stable predicates over wrappers.** Equilibria are predicates on strategies,
-   not bespoke structures; subgames are the `Subtree` relation, not a new type.
-4. **One "Kuhn".** "Kuhn's theorem" here = backward-induction / SPE existence
-   (Kuhn 1953). The *other* Kuhn theorem (mixed ≡ behavioral under perfect
-   recall) lives in `BehaviorStrategy.lean` (Arena side, EG-L2). Don't conflate.
+Use these examples only after the main route:
 
-## Module map
+- [`FiniteEFGWellFormedness.lean`](../../EconCSLib/Examples/ExtensiveGame/FiniteEFGWellFormedness.lean)
+  shows why ghost information values and terminal mover labels create no strategy coordinates.
+- [`OccurrenceNonIso.lean`](../../EconCSLib/Examples/ExtensiveGame/OccurrenceNonIso.lean)
+  distinguishes endpoint equality from occurrence equality.
+- [`RecallHierarchy.lean`](../../EconCSLib/Examples/ExtensiveGame/RecallHierarchy.lean)
+  separates classical, private-signal, and public-signal recall.
 
-```
-GameTheory/ExtensiveGame/
-  GameTree.lean              -- the inductive type, size, children, Subtree, strong_induction  (§1)
-  BackwardInduction.lean     -- value / valueList (argmax), value_Node_ge                       (§2)
-  GameTreeSPE.lean           -- Strategy, outcome, optStrategy, IVariant, SPE, Kuhn_exists_SPE   (§3,§4)
-  GameTreeNE.lean            -- IsNashEquilibrium, IsSubgamePerfectOn, Kuhn_exists_NE/_SPE_on     (§4)
-  GameTreeStrategicForm.lean -- toStrategicGame bridge to the normal-form module                 (§4)
-  Zermelo.lean               -- IsZeroSum, value₀, zermelo_determinacy (saddle value)            (§5)
-```
+## 3. Choosing the semantic branch
 
-Conventions: `[MSZ, Ch. 3]` = Maschler/Solan/Zamir, *Game Theory* (Cambridge,
-2013), extensive games. "Minimal assumptions" lists what a declaration needs on
-top of the always-present `{N U : Type*}`. Signatures abbreviated; source is
-authoritative.
+After the common structural and decision layers, choose only the semantics the
+theorem needs:
 
----
+| Need | Start here |
+|---|---|
+| structure, represented strategies, recall, lawful subgames | `Interface.StructuralCore` or `Interface.Core` |
+| bounded deterministic or PMF execution | `Interface.Execution.Finite` |
+| infinite paths generated by discrete PMF policies | `Interface.Execution.Infinite` |
+| measurable or non-atomic kernels | `Interface.Execution.Analytic` |
+| discrete Kuhn and equilibrium results | `Interface.Equilibrium.Discrete` |
+| measurable continuation equilibrium | `Interface.Equilibrium.Analytic` |
+| finite frontends and compilers | `Interface.Compilation.Discrete` |
 
-## 1. Core model — the `GameTree` type
+This table is a reading aid. The governed import contract and the exact
+responsibility of every facade are in
+[`efg-public-api.md`](efg-public-api.md). The structural, finite-PMF,
+infinite-discrete, analytic, and FOSG execution regimes and their allowed
+adapter directions are separated in
+[`efg-semantic-universes.md`](efg-semantic-universes.md).
 
-File: [`GameTree.lean`](../../../EconCSLib/GameTheory/ExtensiveGame/GameTree.lean)
+## 4. Mathematical boundaries
 
-```lean
-inductive GameTree (N : Type*) (U : Type*) : Type _
-  | Leaf (payoff : N → U)
-  | Node (mover : N) (head : GameTree N U) (tail : List (GameTree N U))
-```
+- `GameTree` backward induction and the occurrence compiler supply the finite
+  perfect-information route to pure SPE.
+- Observed-EFG Kuhn results compare induced laws under finite perfect recall;
+  mixed and behavioral strategy types are not claimed to be isomorphic.
+- Standard SPE quantifies over a complete lawful subgame system. Predicates on
+  caller-selected roots are conservative variants and are not silently called
+  standard SPE.
+- Sequential equilibrium and arbitrary-measure pure-strategy realization are
+  outside this release; their prototype interfaces are not included.
+- Countably supported infinite-prefix realization and arbitrary-measure
+  strategy laws have explicit boundaries; finite marginal equality is not
+  promoted to an infinite path-law theorem without the missing bridge.
 
-| name | Minimal assumptions | Meaning |
-|------|--------------------|---------|
-| `GameTree N U` | **none** | Finite perfect-info game: players `N`, payoffs `U`. |
-| `Leaf payoff` | none | Terminal node with payoff vector `N → U`. |
-| `Node mover head tail` | none | Decision node owned by `mover`, children `head :: tail`. |
+For exact hypotheses and remaining gaps, use
+[`efg-mathematical-provenance.md`](efg-mathematical-provenance.md),
+[`efg-preservation-matrix.md`](efg-preservation-matrix.md), and the focused
+Kuhn and determinacy scope notes.
 
-Two modelling choices are load-bearing:
+## 5. Documentation map
 
-- **Finiteness is the inductive type itself** — no separate well-foundedness
-  hypothesis is ever needed.
-- **Children are non-empty by construction.** A `Node` carries `head` *plus*
-  `tail : List`, so `children = head :: tail` is always non-empty
-  (`children_node_ne_nil`). This is why backward induction can always pick a
-  child — there is no empty-node edge case.
-- **No `Nature` constructor.** The core stays chance-free. Separate stochastic
-  tree modules model chance where the additional utility infrastructure is
-  appropriate.
+| Task | Document |
+|---|---|
+| understand the conceptual layers or follow a first example | this guide |
+| choose a supported import | [`efg-public-api.md`](efg-public-api.md) |
+| locate declaration ownership | [`efg-module-status.md`](efg-module-status.md) |
+| understand the controlled hierarchy | [`efg-controlled-api.md`](efg-controlled-api.md) |
+| review API-growth and dependency policy | [`efg-minimal-core-freeze.md`](efg-minimal-core-freeze.md), [`efg-governance.md`](efg-governance.md) |
+| compare frontend representations and compilers | [`efg-representation-compilation.md`](efg-representation-compilation.md) |
+| check preservation strength | [`efg-preservation-matrix.md`](efg-preservation-matrix.md) |
+| check literature translation or theorem gaps | [`efg-mathematical-provenance.md`](efg-mathematical-provenance.md) |
+| migrate an old path or declaration | [`efg-api-migration.md`](efg-api-migration.md) |
 
-The supporting vocabulary every later proof leans on:
-
-| name | Meaning |
-|------|---------|
-| `size` | structural size (`Leaf = 1`, `Node = 1 + head + Σ tail`); `size_pos`, `size_mem_children_lt` feed well-founded recursion. |
-| `Subtree s g` | `s` occurs inside `g` (reflexive / in head / in a tail child); `Subtree.trans` = "a subgame of a subgame is a subgame". |
-| `strong_induction` | to prove `motive g`, handle `Leaf` and each `Node` given the motive for **every** child. Stronger than the default recursor (which gives IH on the head only) — exactly what backward induction needs. |
-
-`strong_induction` is the workhorse: `value`, `outcome`, and every zero-sum
-invariant are proved by it.
-
----
-
-## 2. Backward-induction value
-
-File: [`BackwardInduction.lean`](../../../EconCSLib/GameTheory/ExtensiveGame/BackwardInduction.lean)
-
-```lean
-mutual
-  noncomputable def value : GameTree N U → (N → U)
-    | Leaf p => p
-    | Node m h t => List.argMaxOn (fun v => v m) (value h) (valueList t)
-  noncomputable def valueList : List (GameTree N U) → List (N → U)
-    | [] => [] | x :: xs => value x :: valueList xs
-end
-```
-
-| name | Minimal assumptions | Meaning |
-|------|--------------------|---------|
-| `value g` | `[TotalPreorder U]` | BI value vector: at a `Node`, the mover picks a child maximizing *their own* coordinate. |
-| `value_Node_ge` | same | the mover's coordinate of `value (Node …)` dominates every child's. |
-| `value_Node_eq_some_child_value` | same | `value (Node …)` *is* the value of some child (the argmax). |
-
-`value` is `noncomputable` because `argMaxOn` over a total preorder needs
-classical choice. The two lemmas are the entire interface used downstream: one
-gives optimality (`≥` every child for the mover), the other says the optimum is
-realized by an actual child. `[TotalPreorder U]` is the *only* assumption — the
-argmax needs comparability, nothing more.
-
----
-
-## 3. Strategies, outcome, and the BI strategy
-
-File: [`GameTreeSPE.lean`](../../../EconCSLib/GameTheory/ExtensiveGame/GameTreeSPE.lean)
-
-```lean
-def Strategy (N U) := (m : N) → (h : GameTree N U) → (t : List (GameTree N U)) →
-  { c : GameTree N U // c ∈ h :: t }
-noncomputable def outcome (σ : Strategy N U) : GameTree N U → (N → U)
-def optStrategy : Strategy N U          -- picks an argmax child at every node
-def IVariant (i) (σ σ') : Prop          -- σ, σ' agree on every node with mover ≠ i
-```
-
-| name | Minimal assumptions | Meaning |
-|------|--------------------|---------|
-| `Strategy N U` | none | A **global** child-selector at every `(mover, head, tail)`, bundled with the membership proof. Covers all players at once. |
-| `outcome σ g` | `[TotalPreorder U]` | The leaf payoff reached by following `σ` from `g` (well-founded on `size`). |
-| `optStrategy` | `[TotalPreorder U]` | Canonical BI strategy: picks a child whose value equals the node's value. `noncomputable` (classical choice). |
-| `IVariant i σ σ'` | none | `σ'` is a unilateral deviation by player `i` only. |
-| `outcome_optStrategy_eq_value` | `[TotalPreorder U]` | the bridge: `outcome optStrategy g = value g`. |
-
-A single `Strategy` is **player-agnostic** (one function for all movers); a
-"player-`i` strategy" is conceptualised as its behaviour on `mover = i` nodes,
-and `IVariant i` captures "change only player `i`'s choices". `outcome` is a
-tree walk; `outcome_optStrategy_eq_value` is the load-bearing lemma that lets
-every value fact transfer to an actual play.
-
----
-
-## 4. Equilibrium and Kuhn's theorem
-
-Files: [`GameTreeSPE.lean`](../../../EconCSLib/GameTheory/ExtensiveGame/GameTreeSPE.lean),
-[`GameTreeNE.lean`](../../../EconCSLib/GameTheory/ExtensiveGame/GameTreeNE.lean)
-
-```lean
-def IsSubgamePerfect (σ) : Prop :=                 -- global: optimal at every tree
-  ∀ g i σ', IVariant i σ σ' → outcome σ' g i ≤ outcome σ g i
-def IsNashEquilibrium (σ) (g) : Prop :=            -- root-scoped (GameTreeNE)
-  ∀ i σ', IVariant i σ σ' → outcome σ' g i ≤ outcome σ g i
-def IsSubgamePerfectOn (σ) (g) : Prop :=           -- SPE on subgames of a fixed root
-  ∀ s, Subtree s g → IsNashEquilibrium σ s
-```
-
-| name | Minimal assumptions | Meaning |
-|------|--------------------|---------|
-| `IsSubgamePerfect σ` | `[TotalPreorder U]` | No `i`-deviation improves `i` at **any** tree. Global (no root). |
-| `IsNashEquilibrium σ g` | same | Same, but only at the fixed root `g`. Weaker — allows off-path threats. |
-| `IsSubgamePerfectOn σ g` | same | NE at every subtree of `g`; `Iff.rfl`-equal to "∀ subtree, `IsNashAt`". |
-| `optStrategy_isSubgamePerfect` | same | **The real Kuhn content**: `optStrategy` is an SPE. |
-| `Kuhn_exists_SPE` | same | `∃ σ, IsSubgamePerfect σ` (existence form). |
-| `Kuhn_exists_SPE_on g` / `Kuhn_exists_NE g` | same | root-scoped SPE / NE existence at `g`. |
-| `IsSubgamePerfect.toNE` | same | SPE ⇒ NE (the classical one-way implication). |
-
-`optStrategy_isSubgamePerfect` is proved by `strong_induction`: at a node owned
-by the deviating player `i`, the deviation lands in some child where the IH plus
-`value_Node_ge` caps it; at any other node, `IVariant` forces the same child and
-the IH applies directly. Existence (`Kuhn_exists_SPE*`) is then immediate.
-`GameTreeStrategicForm.lean` additionally bridges a tree to the normal-form
-`StrategicGame` (`toStrategicGame`, `toStrategicGame_nash_iff_isNashAt`).
-
-**Kuhn naming.** This is the backward-induction theorem (Kuhn 1953). The
-behavioral-strategy Kuhn theorem is unrelated and lives on the Arena side.
-
----
-
-## 5. Zero-sum specialization — Zermelo determinacy
-
-File: [`Zermelo.lean`](../../../EconCSLib/GameTheory/ExtensiveGame/Zermelo.lean)
-
-This is the only GameTree file that uses `ℚ`: zero-sum needs sums and negation.
-
-```lean
-def IsZeroSum : GameTree (Fin 2) ℚ → Prop        -- payoffs sum to 0 at every leaf
-noncomputable def value₀ (g) : ℚ := (value g) 0  -- player 0's value
-```
-
-| name | Minimal assumptions | Meaning |
-|------|--------------------|---------|
-| `IsZeroSum g` | `Fin 2`, `ℚ` | `p 0 + p 1 = 0` at every leaf (propagated over the tree). |
-| `IsZeroSum.of_subtree` | same | zero-sum is inherited by every subgame. |
-| `value_zero_sum` | same | the BI value vector is zero-sum: `value g 0 + value g 1 = 0`. |
-| `value_one_eq_neg_value₀` | same | `value g 1 = -value₀ g`. |
-| `outcome_zero_sum` | same | **any** strategy's terminal outcome is zero-sum. |
-| `value₀_Node_zero_isMax` / `value₀_Node_one_isMin` | same | player 0 maximizes `value₀` at their nodes; player 1 minimizes it at theirs. |
-| `value₀_eq_outcome_and_zeroSum` | same | packaging: `optStrategy` realizes `value₀`, value vector is zero-sum. *Not* a minimax statement. |
-| **`zermelo_determinacy`** | same | **determinacy / saddle value** (below). |
-| `zermelo_exists_pure_SPE` / `_NE` | same | `Fin 2`/`ℚ` instances of Kuhn existence — **no** zero-sum hypothesis needed. |
-
-```lean
-theorem zermelo_determinacy (g : GameTree (Fin 2) ℚ) (hzs : IsZeroSum g) :
-    (∀ σ', IVariant 1 optStrategy σ' → value₀ g ≤ outcome σ' g 0) ∧   -- P0 secures ≥ value₀
-    (∀ σ', IVariant 0 optStrategy σ' → outcome σ' g 0 ≤ value₀ g)     -- P1 caps  ≤ value₀
-```
-
-`zermelo_determinacy` is **the genuine Zermelo content**: `optStrategy` is a
-saddle point with value `value₀ g`. Player 0, playing `optStrategy`, secures at
-least `value₀ g` against every opponent play; player 1, playing `optStrategy`,
-holds player 0 to at most `value₀ g`. The two directions come from
-`optStrategy_isSubgamePerfect` at `i = 1` and `i = 0` respectively, with the
-player-0 side closing via `outcome_zero_sum` (`outcome σ' g 0 = -outcome σ' g 1`).
-
-The split between the layers is the design point:
-
-- existence of an equilibrium is **Kuhn**, needs only `[TotalPreorder U]`, and
-  does *not* use zero-sum — hence `zermelo_exists_pure_SPE`/`_NE` carry no
-  `IsZeroSum` hypothesis;
-- the **value** being determined (a saddle) is **Zermelo**, and is exactly where
-  the zero-sum hypothesis does real work.
-
----
-
-## Relation to the Arena framework
-
-`GameTree` is an inductive specialization for finite perfect-information games.
-The `Arena` framework (`ExtensiveGame/{Basic,Strategy,Play,Subgame}.lean`) is a
-state-space model that also represents infinite and imperfect-information games;
-behavioral strategies, perfect recall, and the *behavioral* Kuhn theorem live
-there (EG-L2). A future `Embedding.lean` is intended to bridge finite Arena →
-GameTree. The two coexist on purpose; this note is only about the GameTree side.
+API growth is frozen. Improve discoverability through this guide, module
+docstrings, existing examples, and links to the current owners—not by adding a
+new facade, wrapper, alias, or duplicate theorem.

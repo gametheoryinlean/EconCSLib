@@ -26,8 +26,8 @@ inductive GameTree (N U : Type*)
 * **Finite** via inductive structure.
 * **Non-empty children at each `Node`** via the `head : GameTree` + `tail : List ...`
   split — `head` provides a witness, `tail` the rest.
-* **No `Nature` / chance constructor**: chance is deferred to a future
-  `StochasticGameTree` module (see project memory 2026-04-20).
+* **No `Nature` / chance constructor**: normalized finite chance is provided
+  separately by `StochasticGameTree`.
 
 ## Main definitions
 
@@ -117,8 +117,10 @@ theorem size_mem_children_lt (m : N) (h : GameTree N U) (t : List (GameTree N U)
 /-! ### Subtree relation
 
 `Subtree s g` means the tree `s` occurs somewhere inside `g` (reflexively, or
-as the head / a tail element, recursively). Useful for stating subgame-perfect
-properties quantified over all reachable subgames. -/
+as the head / a tail element, recursively). It is useful for stating
+structural endpoint-policy properties over subtree values. Distinct equal
+occurrences remain identified; standard occurrence-sensitive subgames use the
+history compiler instead. -/
 
 /-- `Subtree s g` — `s` occurs as a subtree of `g`. -/
 inductive Subtree : GameTree N U → GameTree N U → Prop
@@ -157,6 +159,18 @@ theorem Subtree.trans {r s g : GameTree N U} (hrs : Subtree r s) (hsg : Subtree 
   | refl => exact hrs
   | inHead m h t _ ih => exact Subtree.inHead r m h t ih
   | inTail m h t hmem _ ih => exact Subtree.inTail r m h t hmem ih
+
+/-- A subtree has structural size no greater than the tree containing it. -/
+theorem Subtree.size_le {s g : GameTree N U} (hsg : Subtree s g) :
+    s.size ≤ g.size := by
+  induction hsg with
+  | refl =>
+      exact Nat.le_refl _
+  | inHead m head tail _ ih =>
+      exact Nat.le_trans ih (Nat.le_of_lt (size_head_lt m head tail))
+  | inTail m head tail hmem _ ih =>
+      exact Nat.le_trans ih
+        (Nat.le_of_lt (size_mem_tail_lt m head tail hmem))
 
 /-! ### Strong induction on size
 

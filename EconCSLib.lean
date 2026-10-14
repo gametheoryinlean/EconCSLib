@@ -6,7 +6,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -- EconCSLib: stable aggregate import
 
 -- Foundation: abstract vocabulary
-import EconCSLib.Foundation.Player
 import EconCSLib.Foundation.Preference
 import EconCSLib.Foundation.Profile
 import EconCSLib.Foundation.Argmax
@@ -26,6 +25,13 @@ import EconCSLib.Algorithm.Online
 
 -- Math: infrastructure with no game vocabulary
 import EconCSLib.Math.Simplex
+
+-- Exact finite probability
+import EconCSLib.Math.Probability.FiniteLaw
+import EconCSLib.Math.Probability.Effective
+
+-- Representation-neutral game semantics
+import EconCSLib.GameTheory.GameForm
 
 -- Math/LinearAlgebra
 import EconCSLib.Math.LinearAlgebra.FourierMotzkin
@@ -75,22 +81,11 @@ import EconCSLib.GameTheory.StrategicGame.ZeroSum.Learning.FictitiousPlay
 import EconCSLib.GameTheory.StrategicGame.ZeroSum.Learning.Robinson
 import EconCSLib.GameTheory.StrategicGame.ZeroSum.Learning.Cesaro
 
--- GameTheory/ExtensiveGame (Arena-based, supports infinite games)
-import EconCSLib.GameTheory.ExtensiveGame.Basic
-import EconCSLib.GameTheory.ExtensiveGame.Strategy
-import EconCSLib.GameTheory.ExtensiveGame.Play
-import EconCSLib.GameTheory.ExtensiveGame.Subgame
-import EconCSLib.GameTheory.ExtensiveGame.BehaviorStrategy
--- Finite perfect-information games (inductive GameTree, Kuhn + Zermelo)
+-- GameTheory/ExtensiveGame (finite/PMF execution by default)
+import EconCSLib.GameTheory.ExtensiveGame.Interface.Execution.Finite
+-- Finite perfect-information syntax and backward induction
 import EconCSLib.GameTheory.ExtensiveGame.GameTree
 import EconCSLib.GameTheory.ExtensiveGame.BackwardInduction
-import EconCSLib.GameTheory.ExtensiveGame.GameTreeSPE
-import EconCSLib.GameTheory.ExtensiveGame.GameTreeNE
-import EconCSLib.GameTheory.ExtensiveGame.GameTreeStrategicForm
-import EconCSLib.GameTheory.ExtensiveGame.FiniteArenaExtraction
-import EconCSLib.GameTheory.ExtensiveGame.StochasticGameTree
-import EconCSLib.GameTheory.ExtensiveGame.ImperfectInformation
-import EconCSLib.GameTheory.ExtensiveGame.Zermelo
 import EconCSLib.GameTheory.ExtensiveGame.ZeroSumGameTreeWithChance
 
 -- GameTheory/CoalitionalGame
@@ -161,4 +156,21 @@ import EconCSLib.SocialChoice.FairDivision.Divisible.Existence
 
 Stable aggregate import for the EconCSLib Lean library. Worked examples and
 experimental open-problem interfaces remain available as opt-in imports.
+
+Infinite discrete paths, analytic measurable kernels, relations, equilibrium,
+restart compatibility, FOSG serialization, and reference compilers are
+intentionally opt-in through the tiered `ExtensiveGame.Interface` imports.
+This keeps the root aggregate finite/PMF-focused. These are governed
+pre-stability EFG boundaries, not a current external source-compatibility
+guarantee.
+
+The historical state-indexed `Play`, `BehaviorStrategy`,
+`ImperfectInformation`, and `StochasticGameTree` paths are not part of this
+governed root surface. Their corrected replacements or compatibility imports
+remain available explicitly; canonical EFG development should use the tiered
+interfaces. Historical endpoint-policy NE/SPE/strategic-form declarations,
+finite Arena extraction, Zermelo specialization, and infinite discrete path
+laws remain available through explicit imports. Reference compilers, including
+the occurrence-sensitive `GameTree` compiler and its standard-SPE theorem, are
+available from `Interface.Compilation.Discrete`.
 -/

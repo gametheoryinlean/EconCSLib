@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that knowledge-node References sections cite literature, not GitHub provenance."""
+"""Check knowledge-node references and formalization-status invariants."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ FORBIDDEN_PATTERNS = (
 )
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+FRONT_MATTER_RE = re.compile(r"\A---\r?\n(?P<body>.*?)\r?\n---", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -51,9 +52,67 @@ def _reference_lines(text: str) -> list[tuple[int, str]]:
     return result
 
 
+def _metadata_value(front_matter: str, key: str) -> str | None:
+    match = re.search(
+        rf"^[ \t]*{re.escape(key)}:\s*(?P<value>[^\r\n#]+?)\s*$",
+        front_matter,
+        re.MULTILINE,
+    )
+    return match.group("value").strip() if match else None
+
+
+def _metadata_line(text: str, key: str) -> int:
+    match = re.search(rf"^[ \t]*{re.escape(key)}:", text, re.MULTILINE)
+    return text.count("\n", 0, match.start()) + 1 if match else 1
+
+
+def _formalization_diagnostics(path: Path, text: str) -> list[Diagnostic]:
+    match = FRONT_MATTER_RE.match(text)
+    if match is None:
+        return []
+    front_matter = match.group("body")
+    if _metadata_value(front_matter, "status") != "formalized":
+        return []
+
+    diagnostics: list[Diagnostic] = []
+    kind = _metadata_value(front_matter, "kind")
+    proof = _metadata_value(front_matter, "proof")
+    alignment = _metadata_value(front_matter, "alignment")
+    has_lean_mapping = re.search(r"^lean:\s*$", front_matter, re.MULTILINE)
+
+    if has_lean_mapping is None:
+        diagnostics.append(
+            Diagnostic(
+                path=path,
+                line=_metadata_line(text, "status"),
+                text="formalized node must include a Lean module/declaration mapping",
+            )
+        )
+    if alignment != "aligned":
+        diagnostics.append(
+            Diagnostic(
+                path=path,
+                line=_metadata_line(text, "alignment"),
+                text="formalized node must declare verification.alignment: aligned",
+            )
+        )
+    if kind in {"theorem", "proposition"} and proof != "accepted":
+        diagnostics.append(
+            Diagnostic(
+                path=path,
+                line=_metadata_line(text, "proof"),
+                text=(
+                    "formalized theorem/proposition must declare "
+                    "verification.proof: accepted"
+                ),
+            )
+        )
+    return diagnostics
+
+
 def check_file(path: Path) -> list[Diagnostic]:
     text = path.read_text(encoding="utf-8")
-    diagnostics: list[Diagnostic] = []
+    diagnostics = _formalization_diagnostics(path, text)
     for line_number, line in _reference_lines(text):
         if any(pattern.search(line) for pattern in FORBIDDEN_PATTERNS):
             diagnostics.append(Diagnostic(path=path, line=line_number, text=line.strip()))

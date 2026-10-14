@@ -8,41 +8,53 @@ import EconCSLib.GameTheory.ExtensiveGame.BackwardInduction
 /-!
 # EconCSLib.GameTheory.ExtensiveGame.GameTreeSPE
 
-Strategies, outcomes, and **Kuhn's theorem** on `GameTree N U`:
-every finite perfect-information game without chance has a
-subgame-perfect equilibrium, obtainable via backward induction.
+Structural endpoint policies, outcomes, and backward induction on
+`GameTree N U`.
+
+The historical `Strategy` is one global child selector indexed by a node's
+structural value `(mover, head, tail)`.  It is not bound to a root and cannot
+distinguish two equal subtree values reached at different history
+occurrences.  Consequently this module calls its predicate
+`IsGlobalEndpointSubgamePerfect`: it is a stronger global structural
+endpoint-policy theorem, not the canonical strategy space of a root-bound
+perfect-information EFG.
+
+The canonical occurrence-sensitive theorem is
+`GameTree.Kuhn_exists_occurrencePureSPE` in
+`Compiler.GameTreeOccurrenceObserved`.
 
 ## Minimal assumptions
 
-Only `[TotalPreorder U]` — preorder + totality, no antisymmetry,
-no decidability. See `ExtensiveGame/BackwardInduction.lean`.
+The structural notions use only `[TotalPreorder U]`.  The executable
+backward-induction selector additionally uses `[DecidableLE U]`; no classical
+choice is used. See `ExtensiveGame/BackwardInduction.lean`.
 
 ## Main definitions
 
-* `GameTree.Strategy` — a strategy is a subtype-bundled child-selector
-  at every possible `(mover, head, tail)`.
+* `GameTree.Strategy` — a global structural endpoint policy: a
+  subtype-bundled child-selector at every possible `(mover, head, tail)`.
 * `GameTree.outcome` — the terminal payoff reached when following a strategy.
 * `GameTree.optStrategy` — the canonical backward-induction strategy (picks
   a child whose value attains the backward-induction max for the node's mover).
 * `GameTree.IVariant` — two strategies differ only at nodes whose mover is `i`.
-* `GameTree.IsSubgamePerfect` — no unilateral deviation of any player at any
-  subgame improves their payoff.
+* `GameTree.IsGlobalEndpointSubgamePerfect` — no structural endpoint-policy
+  deviation improves at any tree value.
 
 ## Main results
 
 * `outcome_optStrategy_eq_value` — outcome of `optStrategy` is the BI value.
-* `optStrategy_isSubgamePerfect` — the backward-induction strategy `optStrategy`
-  is a subgame-perfect equilibrium (the substantive theorem).
-* `Kuhn_exists_SPE` — existence form: every finite perfect-information game has
-  an SPE.
+* `optStrategy_isGlobalEndpointSubgamePerfect` — the backward-induction
+  endpoint policy is globally optimal against structural endpoint deviations.
+* `Kuhn_exists_globalEndpointSPE` — existence form for that historical layer.
 
 ## A note on the name "Kuhn"
 
-"Kuhn's theorem" here means the **backward-induction / SPE-existence** theorem
-(Kuhn 1953). It is distinct from the *other* result also called Kuhn's theorem —
-the equivalence of mixed and behavioral strategies under perfect recall — whose
-infrastructure lives in `ExtensiveGame/BehaviorStrategy.lean` (tracked under
-EG-L2). Do not conflate the two.
+The historical name refers to the backward-induction route underlying finite
+SPE existence. The theorem exported by this module alone is the structural
+endpoint-policy result; its canonical standard-SPE realization is proved by
+the occurrence compiler. This is distinct from the *other* result also called
+Kuhn's theorem—the equivalence of mixed and behavioral strategies under
+perfect recall—whose infrastructure lives in the observed-game layer.
 
 ## References
 
@@ -58,11 +70,13 @@ variable {N U : Type*} [TotalPreorder U]
 
 /-! ### Strategies -/
 
-/-- A pure strategy for the entire game tree: at every possible node context
+/-- A global structural endpoint policy: at every possible node context
     `(mover, head, tail)`, specify one child (bundled with its membership proof).
 
     Note: a single `Strategy` covers all players. Player-`i` "strategies"
-    are conceptualized as the restriction to nodes where `mover = i`. -/
+    are conceptualized as the restriction to nodes where `mover = i`.
+    Equal subtree values at distinct history occurrences are intentionally
+    identified. -/
 def Strategy (N U : Type*) : Type _ :=
   (m : N) → (h : GameTree N U) → (t : List (GameTree N U)) →
     { c : GameTree N U // c ∈ h :: t }
@@ -70,7 +84,7 @@ def Strategy (N U : Type*) : Type _ :=
 /-- The outcome (terminal payoff vector) of playing strategy `σ` starting
     from game tree `g`. Walks down the tree, using `σ` to pick a child at
     each `Node`, until a `Leaf` is reached. -/
-noncomputable def outcome (σ : Strategy N U) : GameTree N U → (N → U)
+def outcome (σ : Strategy N U) : GameTree N U → (N → U)
   | Leaf p => p
   | Node m h t => outcome σ (σ m h t).val
 termination_by g => g.size
@@ -93,20 +107,43 @@ theorem outcome_Node (σ : Strategy N U) (m : N) (h : GameTree N U)
 
 /-! ### Backward-induction strategy -/
 
-/-- The canonical backward-induction strategy: at each node, pick a child
-    whose backward-induction value equals the node's value (i.e., a child
-    attaining the argmax for the mover).
+/-- Applying `value` after selecting the best child is the same finite fold as
+selecting the best already-computed child value. -/
+private theorem value_argMaxOn_child
+    [DecidableLE U] (m : N) (h : GameTree N U)
+    (t : List (GameTree N U)) :
+    value (List.argMaxOn (fun child => (value child) m) h t) =
+      List.argMaxOn (fun childValue => childValue m)
+        (value h) (t.map value) := by
+  simp only [List.argMaxOn]
+  induction t generalizing h with
+  | nil =>
+      rfl
+  | cons child tail ih =>
+      simp only [List.foldl_cons, List.map_cons]
+      by_cases hle : (value h) m ≤ (value child) m
+      · simp only [hle, if_true]
+        exact ih child
+      · simp only [hle, if_false]
+        exact ih h
 
-    Noncomputable — uses classical choice via `value_Node_eq_some_child_value`. -/
-noncomputable def optStrategy [DecidableLE U] : Strategy N U := fun m h t =>
-  ⟨(value_Node_eq_some_child_value m h t).choose,
-   (value_Node_eq_some_child_value m h t).choose_spec.1⟩
+/-- The canonical executable backward-induction strategy: at each node, pick
+the child maximizing the mover's coordinate.  The child and its membership
+proof are produced by the same finite `argMaxOn` fold used by `value`; no
+existence theorem or classical choice is involved. -/
+def optStrategy [DecidableLE U] : Strategy N U := fun m h t =>
+  ⟨List.argMaxOn (fun child => (value child) m) h t,
+    List.argMaxOn_mem (fun child => (value child) m) h t⟩
 
 /-- At a node, the `optStrategy` picks a child whose value equals the node's value. -/
 theorem value_optStrategy_eq [DecidableLE U] (m : N) (h : GameTree N U)
     (t : List (GameTree N U)) :
     value (optStrategy m h t).val = value (Node m h t) :=
-  ((value_Node_eq_some_child_value m h t).choose_spec.2).symm
+  by
+    change
+      value (List.argMaxOn (fun child => (value child) m) h t) =
+        value (Node m h t)
+    rw [value_Node, valueList_eq_map, value_argMaxOn_child]
 
 /-! ### Strategy deviation -/
 
@@ -123,10 +160,13 @@ theorem IVariant.refl (i : N) (σ : Strategy N U) : IVariant i σ σ :=
 
 /-! ### Subgame-perfect equilibrium -/
 
-/-- A strategy is **subgame-perfect** (SPE) if, at every subtree, no player
-    can strictly improve their payoff by a unilateral deviation — i.e., by
-    switching to any `i`-variant strategy. -/
-def IsSubgamePerfect (σ : Strategy N U) : Prop :=
+/-- Historical global endpoint-policy optimality: at every tree value, no
+player can improve by switching to an `i`-variant global endpoint policy.
+
+This is not the root-bound occurrence-sensitive standard EFG predicate; use
+`ObservedGame.IsPureStandardSubgamePerfect` through
+`GameTree.toOccurrenceObservedGame` for that semantics. -/
+def IsGlobalEndpointSubgamePerfect (σ : Strategy N U) : Prop :=
   ∀ (g : GameTree N U) (i : N) (σ' : Strategy N U),
     IVariant i σ σ' → outcome σ' g i ≤ outcome σ g i
 
@@ -152,10 +192,10 @@ theorem outcome_optStrategy_eq_value [DecidableLE U] (g : GameTree N U) :
 
 /-- **Optimality of `optStrategy`**: for every subtree `g`, every player `i`,
     and every `i`-variant deviation `σ'`, the deviating outcome is no better
-    than `optStrategy`'s outcome at coordinate `i`. This is the SPE property
-    spelled out before bundling into existence form. -/
-theorem optStrategy_isSubgamePerfect [DecidableLE U] :
-    IsSubgamePerfect (optStrategy : Strategy N U) := by
+than `optStrategy`'s outcome at coordinate `i`. This is the global structural
+endpoint-policy property spelled out before bundling into existence form. -/
+theorem optStrategy_isGlobalEndpointSubgamePerfect [DecidableLE U] :
+    IsGlobalEndpointSubgamePerfect (optStrategy : Strategy N U) := by
   intro g i σ' hiv
   induction g using GameTree.strong_induction with
   | base p =>
@@ -192,11 +232,11 @@ theorem optStrategy_isSubgamePerfect [DecidableLE U] :
         have hmem : (optStrategy m h t).val ∈ h :: t := (optStrategy m h t).property
         exact ih _ hmem
 
-/-- **Kuhn's theorem** (existence form): every finite perfect-information
-    game without chance admits a subgame-perfect equilibrium.
-
-    The backward-induction strategy `optStrategy` is such an SPE. -/
-theorem Kuhn_exists_SPE [DecidableLE U] : ∃ σ : Strategy N U, IsSubgamePerfect σ :=
-  ⟨optStrategy, optStrategy_isSubgamePerfect⟩
+/-- Existence theorem for global structural endpoint policies.  For canonical
+root-bound occurrence-sensitive SPE use `Kuhn_exists_occurrencePureSPE`. -/
+theorem Kuhn_exists_globalEndpointSPE [DecidableLE U] :
+    ∃ σ : Strategy N U,
+      IsGlobalEndpointSubgamePerfect σ :=
+  ⟨optStrategy, optStrategy_isGlobalEndpointSubgamePerfect⟩
 
 end GameTree

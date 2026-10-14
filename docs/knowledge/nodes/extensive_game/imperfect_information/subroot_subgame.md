@@ -12,14 +12,12 @@ uses:
   - game_theory.extensive_game.core.history_and_subgame
 lean:
   modules:
-    - EconCSLib.GameTheory.ExtensiveGame.GameTree
+    - EconCSLib.GameTheory.ExtensiveGame.Observed.Game
   declarations:
-    - GameTree.Subtree
-    - GameTree.Subtree.self
-    - GameTree.Subtree.head
-    - GameTree.Subtree.tail_mem
-    - GameTree.Subtree.child_mem
-    - GameTree.Subtree.trans
+    - ExtensiveGame.ObservedGame.IsLawfulSubgameRoot
+    - ExtensiveGame.ObservedGame.SubgameSystem
+    - ExtensiveGame.ObservedGame.CompleteSubgameSystem
+    - ExtensiveGame.ObservedGame.CompleteSubgameSystem.canonical
 verification:
   definition: accepted
   proof: not_applicable
@@ -32,14 +30,18 @@ tags:
 
 # Subroot And Subgame In Imperfect-Information Games
 
-In a perfect-recall extensive game, a node $x$ is a subroot if:
+In an observed extensive game, a history $x$ is a lawful subgame root if:
 
-1. $x$ is the unique node in its information set;
-2. for every information set $Q$, either every node of $Q$ follows $x$, or no node
-   of $Q$ follows $x$.
+1. the initial history is admitted as the whole game; otherwise, if a player
+   moves at $x$, then $x$ is the unique history in that player's information
+   set;
+2. every player information set encountered after entering at $x$ is wholly
+   contained in the continuation from $x$.
 
-The followers of a subroot, together with inherited information sets and payoffs,
-define a subgame.
+`SubgameSystem` selects a nonempty, possibly conservative collection of lawful
+roots. `CompleteSubgameSystem` additionally proves that every lawful root is
+selected; its canonical instance exists for every observed game. This
+lawfulness is independent of presentation-designated continuation metadata.
 
 ## References
 

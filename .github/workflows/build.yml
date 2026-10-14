@@ -45,8 +45,62 @@ jobs:
       - name: Build examples
         run: lake build EconCSLib.Examples
 
+      - name: Build executable probability test dependencies
+        run: |
+          lake build \
+            EconCSLib.Math.Probability.FiniteLaw \
+            EconCSLib.Math.Probability.Effective \
+            EconCSLib.Math.Probability.FiniteMarkovChain.Reachability \
+            EconCSLib.Math.Probability.FiniteMarkovChain.Discounted \
+            EconCSLib.Math.Probability.FiniteMarkovChain.Automaton \
+            EconCSLib.Math.Probability.FiniteMarkovChain.Parity \
+            EconCSLib.GameTheory.ExtensiveGame.Execution.Discrete.DiscountedPathUtility
+
+      - name: Test executable probability laws
+        run: |
+          lake env lean tests/FiniteLawSmoke.lean
+          lake env lean tests/EffectiveProbabilitySmoke.lean
+          lake env lean tests/FiniteMarkovReachabilitySmoke.lean
+          lake env lean tests/HistoryKernelSmoke.lean
+
+      - name: Build every governed EFG module
+        run: python3 scripts/build_efg_modules.py --fresh
+
       - name: Check Lean sources for placeholders
         run: python3 scripts/check_lean_placeholders.py EconCSLib
+
+      - name: Check EFG architecture governance
+        run: python3 scripts/check_efg_governance.py
+
+      - name: Test EFG governance tooling
+        run: |
+          python3 -m unittest \
+            tests/test_check_efg_api_growth.py \
+            tests/test_check_efg_computability.py \
+            tests/test_check_efg_axioms.py \
+            tests/test_check_efg_governance.py \
+            tests/test_report_efg_declaration_usage.py
+
+      - name: Enforce the EFG API-growth freeze
+        run: python3 scripts/check_efg_api_growth.py
+
+      - name: Enforce the EFG noncomputability ratchet
+        run: python3 scripts/check_efg_computability.py --skip-build
+
+      - name: Reject nonstandard EFG proof axioms
+        run: python3 scripts/check_efg_axioms.py --skip-build
+
+      - name: Report EFG declaration usage
+        run: |
+          python3 scripts/report_efg_declaration_usage.py \
+            --check \
+            --output /tmp/efg-declaration-usage.md
+
+      - name: Upload EFG declaration usage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: efg-declaration-usage
+          path: /tmp/efg-declaration-usage.md
 
       - name: Check diff whitespace
         run: |

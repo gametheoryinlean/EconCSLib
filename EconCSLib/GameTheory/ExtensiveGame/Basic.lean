@@ -74,15 +74,6 @@ theorem ofControlledGame_payoff
     (ofControlledGame base payoff).payoff state i = payoff state i :=
   rfl
 
-/-- Forgetting an existing payoff-aware game and then reattaching its payoff
-recovers the original game definitionally. -/
-@[simp]
-theorem ofControlledGame_toControlledGame_self
-    (G : ExtensiveGame N U) :
-    ofControlledGame G.toControlledGame G.payoff = G := by
-  cases G
-  rfl
-
 /-- Add an initial state, mover assignment, and payoff function to an ordinary
 arena.
 
@@ -145,27 +136,11 @@ abbrev isTerminal (G : ExtensiveGame N U) (s : G.State) := G.toArena.IsTerminal 
 def isPlayerState (G : ExtensiveGame N U) (s : G.State) (i : N) : Prop :=
   G.toControlledGame.isPlayerState s i
 
-/-- The historical payoff-aware player-state predicate is exactly the
-canonical controlled-game predicate. -/
-@[simp]
-theorem isPlayerState_iff_toControlledGame
-    (G : ExtensiveGame N U) (s : G.State) (i : N) :
-    G.isPlayerState s i ↔ G.toControlledGame.isPlayerState s i :=
-  Iff.rfl
-
 /-- A nonterminal state carrying the non-player-control label.
 
 This predicate supplies no probability law. -/
 def isNonPlayerState (G : ExtensiveGame N U) (s : G.State) : Prop :=
   G.toControlledGame.isNonPlayerState s
-
-/-- The historical payoff-aware non-player-state predicate is exactly the
-canonical controlled-game predicate. -/
-@[simp]
-theorem isNonPlayerState_iff_toControlledGame
-    (G : ExtensiveGame N U) (s : G.State) :
-    G.isNonPlayerState s ↔ G.toControlledGame.isNonPlayerState s :=
-  Iff.rfl
 
 /-- Compatibility name for `isNonPlayerState`.
 
@@ -176,13 +151,5 @@ abbrev isChanceState (G : ExtensiveGame N U) (s : G.State) : Prop :=
 /-- No chance nodes: every nonterminal state has a strategic mover. -/
 def NoChance (G : ExtensiveGame N U) : Prop :=
   G.toControlledGame.NoChance
-
-/-- The historical payoff-aware no-chance predicate is exactly the canonical
-controlled-game predicate. -/
-@[simp]
-theorem noChance_iff_toControlledGame
-    (G : ExtensiveGame N U) :
-    G.NoChance ↔ G.toControlledGame.NoChance :=
-  Iff.rfl
 
 end ExtensiveGame

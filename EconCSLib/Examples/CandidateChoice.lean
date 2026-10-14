@@ -204,8 +204,8 @@ theorem sergeyChoice_Lee_Rebecca_subtree_candidateChoiceGame :
 /-! ### Equilibrium existence via the library theorem -/
 
 /-- The candidate-choice game has a subgame-perfect equilibrium by Kuhn's theorem. -/
-theorem candidateChoice_has_spe : ∃ σ : Strategy Player ℚ, IsSubgamePerfect σ :=
-  Kuhn_exists_SPE
+theorem candidateChoice_has_spe : ∃ σ : Strategy Player ℚ, IsGlobalEndpointSubgamePerfect σ :=
+  Kuhn_exists_globalEndpointSPE
 
 /-- The candidate-choice game has a Nash equilibrium at the root. -/
 theorem candidateChoice_has_ne :

@@ -15,7 +15,7 @@ lean:
   declarations:
     - Examples.SimpleGameTree.sample
     - Examples.SimpleGameTree.sample_zero_sum
-    - Examples.SimpleGameTree.sample_zermelo_spe
+    - Examples.SimpleGameTree.sample_zermelo_globalEndpointSPE_on
     - Examples.SimpleGameTree.sample_zermelo_ne
     - Examples.SimpleGameTree.sample_value_zero_sum
 verification:

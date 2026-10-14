@@ -12,9 +12,12 @@ uses:
   - game_theory.strategic_game.nash_equilibrium
 lean:
   modules:
-    - EconCSLib.GameTheory.ExtensiveGame.GameTreeSPE
+    - EconCSLib.GameTheory.ExtensiveGame.Observed.SPE
   declarations:
-    - IsSubgamePerfect
+    - ExtensiveGame.ObservedGame.IsLawfulSubgameRoot
+    - ExtensiveGame.ObservedGame.SubgameSystem
+    - ExtensiveGame.ObservedGame.CompleteSubgameSystem
+    - ExtensiveGame.ObservedGame.IsPureStandardSubgamePerfect
 verification:
   definition: accepted
   proof: not_applicable
@@ -30,8 +33,15 @@ A strategy profile $\sigma$ is subgame-perfect if for every position $p$, the
 continuation strategy profile $\sigma[p]$ induced by $\sigma$ is a Nash equilibrium
 of the subgame $G[p]$.
 
-This strengthens Nash equilibrium by requiring optimality after every possible
-history, including histories not reached by the equilibrium play.
+This strengthens Nash equilibrium by requiring optimality after every lawful
+subgame root, including off-path roots. In Lean the root convention is an
+explicit `ObservedGame.IsLawfulSubgameRoot`: the initial history is the whole
+game, a proper player root has singleton decision information, and information
+sets met after entry cannot cross the continuation boundary.
+`CompleteSubgameSystem` certifies that every such root is exposed, and
+`IsPureStandardSubgamePerfect` tests all of them. A designated-root predicate
+or a possibly conservative `SubgameSystem` is therefore not sufficient by
+itself for the standard claim.
 
 ## References
 

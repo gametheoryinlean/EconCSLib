@@ -3,7 +3,7 @@ Copyright (c) 2026 EconCSLib contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
-import EconCSLib.GameTheory.ExtensiveGame.Subgame
+import EconCSLib.GameTheory.ExtensiveGame.Execution.History
 import EconCSLib.GameTheory.ExtensiveGame.GameTreeNE
 
 /-!
@@ -38,13 +38,14 @@ namespace ExtensiveGame
 
 variable {N U : Type*} (G : ExtensiveGame N U)
 
-/-- A weak tree-shapedness condition: any two paths from the root to the same
-    state are equal as reachability proofs.
+/-- A tree-shapedness condition: there is at most one typed action history from
+    the root to each state.
 
-This is intentionally proof-valued.  Concrete finite extraction modules may
-replace it with a computable predecessor/history representation. -/
+This quantifies over `Arena.History`, whose inhabitants retain the chosen
+actions.  Quantifying over `Arena.Reachable` proofs would be vacuous because
+reachability is a proposition and hence proof-irrelevant. -/
 def TreeShapedFrom (root : G.State) : Prop :=
-  ∀ s : G.State, Subsingleton (Arena.Reachable G.toArena root s)
+  ∀ s : G.State, Subsingleton (G.toArena.History root s)
 
 /-- Assumptions under which an Arena-style game can be extracted to a finite
     no-chance `GameTree`.  The actual recursive extraction is intentionally not
@@ -125,12 +126,12 @@ theorem ExtractsGameTree.node_head_reachable {s : G.State} {i : N}
   | node s i head tail headTree tailTrees hm hcomplete hhead htail =>
       exact ⟨head, Arena.Reachable.step head (Arena.Reachable.refl _), hhead⟩
 
-/-- On any extracted tree, root-scoped subgame perfection implies root Nash
-equilibrium through the ordinary `GameTree` equilibrium API. -/
+/-- On any extracted tree, root-scoped structural endpoint optimality implies
+root Nash equilibrium through the ordinary `GameTree` equilibrium API. -/
 theorem ExtractsGameTree.spe_on_to_nash_at [TotalPreorder U]
     {s : G.State} {tree : GameTree N U}
     (_h : ExtractsGameTree G s tree) {σ : GameTree.Strategy N U}
-    (hspe : GameTree.IsSubgamePerfectOn σ tree) :
+    (hspe : GameTree.IsGlobalEndpointSubgamePerfectOn σ tree) :
     GameTree.IsNashAt σ tree :=
   hspe.toNashAt
 

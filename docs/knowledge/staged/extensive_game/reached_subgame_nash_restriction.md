@@ -10,32 +10,9 @@ topics:
 uses:
   - game_theory.extensive_game.imperfect_information.behavioral_equilibrium
   - game_theory.extensive_game.imperfect_information.reached_information_set
-lean:
-  repository: econcslib
-  modules:
-    - EconCSLib.GameTheory.ExtensiveGame.Subgame
-    - EconCSLib.GameTheory.ExtensiveGame.BehaviorStrategy
-  declarations:
-    - ExtensiveGame.BehaviorStrategy
-    - ExtensiveGame.BehaviorProfile
-    - ExtensiveGame.reachableSubgameAt
-    - ExtensiveGame.reachProb
-    - ExtensiveGame.expectedPayoff
-    - ExtensiveGame.BehaviorStrategy.restrictReachableSubgame
-    - ExtensiveGame.BehaviorStrategy.liftReachableSubgame
-    - ExtensiveGame.BehaviorProfile.restrictReachableSubgame
-    - ExtensiveGame.BehaviorProfile.liftReachableSubgame
-    - ExtensiveGame.BehaviorProfile.restrictReachableSubgame_deviate_liftReachableSubgame
-    - ExtensiveGame.expectedPayoffFrom_restrictSubgame
-    - ExtensiveGame.expectedPayoff_restrictSubgame_init
-    - ExtensiveGame.ReachedSubgamePayoffTransfer
-    - ExtensiveGame.ReachedSubgamePayoffTransfer.init
-    - ExtensiveGame.IsBehaviorNashEq.restrictSubgame_of_reachProb_pos
-    - ExtensiveGame.IsBehaviorNashEq.restrictSubgame_init
 verification:
   statement: accepted
-  proof: accepted
-  alignment: pending
+  proof: gap
 tags:
   - extensive-game
   - behavioral-strategy
@@ -53,23 +30,19 @@ $\Gamma(x)$.
 
 ## Lean Scope
 
-The Lean target should reuse `ExtensiveGame.subgameAt` for $\Gamma(x)$. A faithful
-formalization also needs behavior strategies, reach probabilities, expected
-payoffs, profile restriction to a subgame, and a lifting lemma showing that a
-profitable deviation in a positive-probability subgame induces a profitable
-deviation in the original game.
+This theorem is not currently implemented. The former state-indexed
+`BehaviorStrategy` implementation was removed because it assigned zero
+probability to chance actions and merged distinct history occurrences that
+reached the same state.
 
-The current Lean theorem
-`ExtensiveGame.IsBehaviorNashEq.restrictSubgame_of_reachProb_pos` proves the
-Nash-restriction step from an affine payoff-transfer interface. The root-subgame
-special case `ExtensiveGame.IsBehaviorNashEq.restrictSubgame_init` is proved
-without this interface. The supporting API now also includes
-`ExtensiveGame.reachableSubgameAt`, a subtype subgame whose states are exactly
-those reachable from the subgame root, together with local lift lemmas that keep
-the original profile unchanged outside that reachable subgame. A later
-strengthening can derive the affine payoff-transfer interface for arbitrary
-positively reached subgames from finite-history reach probabilities and expected
-payoffs.
+A faithful replacement should use the history-indexed
+`ObservedGame.BehavioralProfile` API, define reach probabilities from the
+induced stochastic history policy, restrict and lift strategies at a
+structurally lawful subgame root, and prove the payoff decomposition rather than
+assuming it as an affine transfer interface. The existing bounded continuation
+game forms and `IsBehavioralSubgamePerfectOnAtFuel` predicate provide the target
+equilibrium vocabulary, but they do not yet prove this positive-reach
+restriction theorem.
 
 ## References
 

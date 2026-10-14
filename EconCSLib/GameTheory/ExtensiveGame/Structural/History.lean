@@ -235,17 +235,13 @@ namespace ControlledGame
 
 variable {N : Type*}
 
-/-- Complete legal histories of a payoff-free controlled game. -/
-abbrev History (G : ControlledGame N) :=
-  G.toArena.HistoryFrom G.init
-
 /-- Every nonterminal complete history generated from the root has a strategic
 mover.
 
 Unlike `ControlledGame.NoChance`, this predicate does not constrain
 nonterminal ambient states that are unreachable from `G.init`. -/
 def NoChanceOnHistories (G : ControlledGame N) : Prop :=
-  ∀ history : G.History,
+  ∀ history : G.toArena.HistoryFrom G.init,
     ¬ G.isTerminal history.1 →
       ∃ player : N, G.mover history.1 = some player
 
@@ -267,13 +263,6 @@ def unfold (G : ControlledGame N) : ControlledGame N where
     ⟨G.next history.1 action, history.2.snoc action⟩
   init := Arena.HistoryFrom.nil G.toArena G.init
   mover := fun history => G.mover history.1
-
-/-- Forgetting control from the controlled unfolding yields the canonical
-Arena history unfolding. -/
-@[simp]
-theorem unfold_toArena (G : ControlledGame N) :
-    G.unfold.toArena = G.toArena.unfoldFrom G.init :=
-  rfl
 
 @[simp]
 theorem unfold_init (G : ControlledGame N) :
@@ -300,14 +289,6 @@ theorem unfold_isTerminal_iff
     (history : G.toArena.HistoryFrom G.init) :
     G.unfold.isTerminal history ↔ G.isTerminal history.1 :=
   Iff.rfl
-
-/-- History unfolding preserves the absence of non-player-controlled
-nonterminal states. -/
-theorem unfold_noChance
-    (G : ControlledGame N) (h : G.NoChance) :
-    G.unfold.NoChance := by
-  intro history hnonterminal
-  exact h history.1 hnonterminal
 
 /-- Every state of the controlled history unfolding is reachable from its
 empty-history root. -/

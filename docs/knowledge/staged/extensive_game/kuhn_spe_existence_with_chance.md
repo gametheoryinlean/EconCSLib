@@ -40,11 +40,12 @@ The expectation step requires von Neumann–Morgenstern utility theory so that
 
 ## Lean status
 
-Not yet implemented. Tracked by [EG-L3
-(#181)](https://github.com/gametheoryinlean/EconCSLib/issues/181), which is
-itself blocked on the vNM theorem in `EconCSLib/Utility/Lottery.lean`. The
-target Lean module is `EconCSLib.ExtensiveGame.StochasticGameTree`; current
-state is a type definition + `fairCoinGame` example, no general theorem.
+Not yet implemented. The target module
+`EconCSLib.GameTheory.ExtensiveGame.StochasticGameTree` now has normalized
+finite `PMF` chance nodes, occurrence-sensitive pure policies, an explicit
+finite-horizon real-payoff evaluator, and a verified fair-coin calculation.
+It does not yet define standard subgames or prove the advertised general SPE
+existence theorem.
 
 ## References
 

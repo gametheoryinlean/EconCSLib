@@ -1,6 +1,6 @@
 ---
 id: game_theory.extensive_game.perfect_information.perfect_information_extensive_game
-title: Finite Extensive Game With Perfect Information
+title: Finite Perfect-Information GameTree Presentation
 kind: definition
 status: formalized
 primary_topic: game_theory.extensive_game
@@ -9,12 +9,13 @@ topics:
   - game_theory.extensive_game.perfect_information
 lean:
   modules:
-    - EconCSLib.GameTheory.ExtensiveGame.Basic
+    - EconCSLib.GameTheory.ExtensiveGame.GameTree
+    - EconCSLib.GameTheory.ExtensiveGame.Compiler.GameTreeOccurrenceObserved
   declarations:
-    - Arena
-    - ExtensiveGame
-    - ExtensiveGame.isPlayerState
-    - ExtensiveGame.isTerminal
+    - GameTree
+    - GameTree.toOccurrenceObservedGame
+    - GameTree.toOccurrenceObservedGame_perfectInformation
+    - GameTree.occurrenceCompleteSubgameSystem
 verification:
   definition: accepted
   proof: not_applicable
@@ -24,19 +25,23 @@ tags:
   - perfect-information
 ---
 
-# Finite Extensive Game With Perfect Information
+# Finite Perfect-Information GameTree Presentation
 
-A finite extensive form game with perfect information consists of:
+The canonical finite, no-chance frontend is an inductive `GameTree N U`:
+leaves store payoff vectors and every decision node stores its mover and a
+nonempty finite list of child trees. Finiteness and termination are structural;
+the carrier does not require `N` or `U` themselves to be finite.
 
-1. a finite nonempty player set $I$;
-2. a finite tree of nodes $Z$ with origin $\theta$ and predecessor map;
-3. terminal nodes $R$ and decision positions $P=Z\setminus R$;
-4. a successor set $S(p)$ for each decision position $p$;
-5. a partition $(P_i)_{i\in I}$ of decision positions by the player who moves;
-6. payoff functions $g_i:R\to\mathbb R$.
+`GameTree.toOccurrenceObservedGame` compiles each node occurrence to a typed
+history and uses the full occurrence as its information state. The theorem
+`toOccurrenceObservedGame_perfectInformation` proves that every player
+information set is singleton, and `occurrenceCompleteSubgameSystem` selects
+all history occurrences as the complete lawful subgame system.
 
-Play starts at $\theta$, follows successor choices at decision positions, stops at a
-terminal node $r\in R$, and gives player $i$ payoff $g_i(r)$.
+This node does not claim that the more general `Arena` or `ExtensiveGame`
+records are finite or perfect-information structures; those records
+intentionally support infinite state spaces and do not carry an information
+partition.
 
 ## References
 

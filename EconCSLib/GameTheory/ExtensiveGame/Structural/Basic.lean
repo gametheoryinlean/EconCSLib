@@ -55,6 +55,18 @@ theorem isTerminal_iff_not_isDecision (s : A.State) :
     A.IsTerminal s ↔ ¬ A.IsDecision s := by
   simp [IsTerminal, IsDecision, isEmpty_iff, not_nonempty_iff]
 
+/-- Classical compatibility bridge for legacy APIs stated with a merely
+nonterminal premise.
+
+Core decision-information data should request `IsDecision` directly. This
+lemma is reserved for interfaces, such as terminal-aware history policies,
+whose established callback contract supplies `¬ IsTerminal`. -/
+theorem isDecision_of_not_isTerminal (s : A.State)
+    (hnonterminal : ¬ A.IsTerminal s) : A.IsDecision s := by
+  classical
+  by_contra hnotDecision
+  exact hnonterminal ((A.isTerminal_iff_not_isDecision s).2 hnotDecision)
+
 end Arena
 
 /-- A payoff-free controlled extensive-game skeleton.

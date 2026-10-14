@@ -34,8 +34,10 @@ function assigning to every information set $P^i_k$ an action
 $$
   a_i\in A_i(P^i_k).
 $$
-A pure strategy profile again induces a unique terminal outcome, so every finite
-extensive game has an associated normal form.
+In a terminating finite extensive-form tree, a pure strategy profile induces a
+unique terminal outcome, so the game has an associated normal form. The compact
+Lean presentation does not infer termination merely from finiteness of its
+state carrier.
 
 ## References
 
