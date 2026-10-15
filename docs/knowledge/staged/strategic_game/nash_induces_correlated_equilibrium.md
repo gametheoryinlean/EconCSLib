@@ -10,9 +10,17 @@ status: staged
 uses:
   - game_theory.strategic_game.correlated.correlated_equilibrium
   - game_theory.strategic_game.equilibrium.mixed_nash_equilibrium
+lean:
+  modules:
+    - EconCSLib.GameTheory.StrategicGame.CorrelatedEq
+  declarations:
+    - StrategicGame.inducedDistribution_trivial_eq_piProduct
+    - StrategicGame.piProduct_mem_correlatedEquilibriumDistributions_of_isMixedNashEq
+    - StrategicGame.piProduct_mem_correlatedEquilibriumDistributions_of_mixedNashEquilibrium
 verification:
   statement: accepted
-  proof: gap
+  proof: accepted
+  alignment: aligned
 tags:
   - strategic-game
   - correlated-equilibrium
@@ -32,6 +40,13 @@ mixed strategies. Since the player's mixed strategy is a best response, every
 pure action used with positive probability is optimal against that conditional
 distribution. Therefore obeying each recommendation satisfies the obedience
 inequalities.
+
+The formal proof realizes the mixed profile in the one-event, one-signal
+information extension, proves that the induced distribution is exactly its
+independent product, and applies the already-proved equivalence between
+equilibrium of that extension and ordinary mixed Nash equilibrium. A second
+theorem bridges directly from the all-mixed-deviations predicate returned by
+the library's Brouwer-based Nash existence theorem.
 
 ## References
 

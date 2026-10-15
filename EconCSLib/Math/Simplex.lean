@@ -39,6 +39,14 @@ these lemmas.
 * `wsum_smul` — weighted sums distribute over scalar multiplication
 * `wsum_wsum_comm` — exchange order of iterated weighted sums
 * `wsum_pure` — a point mass evaluates the selected coordinate
+* `stdSimplex.piProduct` — independent product of a finite dependent family
+  of simplex distributions
+* `stdSimplex.piProduct_vertex` — products of point masses are point masses
+* `stdSimplex.coordinateMarginal` — the push-forward to one coordinate of a
+  finite dependent function space
+* `stdSimplex.coordinateMarginal_piProduct` — the product coupling realizes
+  the prescribed coordinate marginals
+* `stdSimplex.wsum_map` — change of variables for a finite push-forward
 
 ## Attribution
 
@@ -84,7 +92,9 @@ end stdSimplex
     Kept as a named concept because the simplex-specific lemmas below
     (`wsum_const`, `wsum_le_wsum`, `wsum_nonneg`, `wsum_pure`) depend on
     `∑ x = 1` or `x ≥ 0` and have no generic `dotProduct` analogue. -/
-abbrev wsum (x : stdSimplex 𝕜 I) (f : I → 𝕜) : 𝕜 :=
+abbrev wsum {𝕜 : Type*} [Semiring 𝕜] [PartialOrder 𝕜]
+    {I : Type*} [Fintype I]
+    (x : stdSimplex 𝕜 I) (f : I → 𝕜) : 𝕜 :=
   x ⬝ᵥ f
 
 /-- Weighted sum of a constant equals the constant. -/
@@ -329,6 +339,215 @@ theorem wsum_pure [DecidableEq I] (i₀ : I) (f : I → 𝕜) :
           fun i => by simp only; split_ifs <;> norm_num,
           by simp [Finset.sum_ite_eq', Finset.mem_univ]⟩ f = f i₀ :=
   wsum_pure_apply (𝕜 := 𝕜) i₀ f
+
+/-! ### Finite product distributions and coordinate marginals
+
+These definitions are the finite-simplex analogue of independent product
+measures and marginal distributions. They are stated for dependent function
+spaces `∀ i, X i`, so they apply equally to player profiles, contingent plans,
+Bayesian pure strategies, and other finite product models.
+-/
+
+namespace stdSimplex
+
+section Map
+
+variable {𝕜 : Type*} [Semiring 𝕜] [PartialOrder 𝕜] [IsOrderedRing 𝕜]
+
+/-- Pointwise fiber-sum formula for the push-forward of a finite simplex
+distribution. -/
+theorem map_apply_eq_sum_ite {A B : Type*} [Fintype A] [Fintype B]
+    [DecidableEq B] (f : A → B) (μ : stdSimplex 𝕜 A) (b : B) :
+    (stdSimplex.map f μ).val b =
+      ∑ a : A, if f a = b then μ.val a else 0 := by
+  classical
+  change (FunOnFinite.linearMap 𝕜 𝕜 f μ.val) b = _
+  rw [FunOnFinite.linearMap_apply_apply]
+  simp [Finset.sum_filter]
+
+end Map
+
+section PiProduct
+
+variable {𝕜 : Type*} [CommSemiring 𝕜] [PartialOrder 𝕜] [IsOrderedRing 𝕜]
+variable {J : Type*} [Fintype J] [DecidableEq J]
+variable {X : J → Type*} [∀ j, Fintype (X j)]
+
+/-- The independent product of a finite dependent family of simplex
+distributions. -/
+noncomputable def piProduct (p : ∀ j, stdSimplex 𝕜 (X j)) :
+    stdSimplex 𝕜 (∀ j, X j) := by
+  classical
+  refine ⟨fun x => ∏ j, (p j).val (x j), ?_, ?_⟩
+  · intro x
+    exact Finset.prod_nonneg fun j _ => (p j).property.1 (x j)
+  · rw [← Fintype.prod_sum]
+    exact Finset.prod_eq_one fun j _ => (p j).property.2
+
+@[simp]
+theorem piProduct_apply (p : ∀ j, stdSimplex 𝕜 (X j)) (x : ∀ j, X j) :
+    (piProduct p).val x = ∏ j, (p j).val (x j) :=
+  rfl
+
+/-- Independent finite products commute with componentwise push-forward. -/
+theorem map_piProduct {Y : J → Type*}
+    [∀ j, Fintype (Y j)]
+    (f : ∀ j, X j → Y j) (p : ∀ j, stdSimplex 𝕜 (X j)) :
+    stdSimplex.map (fun x j => f j (x j)) (piProduct p) =
+      piProduct (fun j => stdSimplex.map (f j) (p j)) := by
+  classical
+  apply stdSimplex.ext
+  funext y
+  change (stdSimplex.map (fun x j => f j (x j)) (piProduct p)).val y =
+    (piProduct (fun j => stdSimplex.map (f j) (p j))).val y
+  rw [map_apply_eq_sum_ite, piProduct_apply]
+  simp_rw [map_apply_eq_sum_ite]
+  rw [Fintype.prod_sum]
+  apply Finset.sum_congr rfl
+  intro x _
+  by_cases hxy : (fun j => f j (x j)) = y
+  · have hcoord : ∀ j, f j (x j) = y j := fun j => congrFun hxy j
+    rw [if_pos hxy]
+    apply Finset.prod_congr rfl
+    intro j _
+    rw [if_pos (hcoord j)]
+  · have hcoord : ∃ j, f j (x j) ≠ y j := by
+      by_contra h
+      push Not at h
+      apply hxy
+      funext j
+      exact h j
+    obtain ⟨j, hj⟩ := hcoord
+    rw [if_neg hxy]
+    exact (Finset.prod_eq_zero (Finset.mem_univ j) (by simp [hj])).symm
+
+/-- The independent product of vertices is the vertex at the
+corresponding dependent function. -/
+@[simp]
+theorem piProduct_vertex [∀ j, DecidableEq (X j)] (x : ∀ j, X j) :
+    piProduct (fun j => stdSimplex.vertex (S := 𝕜) (x j)) =
+      stdSimplex.vertex x := by
+  classical
+  apply stdSimplex.ext
+  funext y
+  change (piProduct (fun j => stdSimplex.vertex (S := 𝕜) (x j))).val y =
+    (stdSimplex.vertex (S := 𝕜) x).val y
+  rw [piProduct_apply]
+  simp only [Pi.single_apply]
+  by_cases hxy : y = x
+  · subst y
+    simp
+  · have hcoord : ∃ j, y j ≠ x j := by
+      by_contra h
+      push Not at h
+      exact hxy (funext h)
+    obtain ⟨j, hj⟩ := hcoord
+    rw [if_neg hxy]
+    exact Finset.prod_eq_zero (Finset.mem_univ j) (by simp [hj])
+
+end PiProduct
+
+section CoordinateMarginal
+
+variable {𝕜 : Type*} [Semiring 𝕜] [PartialOrder 𝕜] [IsOrderedRing 𝕜]
+variable {J : Type*} [Fintype J] [DecidableEq J]
+variable {X : J → Type*} [∀ j, Fintype (X j)]
+
+/-- The marginal distribution of a distribution on a finite function space at
+coordinate `j`. This is the push-forward along evaluation at `j`. -/
+noncomputable def coordinateMarginal
+    (μ : stdSimplex 𝕜 (∀ j, X j)) (j : J) : stdSimplex 𝕜 (X j) :=
+  stdSimplex.map (fun x => x j) μ
+
+/-- Coordinate marginals are sums over the corresponding evaluation fiber. -/
+theorem coordinateMarginal_apply (μ : stdSimplex 𝕜 (∀ j, X j))
+    (j : J) [DecidableEq (X j)] (a : X j) :
+    (coordinateMarginal μ j).val a =
+      ∑ x : (∀ j, X j), if x j = a then μ.val x else 0 := by
+  classical
+  change (FunOnFinite.linearMap 𝕜 𝕜 (fun x => x j) μ.val) a = _
+  rw [FunOnFinite.linearMap_apply_apply]
+  simp [Finset.sum_filter]
+
+end CoordinateMarginal
+
+section CoordinateMarginalPiProduct
+
+variable {𝕜 : Type*} [CommSemiring 𝕜] [PartialOrder 𝕜] [IsOrderedRing 𝕜]
+variable {J : Type*} [Fintype J] [DecidableEq J]
+variable {X : J → Type*} [∀ j, Fintype (X j)]
+
+/-- The independent product coupling has the original distribution as every
+coordinate marginal. -/
+theorem coordinateMarginal_piProduct
+    (p : ∀ j, stdSimplex 𝕜 (X j)) (j : J) :
+    coordinateMarginal (piProduct p) j = p j := by
+  classical
+  apply stdSimplex.ext
+  funext a
+  change (coordinateMarginal (piProduct p) j).val a = (p j).val a
+  rw [coordinateMarginal_apply]
+  change (∑ x : (∀ j, X j),
+      if x j = a then ∏ k, (p k).val (x k) else 0) = (p j).val a
+  let e := Equiv.piSplitAt j X
+  rw [← e.symm.sum_comp]
+  rw [Fintype.sum_prod_type]
+  simp_rw [Fintype.prod_eq_mul_prod_subtype_ne _ j]
+  have heval_self (z : X j) (rest : ∀ k : {k : J // k ≠ j}, X k) :
+      e.symm (z, rest) j = z := by
+    simp [e, Equiv.piSplitAt]
+  have heval_rest (z : X j) (rest : ∀ k : {k : J // k ≠ j}, X k)
+      (k : {k : J // k ≠ j}) : e.symm (z, rest) k = rest k := by
+    simp [e, Equiv.piSplitAt, k.property]
+  simp_rw [heval_self, heval_rest]
+  simp
+  rw [← Finset.mul_sum]
+  have h := Finset.prod_univ_sum
+    (fun k : {k : J // k ≠ j} => (Finset.univ : Finset (X k)))
+    (fun k b => (p k).val b)
+  rw [show (∑ x : (∀ k : {k : J // k ≠ j}, X k),
+      ∏ k : {k : J // k ≠ j}, (p k).val (x k)) =
+      ∏ k : {k : J // k ≠ j}, ∑ b : X k, (p k).val b by
+        simpa using h.symm]
+  rw [show (∏ k : {k : J // k ≠ j}, ∑ b : X k, (p k).val b) = 1 by
+    apply Finset.prod_eq_one
+    intro k _
+    exact (p k).property.2]
+  exact mul_one _
+
+end CoordinateMarginalPiProduct
+
+section WsumMap
+
+variable {𝕜 : Type*} [Semiring 𝕜] [PartialOrder 𝕜] [IsOrderedRing 𝕜]
+
+/-- Weighted sums commute with finite push-forward. -/
+theorem wsum_map {A B : Type*} [Fintype A] [Fintype B]
+    (f : A → B) (μ : stdSimplex 𝕜 A) (g : B → 𝕜) :
+    wsum (stdSimplex.map f μ) g = wsum μ (g ∘ f) := by
+  classical
+  change (∑ b, (FunOnFinite.linearMap 𝕜 𝕜 f μ.val) b * g b) =
+    ∑ a, μ.val a * g (f a)
+  simp only [FunOnFinite.linearMap_apply_apply, Finset.sum_mul]
+  calc
+    (∑ b, ∑ a ∈ Finset.univ with f a = b, μ.val a * g b) =
+        ∑ b, ∑ a : {a // f a = b}, μ.val a * g b := by
+          apply Finset.sum_congr rfl
+          intro b _
+          exact Finset.sum_subtype (Finset.univ.filter fun a => f a = b)
+            (by simp) (fun a => μ.val a * g b)
+    _ = ∑ b, ∑ a : {a // f a = b}, μ.val a * g (f a) := by
+          apply Finset.sum_congr rfl
+          intro b _
+          apply Finset.sum_congr rfl
+          intro a _
+          rw [a.property]
+    _ = ∑ a, μ.val a * g (f a) :=
+      Fintype.sum_fiberwise f (fun a => μ.val a * g (f a))
+
+end WsumMap
+
+end stdSimplex
 
 /-! ### Order characterization of `wsum` ranges
 

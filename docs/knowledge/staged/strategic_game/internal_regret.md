@@ -10,6 +10,22 @@ status: staged
 uses:
   - game_theory.strategic_game.zero_sum.learning.external_regret
   - game_theory.strategic_game.correlated.correlated_equilibrium
+lean:
+  modules:
+    - EconCSLib.GameTheory.StrategicGame.NoRegret.Internal
+    - EconCSLib.GameTheory.StrategicGame.ZeroSum.StochasticMatrix
+  declarations:
+    - StrategicGame.internalRegretStage
+    - StrategicGame.averageInternalRegret
+    - StrategicGame.HasNoInternalRegret
+    - StrategicGame.maximalPositiveAverageInternalRegret
+    - StrategicGame.hasNoInternalRegret_iff_maximalPositiveAverageInternalRegret
+    - StrategicGame.hasNoInternalRegret_iff_tendsto_maximalPositiveAverageInternalRegret_zero
+    - StrategicGame.IsInvariantMeasureFor
+    - StrategicGame.invariantMeasure_internalRegret_orthogonal
+    - EconCSLib.StrategicGame.MatrixGame.exists_invariant_measure_nonneg
+    - StrategicGame.NoRegretProbability.HasNoInternalRegretAE
+    - StrategicGame.NoRegretProbability.HasNoInternalRegretOnGeneratedProcessesAE
 verification:
   definition: accepted
   proof: not_applicable
@@ -31,8 +47,13 @@ $$
   \frac1n\sum_{t:a_i^t=a_i}
   (g_i(b_i,a_{-i}^t)-g_i(a_i,a_{-i}^t)).
 $$
-A procedure has no internal regret if the positive part of this quantity
-converges to $0$ for every ordered pair $(a_i,b_i)$.
+A realized path has no internal regret if the positive part of this quantity
+converges to $0$ for every ordered pair $(a_i,b_i)$. Since the action set is
+finite, this is equivalent to convergence to $0$ of the maximum positive entry
+of the entire internal-regret matrix, a finite scalar form equivalent to
+[MFoGT, Definition 7.3.5]. A randomized procedure has no internal regret in
+MFoGT's sense when this holds almost surely against every admissible payoff
+process.
 
 Internal regret is the learning analogue of correlated-equilibrium obedience:
 the counterfactual deviation is allowed to depend on the action actually

@@ -8,6 +8,9 @@ broader mathematical gaps belong in the knowledge blueprint.
 
 - `design_decisions.md`: architectural rationale that still explains the code.
 - `arrow_proof_source.md`: source comparison for the Arrow proof.
+- `chapter7_formalization_audit.md`: semantic comparison of the implemented
+  Chapter 7 correlated-equilibrium, learning, and Bayesian-game APIs with
+  MFoGT.
 - `infinite_game_inductive.md`: extensive-game modeling notes.
 - `lean_pitfalls.md`: reusable Lean and Mathlib implementation notes.
 - `minimax_comparison.md`: comparison of minimax proof routes.

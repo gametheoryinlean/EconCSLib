@@ -43,10 +43,11 @@ set_option linter.unusedSectionVars false
 
 namespace MatrixGame
 
--- The strategic-game embedding below uses a single `strategy : Fin 2 → Type u`,
--- so we constrain `I` and `J` to live at the same universe.
-universe u
-variable {I J : Type u} [Fintype I] [Fintype J] [Nonempty I] [Nonempty J]
+section MatrixAPI
+
+universe uI uJ
+variable {I : Type uI} {J : Type uJ}
+  [Fintype I] [Fintype J] [Nonempty I] [Nonempty J]
 variable (A : MatrixGame I J ℝ)
 
 /-! ### Saddle-point mixed Nash equilibrium -/
@@ -469,6 +470,8 @@ theorem exists_mixed_nash_equilibrium {𝕜 : Type} [Field 𝕜] [LinearOrder �
           Finset.sum_congr rfl (fun j _ => mul_comm _ _)
       _ ≤ v := hAy i
 
+end MatrixAPI
+
 /-! ### Strategic-game embedding
 
 A matrix game `A : I → J → 𝕜` lifts to a two-player zero-sum strategic game
@@ -477,6 +480,15 @@ row player) and `−A` (for the column player). Polymorphic in the scalar
 field `𝕜`. The standard [`StrategicGame.IsMixedNashEq`] then unfolds —
 modulo a 2-player profile expansion — to the saddle-point form
 `MatrixGame.IsMixedNashEq` above. -/
+
+section StrategicGameEmbedding
+
+-- The strategic-game embedding uses one dependent family
+-- `strategy : Fin 2 → Type u`, so only this section constrains `I` and `J`
+-- to inhabit the same universe.
+universe u
+variable {I J : Type u} [Fintype I] [Fintype J] [Nonempty I] [Nonempty J]
+variable (A : MatrixGame I J ℝ)
 
 /-- The two-player zero-sum strategic game associated with a matrix game.
 
@@ -655,5 +667,7 @@ theorem exists_strategic_game_nash_equilibrium :
     rw [hdev0, hdev1, toMixedProfile_zero, toMixedProfile_one]
     have h := hyy (StrategicGame.pureToMixed s')
     linarith
+
+end StrategicGameEmbedding
 
 end MatrixGame
