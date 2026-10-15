@@ -27,6 +27,10 @@ import EconCSLib.Algorithm.Online
 -- Math: infrastructure with no game vocabulary
 import EconCSLib.Math.Simplex
 
+-- Math/Probability: exact executable finite laws
+import EconCSLib.Math.Probability.FiniteLaw
+import EconCSLib.Math.Probability.FiniteMarkovChain
+
 -- Math/LinearAlgebra
 import EconCSLib.Math.LinearAlgebra.FourierMotzkin
 import EconCSLib.Math.LinearAlgebra.Farkas
