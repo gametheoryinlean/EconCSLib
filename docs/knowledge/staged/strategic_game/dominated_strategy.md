@@ -18,7 +18,7 @@ lean:
 verification:
   definition: accepted
   proof: not_applicable
-  alignment: pending
+  alignment: aligned
 tags:
   - strategic-game
   - dominance
