@@ -1262,13 +1262,17 @@ end
 
 namespace EconCSLib.OpenProblem.New.EconCSBench.MeaningOfAGame
 
-/-- Finite-list computation in the fixed justified set language; this is a
-representation-parametric schema. -/
+/-- Finite-list computation relative to a fixed set denotation. This schema does not
+require effective interpretation; the polynomial-distance answer theorem is in
+`Supporting`. Finite enumeration is a representation choice, not an equivalence with
+an arbitrary collective description of all attractors. -/
 theorem computeAttractors (dynamics : ReplicatorModel) (language : AttractorSetLanguage) :
     answer(sorry) ↔ AttractorComputationRationalWordRAMQuestion dynamics language := by
   sorry
 
-/-- Polynomial-time attractor prediction for initial profiles in an attractor basin. -/
+/-- Basin-promised prediction relative to a fixed set denotation. This schema does not
+require effective interpretation; the polynomial-distance answer theorem is in
+`Supporting`. -/
 theorem predictAttractorOnBasin (dynamics : ReplicatorModel) (language : AttractorSetLanguage) :
     answer(sorry) ↔ BasinPromisedLimitPredictionRationalWordRAMQuestion dynamics language := by
   sorry

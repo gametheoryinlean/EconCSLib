@@ -1643,6 +1643,40 @@ def CertifiedTotalPredictionRationalWordRAMQuestion (dynamics : ReplicatorModel)
 /-- Explicit stronger distance-name variant. -/
 abbrev DistanceNameAttractorComputationQuestion := EffectiveAttractorComputationQuestion
 
+/-- Basin-promised prediction with one polynomial-time distance interpreter for every
+set denoted by the fixed language. Interpretation and prediction are separate charged
+computations; neither is supplied by an unrestricted semantic decoder. -/
+def DistanceNameBasinPromisedLimitPredictionQuestion (dynamics : ReplicatorModel)
+    (language : AttractorSetLanguage) : Prop :=
+  language.HasPolynomialDistanceInterpreter ∧
+    BasinPromisedLimitPredictionRationalWordRAMQuestion dynamics language
+
+/-!
+## Questions with effective set descriptions
+
+These answer theorems enforce the polynomial-distance convention, rather than merely
+fixing an arbitrary denotation. They are separate representation variants of the
+schemas in `Problem`: no equivalence with unrestricted set descriptions is asserted.
+The collection variant emits an explicit finite list and charges for every description;
+it does not permit one collective description of an infinite family. No premise
+silently restricts the input games to those with finitely many attractors. Correctness
+of a solver would have to establish the required finite listed coverage.
+-/
+
+/-- Polynomial-time finite-list attractor computation together with an effective
+polynomial-distance interpretation of every denoted set. -/
+theorem computeAttractorsWithPolynomialDistance (dynamics : ReplicatorModel)
+    (language : AttractorSetLanguage) :
+    answer(sorry) ↔ DistanceNameAttractorComputationQuestion dynamics language := by
+  sorry
+
+/-- Polynomial-time prediction on the attractor-basin promise together with an effective
+polynomial-distance interpretation of every denoted set. -/
+theorem predictAttractorOnBasinWithPolynomialDistance (dynamics : ReplicatorModel)
+    (language : AttractorSetLanguage) :
+    answer(sorry) ↔ DistanceNameBasinPromisedLimitPredictionQuestion dynamics language := by
+  sorry
+
 end EconCSLib.OpenProblem.New.EconCSBench.MeaningOfAGame
 
 end
