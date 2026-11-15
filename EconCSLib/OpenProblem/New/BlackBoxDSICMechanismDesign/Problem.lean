@@ -434,7 +434,15 @@ One finite arithmetic program accesses only the fixed allocation map, fresh prio
 samples and fair bits. No local callback, prior description, feasibility oracle or
 output decoder is supplied. Realized allocation and payment vectors are read from the
 actual halt buffer. Every buffer scan and copy is charged. This is exact-real
-unit-cost computation.
+unit-cost computation with a polynomial bound in n on dynamically addressable memory
+cells. Word width is fixed from n before execution and does not grow with elapsed time
+or consumed randomness. Real cells retain exact, unbounded-precision values.
+
+Both runtime conventions retain this address-space restriction. In particular, the
+expected-time variant does not cover unrestricted expected-time algorithms whose rare
+executions use arbitrarily many cells. No equivalence with that broader model is
+asserted. The independent tape law and finite-prefix causality are specified separately;
+a conditional fresh-sampling theorem for adaptive execution is not proved here.
 -/
 namespace EconCSLib.OpenProblem.New.EconCSBench.BlackBoxDSICMechanismDesign
 namespace ExactReal
@@ -508,7 +516,8 @@ noncomputable def runFrom (width : ℕ) (program : Program)
             (runFrom width program algorithm tape fuel next sampleCursor (bitCursor + 1))
 
 /-- Input contains only n and the report. Capacity checks prevent truncation; the report,
-code and validation costs are paid before the first instruction. -/
+code and validation costs are paid before the first instruction. Word width, hence the
+dynamic address space, depends only on n and the fixed model, not on fuel or tape. -/
 noncomputable def run (model : WordRAM.Model) (program : Program)
     {n : ℕ} (algorithm : RealProfile n → Allocation n)
     (report : RealProfile n) (tape : RealSampleTape n) (fuel : ℕ) :=
@@ -554,7 +563,8 @@ noncomputable def ExecutionWitness.Within
 
 /-- One finite program precedes every dimension, prior and fixed algorithm. Its concrete
 output law must implement the same correct mechanism for every legal product-tape law.
-No trusted local-transition schema is quantified. -/
+No trusted local-transition schema is quantified. Both runtime modes use the same
+polynomially bounded dynamic address space; expected runtime does not relax it. -/
 noncomputable def PolynomialReductionQuestion (mode : RuntimeConvention) : Prop :=
   ∃ model : WordRAM.Model, ∃ program : Program, ∃ budget : ℕ → ℕ,
     WordRAM.StrictCostCore.IsEventuallyBoundedByPolynomial id budget ∧
@@ -585,12 +595,16 @@ exact-real arithmetic program with fixed algorithm/prior/bit access. The separat
 rational statement adopts fresh-resampling and a public response bound B. In both, the
 actual output law and runtime refer to the same execution; neither requires computing
 an expected payment on every finite run.
+
+The exact-real statement is the bounded-address-space variant described above. Its
+expected-time mode is not claimed equivalent to unrestricted expected-time reductions.
 -/
 namespace EconCSLib.OpenProblem.New.EconCSBench.BlackBoxDSICMechanismDesign
 open WordRAM.FiniteData
 
 /-- The primary full-real target uses concrete finite syntax and fixed oracle access.
-Exact-real unit cost is explicit. -/
+Exact-real unit cost and polynomially bounded dynamic address space are part of the
+model, in both runtime modes. -/
 noncomputable def BlackBoxDSICExactRealStatement (mode : RuntimeConvention) : Prop :=
   ExactReal.PolynomialReductionQuestion mode
 
@@ -605,7 +619,10 @@ end
 
 namespace EconCSLib.OpenProblem.New.EconCSBench.BlackBoxDSICMechanismDesign
 
-/-- Existence of a black-box DSIC reduction under the specified runtime convention. -/
+/-- Existence of a black-box DSIC reduction in the exact-real, polynomial-address-space
+model under the specified runtime convention. Even expected-time execution retains
+that space restriction; no equivalence with unrestricted expected-time reductions is
+asserted. -/
 theorem blackBoxDSIC (mode : RuntimeConvention) :
     answer(sorry) ↔ BlackBoxDSICExactRealStatement mode := by
   sorry
