@@ -100,9 +100,11 @@ improve readability.
 
 ## Placeholder Policy
 
-Lean source under `EconCSLib/` must not contain ordinary `sorry` or `admit`.
-Open-problem theorems under `EconCSLib/OpenProblem/` may use only the scoped
-`answer(sorry) ↔ P := by sorry` pattern.
+Production Lean source must not contain ordinary `sorry`, `admit`, or direct
+`sorryAx` uses. Named theorems/lemmas under `EconCSLib/OpenProblem/` may contain
+typed `answer(sorry)` in their result types, with the entire proof `:= by sorry`
+only for that same declaration. See [open-problem verification](docs/design/open-problem-verification.md)
+for the scope, build commands, and merge order.
 
 When a mathematical target is not ready for implementation:
 
@@ -150,7 +152,7 @@ Run checks from the repository root and scale them to the files changed.
 ```bash
 lake build
 lake build EconCSLib.Examples
-python3 scripts/check_lean_placeholders.py EconCSLib
+python3 scripts/check_lean_placeholders.py EconCSLib EconCSLib.lean
 ```
 
 The placeholder checker must pass.
@@ -188,6 +190,8 @@ git diff --check
 
 - `.github/workflows/build.yml`: builds the stable library and examples,
   rejects disallowed Lean placeholders, and checks diff whitespace.
+- `.github/workflows/open-problems.yml`: builds every tracked open-problem module
+  and checks the shared placeholder policy.
 - `.github/workflows/blueprint.yml`: validates the blueprint on pull requests
   and deploys the generated site only from `main`.
 - `.github/workflows/docs.yml`: builds and deploys API reference output from
