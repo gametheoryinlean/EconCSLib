@@ -27,6 +27,12 @@ import EconCSLib.Algorithm.Online
 -- Math: infrastructure with no game vocabulary
 import EconCSLib.Math.Simplex
 
+-- Math/Convex
+import EconCSLib.Math.Convex.FinitePolyhedron
+
+-- Math/Probability
+import EconCSLib.Math.Probability.Blackwell
+
 -- Math/LinearAlgebra
 import EconCSLib.Math.LinearAlgebra.FourierMotzkin
 import EconCSLib.Math.LinearAlgebra.Farkas
@@ -59,6 +65,15 @@ import EconCSLib.GameTheory.StrategicGame.ESS
 import EconCSLib.GameTheory.StrategicGame.IESDS
 import EconCSLib.GameTheory.StrategicGame.CorrelatedEq
 import EconCSLib.GameTheory.StrategicGame.MixedStrategy
+import EconCSLib.GameTheory.StrategicGame.NoRegret.Basic
+import EconCSLib.GameTheory.StrategicGame.NoRegret.External
+import EconCSLib.GameTheory.StrategicGame.NoRegret.Internal
+import EconCSLib.GameTheory.StrategicGame.NoRegret.Calibration
+import EconCSLib.GameTheory.StrategicGame.NoRegret.EmpiricalDistribution
+import EconCSLib.GameTheory.StrategicGame.NoRegret.Process
+import EconCSLib.GameTheory.StrategicGame.BayesianGame.Basic
+import EconCSLib.GameTheory.StrategicGame.BayesianGame.Continuous
+import EconCSLib.GameTheory.StrategicGame.BayesianGame.WarOfAttrition.CompactApproximation
 import EconCSLib.GameTheory.StrategicGame.Nash
 
 -- GameTheory/StrategicGame/ZeroSum

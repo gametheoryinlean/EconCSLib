@@ -9,6 +9,14 @@ kind: definition
 status: staged
 uses:
   - game_theory.strategic_game.zero_sum.learning.external_regret
+lean:
+  modules:
+    - EconCSLib.GameTheory.StrategicGame.NoRegret.EmpiricalDistribution
+  declarations:
+    - StrategicGame.jointPayoff
+    - StrategicGame.payoffAgainstOpponentMarginal
+    - StrategicGame.HannanSet
+    - StrategicGame.hannanViolation_eq_zero_iff
 verification:
   definition: accepted
   proof: not_applicable

@@ -14,8 +14,7 @@ lean:
   modules:
     - EconCSLib.GameTheory.StrategicGame.CorrelatedEq
   declarations:
-    - StrategicGame.IsDegenerateCorrelatedEq
-    - StrategicGame.nash_iff_degenerate_ce
+    - StrategicGame.vertex_mem_correlatedEquilibriumDistributions_iff_isNashEquilibrium
 verification:
   statement: accepted
   proof: accepted
@@ -41,6 +40,10 @@ If the point-mass profile is Nash, every recommended action is already a best
 response to the other components, so obedience holds. Conversely, obedience of
 the point-mass device tests exactly the unilateral deviations from that profile,
 which is the Nash condition.
+
+The Lean theorem is distribution-level: it states that the standard-simplex
+vertex at a pure profile belongs to the correlated-equilibrium distribution
+set if and only if that profile is a pure Nash equilibrium.
 
 ## References
 
