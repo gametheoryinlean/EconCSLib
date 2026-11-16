@@ -56,6 +56,94 @@ class KnowledgeReferencesCheckTest(unittest.TestCase):
 
             self.assertEqual(check_path(root), [])
 
+    def test_rejects_formalized_theorem_with_proof_gap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            node = root / "gap.md"
+            node.write_text(
+                textwrap.dedent(
+                    """\
+                    ---
+                    id: example.gap
+                    title: Gap
+                    kind: theorem
+                    status: formalized
+                    lean:
+                      modules:
+                        - Example
+                      declarations:
+                        - example_theorem
+                    verification:
+                      statement: accepted
+                      proof: gap
+                      alignment: aligned
+                    ---
+
+                    # Gap
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            diagnostics = check_path(root)
+
+            self.assertEqual(len(diagnostics), 1)
+            self.assertIn("proof: accepted", diagnostics[0].text)
+
+    def test_rejects_formalized_node_without_lean_mapping(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            node = root / "unmapped.md"
+            node.write_text(
+                textwrap.dedent(
+                    """\
+                    ---
+                    id: example.unmapped
+                    title: Unmapped
+                    kind: definition
+                    status: formalized
+                    verification:
+                      definition: accepted
+                      proof: not_applicable
+                      alignment: aligned
+                    ---
+
+                    # Unmapped
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            diagnostics = check_path(root)
+
+            self.assertEqual(len(diagnostics), 1)
+            self.assertIn("Lean module/declaration mapping", diagnostics[0].text)
+
+    def test_accepts_staged_theorem_with_proof_gap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            node = root / "staged.md"
+            node.write_text(
+                textwrap.dedent(
+                    """\
+                    ---
+                    id: example.staged
+                    title: Staged
+                    kind: theorem
+                    status: staged
+                    verification:
+                      statement: accepted
+                      proof: gap
+                    ---
+
+                    # Staged
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(check_path(root), [])
+
 
 if __name__ == "__main__":
     unittest.main()

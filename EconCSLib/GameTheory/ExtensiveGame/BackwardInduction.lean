@@ -11,7 +11,8 @@ import EconCSLib.GameTheory.ExtensiveGame.GameTree
 
 Backward induction on `GameTree N U`, producing a value function
 `value : GameTree N U → (N → U)` together with the optimality lemmas
-used by `ExtensiveGame.SPE` to prove Kuhn's theorem.
+used by `GameTreeSPE` and the occurrence-sensitive compiler to prove the
+structural and canonical finite existence theorems.
 
 ## Minimal assumptions
 

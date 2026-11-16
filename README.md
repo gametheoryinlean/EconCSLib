@@ -41,6 +41,14 @@ Worked examples live under [`EconCSLib/Examples/`](EconCSLib/Examples).
 Experimental open-problem interfaces under
 [`EconCSLib/OpenProblem/`](EconCSLib/OpenProblem) are opt-in.
 
+For extensive-form games, start with the [EFG reading guide](docs/design/extensive_game.md).
+The root import includes finite execution; infinite paths, analytic kernels,
+equilibrium, and compilers have explicit opt-in interfaces. The
+[mathematical scope table](docs/design/efg-mathematical-provenance.md) separates
+proved results from remaining bridges. Sequential-equilibrium and arbitrary-measure pure-strategy prototypes are
+excluded from this release. Existing clients should consult the
+[migration guide](docs/design/efg-api-migration.md) for changed imports and names.
+
 ## Documentation
 
 - [`docs/design.md`](docs/design.md) describes architecture and contribution

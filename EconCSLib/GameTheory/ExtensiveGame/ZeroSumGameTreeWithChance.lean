@@ -12,9 +12,9 @@ import Mathlib.Tactic.Linarith
 **2-player zero-sum extensive game with rational chance (Nature) nodes.**
 
 This module sits strictly between the chance-free `Zermelo.lean` and the
-fully general `StochasticGameTree.lean` (which requires vNM utility theory).
-Because payoffs and probabilities are both in `ℚ`, rational arithmetic suffices
-for chance averaging — no vNM theorem is needed.
+n-player real-payoff `StochasticGameTree.lean`. Because payoffs and
+probabilities are both in `ℚ`, rational arithmetic suffices for chance
+averaging.
 
 Ported from `math-xmum/gametheory` (finitegame branch),
 `GameTheory/ZerosumFiniteGame.lean`, with EconCSLib-style docstrings and
@@ -35,11 +35,18 @@ inductive GameTree
 * Player B node → min of children's values.
 * Nature node   → probability-weighted average of children's values.
 
-`DStrategy : Strategy` is A's canonical optimal (dominant) strategy:
+`DStrategy : Strategy` is A's canonical maximin strategy:
 always choose the child with the higher `value`.
+
+`MinStrategy : Strategy` is B's canonical minimax strategy:
+always choose the child with the lower `value`.
 
 `value_prop` is the soundness theorem: for every B-strategy `SB`,
 `t.value ≤ t.outcome DStrategy SB`.
+
+`outcome_MinStrategy_le_value` is the dual soundness theorem: for every
+A-strategy `SA`, `t.outcome SA MinStrategy ≤ t.value`. Together they prove the
+pure-strategy saddle inequalities and the exact value identity.
 
 ## Main definitions
 
@@ -47,9 +54,13 @@ always choose the child with the higher `value`.
 * `ZeroSumChance.Select` — binary selection: `l` (left) or `r` (right).
 * `ZeroSumChance.GameTree` — inductive binary game tree with Nature.
 * `ZeroSumChance.GameTree.value` — backward-induction value (computable).
-* `ZeroSumChance.GameTree.DStrategy` — dominant strategy for A.
+* `ZeroSumChance.GameTree.DStrategy` — maximin strategy for A.
+* `ZeroSumChance.GameTree.MinStrategy` — minimax strategy for B.
 * `ZeroSumChance.GameTree.outcome` — outcome under a strategy pair.
 * `ZeroSumChance.GameTree.value_prop` — `t.value ≤ t.outcome DStrategy SB`.
+* `ZeroSumChance.GameTree.outcome_MinStrategy_le_value` —
+  `t.outcome SA MinStrategy ≤ t.value`.
+* `ZeroSumChance.GameTree.saddle_bounds` and `saddle_value`.
 
 ## References
 
@@ -59,7 +70,8 @@ always choose the child with the higher `value`.
 ## Related modules
 
 * `EconCSLib.GameTheory.ExtensiveGame.Zermelo` — the chance-free variant.
-* `EconCSLib.GameTheory.ExtensiveGame.StochasticGameTree` — n-player general utility (needs vNM).
+* `EconCSLib.GameTheory.ExtensiveGame.StochasticGameTree` — n-player
+  real-payoff trees with exact rational `FiniteLaw` chance distributions.
 -/
 
 namespace ZeroSumChance
@@ -129,10 +141,15 @@ def value : GameTree → ℚ
     | .B => min L.value R.value
   | Nnode prob L R => prob * L.value + (1 - prob) * R.value
 
-/-- **A's dominant strategy**: at each A-node, move to whichever child has the
+/-- **A's maximin strategy**: at each A-node, move to whichever child has the
     higher value; ties go left. -/
 def DStrategy : Strategy :=
   fun L R => if L.value < R.value then .r else .l
+
+/-- **B's minimax strategy**: at each B-node, move to whichever child has the
+    lower value; ties go right. -/
+def MinStrategy : Strategy :=
+  fun L R => if L.value < R.value then .l else .r
 
 /-! ### Outcome under a strategy pair -/
 
@@ -186,6 +203,49 @@ theorem value_prop (SB : Strategy) {t : GameTree} : t.value ≤ t.outcome DStrat
       mul_le_mul_of_nonneg_left HR (by linarith [prob.2.2])
     linarith
 
+/-- **Soundness of `MinStrategy`**: the backward-induction value is an upper
+    bound on the outcome against B's strategy, regardless of how A plays. -/
+theorem outcome_MinStrategy_le_value (SA : Strategy) {t : GameTree} :
+    t.outcome SA MinStrategy ≤ t.value := by
+  induction t with
+  | Leaf r =>
+    simp [outcome, value]
+  | Pnode p L R HL HR =>
+    match p with
+    | Player.A =>
+      rw [value, outcome]
+      cases SA L R
+      · exact HL.trans (le_max_left L.value R.value)
+      · exact HR.trans (le_max_right L.value R.value)
+    | Player.B =>
+      rw [value, outcome, MinStrategy]
+      split_ifs with h
+      · exact le_min HL (HL.trans h.le)
+      · exact le_min (HR.trans (not_lt.mp h)) HR
+  | Nnode prob L R HL HR =>
+    rw [outcome, value]
+    have hpL :
+        (prob : ℚ) * outcome SA MinStrategy L ≤ prob * L.value :=
+      mul_le_mul_of_nonneg_left HL prob.2.1
+    have hpR :
+        (1 - prob) * outcome SA MinStrategy R ≤ (1 - prob) * R.value :=
+      mul_le_mul_of_nonneg_left HR (by linarith [prob.2.2])
+    linarith
+
+/-- The two canonical strategies bound every unilateral opponent strategy
+around the backward-induction value. -/
+theorem saddle_bounds (SA SB : Strategy) {t : GameTree} :
+    t.outcome SA MinStrategy ≤ t.value ∧
+      t.value ≤ t.outcome DStrategy SB :=
+  ⟨outcome_MinStrategy_le_value SA, value_prop SB⟩
+
+/-- The canonical maximin/minimax strategy pair realizes the
+backward-induction value exactly. -/
+theorem saddle_value (t : GameTree) :
+    t.outcome DStrategy MinStrategy = t.value :=
+  le_antisymm (outcome_MinStrategy_le_value DStrategy)
+    (value_prop MinStrategy)
+
 end GameTree
 
 /-! ### Notation helpers -/
@@ -210,8 +270,10 @@ private def T : GameTree := [B [A [L 10], [L (-10)]] , [L 3]]
 /-- T with a 50/50 Nature node at the root. -/
 private def T' : GameTree := [N (1/2 : ℚ), T, T]
 
-#eval T.value   -- expected: 3
-#eval T'.value  -- expected: 3
+example : T.value = 3 := by decide
+
+example : T'.value = 3 := by
+  norm_num [T', T, PUInterval, GameTree.value, min_def, max_def]
 
 end Example
 

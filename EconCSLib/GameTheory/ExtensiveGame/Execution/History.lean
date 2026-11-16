@@ -31,22 +31,12 @@ Movers and payoffs are read from the endpoint world state.  Observation and
 information-state layers may instead distinguish histories with the same
 endpoint. -/
 def unfold (G : ExtensiveGame N U) : ExtensiveGame N U where
-  toControlledGame := G.toControlledGame.unfold
+  State := G.toArena.HistoryFrom G.init
+  Action := fun h => G.Action h.1
+  next := fun h a => ⟨G.next h.1 a, h.2.snoc a⟩
+  init := Arena.HistoryFrom.nil G.toArena G.init
+  mover := fun h => G.mover h.1
   payoff := fun h i => G.payoff h.1 i
-
-/-- Forgetting payoff from the historical unfolding recovers the canonical
-controlled-game unfolding. -/
-@[simp]
-theorem unfold_toControlledGame (G : ExtensiveGame N U) :
-    G.unfold.toControlledGame = G.toControlledGame.unfold :=
-  rfl
-
-/-- Forgetting both payoff and control from the historical unfolding recovers
-the canonical Arena history unfolding. -/
-@[simp]
-theorem unfold_toArena (G : ExtensiveGame N U) :
-    G.unfold.toArena = G.toArena.unfoldFrom G.init :=
-  rfl
 
 @[simp]
 theorem unfold_init (G : ExtensiveGame N U) :
@@ -74,14 +64,15 @@ theorem unfold_isTerminal_iff (G : ExtensiveGame N U)
 
 /-- History unfolding preserves the absence of chance nodes. -/
 theorem unfold_noChance (G : ExtensiveGame N U) (h : G.NoChance) :
-    G.unfold.NoChance :=
-  ControlledGame.unfold_noChance G.toControlledGame h
+    G.unfold.NoChance := by
+  intro s hs
+  exact h s.1 hs
 
 /-- Every history-state is reachable from the initial empty history in the
 unfolded game. -/
 theorem unfold_isReachable (G : ExtensiveGame N U)
     (h : G.toArena.HistoryFrom G.init) :
     G.unfold.IsReachable h :=
-  ControlledGame.unfold_isReachable G.toControlledGame h
+  h.2.reachableInUnfolding G.toArena G.init
 
 end ExtensiveGame

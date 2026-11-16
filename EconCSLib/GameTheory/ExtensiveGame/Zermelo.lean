@@ -45,8 +45,9 @@ Here we frame it as the special case of Kuhn's theorem where:
 * `value₀_eq_outcome_and_zeroSum` — `optStrategy` realizes the player-0 value and
   the value vector is zero-sum (packaging lemma; the saddle statement is
   `zermelo_determinacy`).
-* `zermelo_exists_pure_SPE` / `zermelo_exists_pure_NE` — the `Fin 2` / `ℚ`
-  instances of Kuhn's existence theorem. **Existence needs no zero-sum
+* `zermelo_exists_pure_globalEndpointSPE_on` /
+  `zermelo_exists_pure_NE` — the `Fin 2` / `ℚ` instances of the structural
+  endpoint and root-Nash existence theorems. **Existence needs no zero-sum
   hypothesis**; the zero-sum refinement is `zermelo_determinacy`.
 
 ## References
@@ -102,18 +103,21 @@ theorem IsZeroSum.of_subtree {s g : GameTree (Fin 2) ℚ}
 
 /-! ### Existence (instances of Kuhn's theorem)
 
-Existence of a pure SPE / Nash equilibrium is **Kuhn's theorem**; it holds for
+Existence of a global structural endpoint-optimal policy, and hence a root
+Nash equilibrium, follows from backward induction; it holds for
 any finite perfect-information game and does **not** use the zero-sum
 hypothesis. These two declarations are just the `Fin 2` / `ℚ` instances, kept as
 named entry points. The genuinely zero-sum result — that the game has a
 determined value realized by a saddle point — is `zermelo_determinacy` below. -/
 
-/-- Pure root-scoped subgame-perfect existence for a finite two-player game on
-    `ℚ`: the `Fin 2` / `ℚ` instance of `Kuhn_exists_SPE_on`. Zero-sum is **not**
+/-- Pure root-scoped structural endpoint-policy existence for a finite
+two-player game on `ℚ`: the `Fin 2` / `ℚ` instance of
+`Kuhn_exists_globalEndpointSPE_on`. Zero-sum is **not**
     needed for existence; see `zermelo_determinacy` for the zero-sum refinement. -/
-theorem zermelo_exists_pure_SPE (g : GameTree (Fin 2) ℚ) :
-    ∃ σ : Strategy (Fin 2) ℚ, IsSubgamePerfectOn σ g :=
-  Kuhn_exists_SPE_on g
+theorem zermelo_exists_pure_globalEndpointSPE_on
+    (g : GameTree (Fin 2) ℚ) :
+    ∃ σ : Strategy (Fin 2) ℚ, IsGlobalEndpointSubgamePerfectOn σ g :=
+  Kuhn_exists_globalEndpointSPE_on g
 
 /-- Pure root Nash existence for a finite two-player game on `ℚ`: the `Fin 2` /
     `ℚ` instance of `Kuhn_exists_NE`. Zero-sum is **not** needed. -/
@@ -273,23 +277,24 @@ theorem value₀_eq_outcome_and_zeroSum (g : GameTree (Fin 2) ℚ) (hzs : IsZero
 
 /-! ### Determinacy (the saddle value)
 
-The genuine Zermelo content. Combining subgame perfection of `optStrategy`
-(`optStrategy_isSubgamePerfect`) with the zero-sum invariant gives a saddle
-point: `value₀ g` is simultaneously what player 0 can secure and what player 1
-can hold player 0 to. -/
+The genuine Zermelo content. Combining global structural endpoint optimality
+of `optStrategy` (`optStrategy_isGlobalEndpointSubgamePerfect`) with the
+zero-sum invariant gives a saddle point: `value₀ g` is simultaneously what
+player 0 can secure and what player 1 can hold player 0 to. -/
 
 /-- **Player 0's security.** If player 0 plays `optStrategy` (so the deviating
     profile `σ'` is a `1`-variant, leaving player 0's choices fixed), then player
     0's payoff is at least `value₀ g` against *every* play of player 1.
 
-    Proof: subgame perfection at player 1 caps `outcome σ' g 1 ≤ value g 1 =
-    -value₀ g`; the zero-sum identity `outcome σ' g 0 = -outcome σ' g 1` then
-    forces `outcome σ' g 0 ≥ value₀ g`. -/
+    Proof: structural endpoint optimality against a player-1 variant caps
+    `outcome σ' g 1 ≤ value g 1 = -value₀ g`; the zero-sum identity
+    `outcome σ' g 0 = -outcome σ' g 1` then forces
+    `outcome σ' g 0 ≥ value₀ g`. -/
 theorem value₀_le_outcome_of_iVariant_one (g : GameTree (Fin 2) ℚ)
     (hzs : IsZeroSum g) {σ' : Strategy (Fin 2) ℚ}
     (hiv : IVariant (1 : Fin 2) optStrategy σ') :
     value₀ g ≤ outcome σ' g 0 := by
-  have h1 := optStrategy_isSubgamePerfect g (1 : Fin 2) σ' hiv
+  have h1 := optStrategy_isGlobalEndpointSubgamePerfect g (1 : Fin 2) σ' hiv
   rw [outcome_optStrategy_eq_value, value_one_eq_neg_value₀ g hzs] at h1
   have hsum := outcome_zero_sum σ' g hzs
   linarith
@@ -301,7 +306,7 @@ theorem value₀_le_outcome_of_iVariant_one (g : GameTree (Fin 2) ℚ)
 theorem outcome_le_value₀_of_iVariant_zero (g : GameTree (Fin 2) ℚ)
     {σ' : Strategy (Fin 2) ℚ} (hiv : IVariant (0 : Fin 2) optStrategy σ') :
     outcome σ' g 0 ≤ value₀ g := by
-  have h0 := optStrategy_isSubgamePerfect g (0 : Fin 2) σ' hiv
+  have h0 := optStrategy_isGlobalEndpointSubgamePerfect g (0 : Fin 2) σ' hiv
   rw [outcome_optStrategy_eq_value] at h0
   simpa [value₀] using h0
 

@@ -191,8 +191,8 @@ def centipedePrefixTree : GameTree (Fin 2) ℤ :=
     equilibrium by backward induction. -/
 theorem centipedePrefix_has_spe_on :
     ∃ σ : GameTree.Strategy (Fin 2) ℤ,
-      GameTree.IsSubgamePerfectOn σ centipedePrefixTree :=
-  GameTree.Kuhn_exists_SPE_on centipedePrefixTree
+      GameTree.IsGlobalEndpointSubgamePerfectOn σ centipedePrefixTree :=
+  GameTree.Kuhn_exists_globalEndpointSPE_on centipedePrefixTree
 
 /-- Subgame-perfect equilibrium at the root yields a root Nash equilibrium for
     the finite-tree centipede prefix. -/

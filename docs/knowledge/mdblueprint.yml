@@ -8,6 +8,26 @@ sources:
       title: "Mathematical Foundations of Game Theory"
       short: "MFoGT"
       authors: "Laraki, Renault, and Sorin"
+    - id: kuhn-1953
+      title: "Extensive Games and the Problem of Information"
+      short: "Kuhn 1953"
+      authors: "H. W. Kuhn"
+      path: "https://doi.org/10.1515/9781400829156-011"
+    - id: kreps-wilson-1982
+      title: "Sequential Equilibria"
+      short: "Kreps–Wilson 1982"
+      authors: "David M. Kreps and Robert Wilson"
+      path: "https://doi.org/10.2307/1912767"
+    - id: zermelo-1913
+      title: "Über eine Anwendung der Mengenlehre auf die Theorie des Schachspiels"
+      short: "Zermelo 1913"
+      authors: "Ernst Zermelo"
+      path: "https://bibbase.org/network/publication/zermelo-ubereineanwendungdermengenlehreaufdietheoriedesschachspiels-1913"
+    - id: gale-stewart-1953
+      title: "Infinite Games with Perfect Information"
+      short: "Gale–Stewart 1953"
+      authors: "David Gale and F. M. Stewart"
+      path: "https://doi.org/10.1515/9781400881970-014"
     - id: msz-game-theory
       title: "Game Theory"
       short: "MSZ"

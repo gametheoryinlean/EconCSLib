@@ -11,7 +11,7 @@ import EconCSLib.GameTheory.ExtensiveGame.GameTreeStrategicForm
 # EconCSLib.Examples.SimpleGameTree
 
 A sample 2-player zero-sum perfect-info game expressed in the
-`GameTree` framework, used to smoke-test `value`, `Kuhn_exists_SPE`,
+`GameTree` framework, used to smoke-test `value`, `Kuhn_exists_globalEndpointSPE`,
 root-scoped Nash equilibrium, and the Zermelo-style zero-sum API.
 
 The game (adapted from `ZerosumFiniteGame.lean`):
@@ -60,26 +60,35 @@ def sample : GameTree Player ℚ :=
 -- Sanity: the game is well-typed.
 example : GameTree Player ℚ := sample
 
--- `value` is computable (backward induction over the decidable order `≤` on `ℚ`),
--- so the value evaluates and is machine-checkable on this concrete game.
-#eval value₀ sample          -- 3  (B picks min{10, 3} = 3)
-#eval value sample 0         -- 3
-#eval value sample 1         -- -3
-
 /-- The player-0 value of the sample is `3`, checked by computation. -/
 example : value₀ sample = 3 := by decide
+
+/-- The complete value vector is checked without emitting build-time output. -/
+example : value sample 0 = 3 := by decide
+
+example : value sample 1 = -3 := by decide
 
 /-- The zero-sum predicate holds on the sample game. -/
 theorem sample_zero_sum : IsZeroSum sample := by
   simp [sample, IsZeroSum, zeroSumLeaf]
 
-/-- **Existence of an SPE** for the sample game (via `Kuhn_exists_SPE`). -/
-example : ∃ σ : Strategy Player ℚ, IsSubgamePerfect σ := Kuhn_exists_SPE
+/-- Existence of a global structural endpoint-optimal policy for the sample. -/
+example : ∃ σ : Strategy Player ℚ, IsGlobalEndpointSubgamePerfect σ := Kuhn_exists_globalEndpointSPE
 
-/-- Pure root-scoped SPE existence for the sample (Kuhn's theorem; no zero-sum
-    hypothesis required). -/
-theorem sample_zermelo_spe : ∃ σ : Strategy Player ℚ, IsSubgamePerfectOn σ sample :=
-  zermelo_exists_pure_SPE sample
+/-- Pure root-scoped structural endpoint-policy existence for the sample; no
+zero-sum hypothesis is required. -/
+theorem sample_zermelo_globalEndpointSPE_on :
+    ∃ σ : Strategy Player ℚ,
+      IsGlobalEndpointSubgamePerfectOn σ sample :=
+  zermelo_exists_pure_globalEndpointSPE_on sample
+
+/-- Deprecated compatibility name for the structural endpoint example. -/
+@[deprecated sample_zermelo_globalEndpointSPE_on
+  (since := "2026-07-29")]
+theorem sample_zermelo_spe :
+    ∃ σ : Strategy Player ℚ,
+      IsGlobalEndpointSubgamePerfectOn σ sample :=
+  sample_zermelo_globalEndpointSPE_on
 
 /-- Pure root Nash existence for the sample (Kuhn's theorem). -/
 theorem sample_zermelo_ne :
@@ -108,8 +117,8 @@ theorem leaf_hasOnlyRootSubgames (p : Player → ℚ) :
     form of MSZ Theorem 7.4 on a one-leaf game. -/
 theorem leaf_nash_to_spe_on (p : Player → ℚ) {σ : Strategy Player ℚ}
     (hnash : GameTree.IsNashAt σ (Leaf p)) :
-    IsSubgamePerfectOn σ (Leaf p) :=
-  hnash.toSubgamePerfectOn_of_hasOnlyRootSubgames (leaf_hasOnlyRootSubgames p)
+    IsGlobalEndpointSubgamePerfectOn σ (Leaf p) :=
+  hnash.toGlobalEndpointSubgamePerfectOn_of_hasOnlyRootSubgames (leaf_hasOnlyRootSubgames p)
 
 /-- The backward-induction value of the sample remains zero-sum. -/
 theorem sample_value_zero_sum : (value sample) 0 + (value sample) 1 = 0 :=
@@ -117,8 +126,8 @@ theorem sample_value_zero_sum : (value sample) 0 + (value sample) 1 = 0 :=
 
 /-- The backward-induction strategy is subgame-perfect on the sample root. -/
 theorem sample_optStrategy_spe_on :
-    IsSubgamePerfectOn (optStrategy : Strategy Player ℚ) sample :=
-  optStrategy_isSubgamePerfect.toSubgamePerfectOn sample
+    IsGlobalEndpointSubgamePerfectOn (optStrategy : Strategy Player ℚ) sample :=
+  optStrategy_isGlobalEndpointSubgamePerfect.toGlobalEndpointSubgamePerfectOn sample
 
 /-- The extracted strategic-form game has a pure Nash equilibrium, and this is
     exactly the root-scoped Nash predicate on the original tree. -/
@@ -130,7 +139,7 @@ theorem sample_strategic_form_has_nash :
       (optStrategy : Strategy Player ℚ) := rfl
   refine ⟨fun _ => optStrategy, ?_, ?_⟩
   · exact (toStrategicGame_nash_iff_isNashAt sample (fun _ => optStrategy)).mpr
-      (by simpa [hprofile] using optStrategy_isSubgamePerfect.toNE sample)
-  · simpa [hprofile] using optStrategy_isSubgamePerfect.toNE sample
+      (by simpa [hprofile] using optStrategy_isGlobalEndpointSubgamePerfect.toNE sample)
+  · simpa [hprofile] using optStrategy_isGlobalEndpointSubgamePerfect.toNE sample
 
 end Examples.SimpleGameTree

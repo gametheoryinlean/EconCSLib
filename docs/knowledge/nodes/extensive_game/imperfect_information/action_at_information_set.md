@@ -23,7 +23,7 @@ lean:
     - EconCSLib.GameTheory.ExtensiveGame.ImperfectInformation
   declarations:
     - FiniteImperfectGame.PureStrategy.actionAt
-    - FiniteImperfectGame.actionAt_same_info_label
+    - FiniteImperfectGame.actionAt_same_info
 ---
 
 # Action At An Information Set

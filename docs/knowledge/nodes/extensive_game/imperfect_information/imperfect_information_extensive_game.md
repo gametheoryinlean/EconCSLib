@@ -35,6 +35,11 @@ and terminal payoffs of an extensive form, but also records what each player kno
 when making a move. This is represented by information sets that group decision
 nodes a player cannot distinguish.
 
+The Lean `FiniteImperfectGame` presentation guarantees a finite state carrier
+and coherent information-set actions. It deliberately leaves acyclicity,
+termination, reachability, and any additional carrier finiteness as separate
+assumptions.
+
 ## References
 
 - [MFoGT, Section 6.3] Laraki, Renault, and Sorin, *Mathematical Foundations of Game Theory*. Imperfect information extends the extensive form model by adding information sets.
