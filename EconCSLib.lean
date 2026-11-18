@@ -127,6 +127,7 @@ import EconCSLib.MechanismDesign.Auction.Vickrey
 import EconCSLib.MechanismDesign.Auction.ReserveVickrey
 import EconCSLib.MechanismDesign.Auction.FirstPrice
 import EconCSLib.MechanismDesign.Auction.OptimalSingleItem
+import EconCSLib.MechanismDesign.Auction.RegularMyersonReserveSecondPrice
 
 -- Fair division
 import EconCSLib.SocialChoice.FairDivision.Basic
