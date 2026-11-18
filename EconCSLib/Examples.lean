@@ -12,6 +12,7 @@ import EconCSLib.Examples.ExtensiveGame.LegacyApiMigration
 import EconCSLib.Examples.ExtensiveGame.ObservedInfoRealization
 import EconCSLib.Examples.ExtensiveGame.StructuralCoreImportBoundary
 import EconCSLib.Examples.ExtensiveGame.TerminalMoverIgnored
+import EconCSLib.Examples.FiniteMarkovChain
 import EconCSLib.Examples.MatchingPennies
 import EconCSLib.Examples.PrisonersDilemma
 import EconCSLib.Examples.RockPaperScissors
