@@ -15,10 +15,20 @@ uses:
 lean:
   modules:
     - EconCSLib.Foundation.Preference
+  declarations:
+    - Pref
+    - Pref.lt
+    - Pref.indifferent
+    - Pref.ofTotalPreorder
+    - Indifferent
+    - StrictlyPreferred
+    - TotalPreorder
+    - IsPreference
+    - PrefProfile
 verification:
   definition: accepted
   proof: not_applicable
-  alignment: pending
+  alignment: aligned
 tags:
   - preference
 ---
